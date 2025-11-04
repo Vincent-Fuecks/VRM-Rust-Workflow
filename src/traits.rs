@@ -1,4 +1,4 @@
-use crate::reservation::ReservationBase;
+use crate::workflow::reservation::ReservationBase;
 
 pub enum RequestType {
     Compute,

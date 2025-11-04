@@ -1,0 +1,301 @@
+{
+  "$id": "http://vrm.gridworkflow.net/reservations.schema.json",
+  "title": "VRM - Reservation Types",
+  "description": "Defines the structure for VRM reservations (Node, Link, or Workflow).",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/NodeReservationType"
+    },
+    {
+      "$ref": "#/$defs/LinkReservationType"
+    },
+    {
+      "$ref": "#/$defs/WorkflowType"
+    }
+  ],
+  "$defs": {
+    "versionType": {
+      "type": "string"
+    },
+    "VRMTimeInSeconds": {
+      "type": "integer",
+      "description": "Time in seconds, represented as a long integer."
+    },
+    "VRMTime": {
+      "oneOf": [
+        {
+          "type": "string",
+          "format": "date-time"
+        },
+        {
+          "type": "string",
+          "format": "time"
+        },
+        {
+          "$ref": "#/$defs/VRMTimeInSeconds"
+        }
+      ],
+      "description": "Time in seconds, absolute (dateTime or time) or relative (integer)."
+    },
+    "jobID": {
+      "type": "string"
+    },
+    "PortID": {
+      "type": "string"
+    },
+    "RouterName": {
+      "type": "string"
+    },
+    "ReservationType": {
+      "type": "object",
+      "properties": {
+        "JobName": {
+          "$ref": "#/$defs/jobID"
+        },
+        "JobState": {
+          "type": "string",
+          "enum": [
+            "STATE_REJECTED",
+            "STATE_DELETED",
+            "STATE_OPEN",
+            "STATE_PROBEANSWER",
+            "STATE_RESERVEANSWER",
+            "STATE_COMMITED",
+            "STATE_FINISHED"
+          ]
+        },
+        "StartTime": {
+          "$ref": "#/$defs/VRMTime"
+        },
+        "RelativeStartTime": {
+          "$ref": "#/$defs/VRMTime"
+        },
+        "EndTime": {
+          "$ref": "#/$defs/VRMTime"
+        },
+        "RelativeEndTime": {
+          "$ref": "#/$defs/VRMTime"
+        },
+        "ArrivalTime": {
+          "$ref": "#/$defs/VRMTime"
+        },
+        "RelativeArrivalTime": {
+          "$ref": "#/$defs/VRMTime"
+        },
+        "RequestProceeding": {
+          "type": "string",
+          "enum": [
+            "Request",
+            "Probe",
+            "Reserve",
+            "Commit",
+            "Delete"
+          ]
+        },
+        "Duration": {
+          "$ref": "#/$defs/VRMTime"
+        },
+        "AssignedStart": {
+          "$ref": "#/$defs/VRMTime"
+        },
+        "AssignedEnd": {
+          "$ref": "#/$defs/VRMTime"
+        },
+        "Moldable": {
+          "type": "boolean"
+        },
+        "name": {
+          "$ref": "#/$defs/jobID"
+        },
+        "version": {
+          "$ref": "#/$defs/versionType"
+        },
+        "id": {
+          "$ref": "#/$defs/jobID",
+          "description": "deprecated, use name instead"
+        }
+      },
+      "allOf": [
+        {
+          "not": {
+            "required": [
+              "StartTime",
+              "RelativeStartTime"
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "EndTime",
+              "RelativeEndTime"
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "ArrivalTime",
+              "RelativeArrivalTime"
+            ]
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "WorkflowType": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/ReservationType"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "WorkflowGraph": {
+              "$ref": "#/$defs/WorkflowGraphType"
+            },
+            "NodeReservation": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/NodeReservationType"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "WorkflowGraphType": {
+      "type": "object",
+      "description": "Represents the workflow graph structure. Empty in XSD.",
+      "additionalProperties": true
+    },
+    "LinkReservationType": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/ReservationType"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "startPoint": {
+              "$ref": "#/$defs/RouterName"
+            },
+            "endPoint": {
+              "$ref": "#/$defs/RouterName"
+            },
+            "Amount": {
+              "type": "integer"
+            },
+            "Bandwidth": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "startPoint",
+            "endPoint"
+          ]
+        }
+      ]
+    },
+    "NodeReservationType": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/ReservationType"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "JobPath": {
+              "type": "string"
+            },
+            "CPUS": {
+              "type": "integer"
+            },
+            "OutputPath": {
+              "type": "string"
+            },
+            "ErrorPath": {
+              "type": "string"
+            },
+            "DataOut": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/DataOutType"
+              }
+            },
+            "DataIn": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/DataInType"
+              }
+            },
+            "Dependency": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/DependencyType"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "DataOutType": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/PortID"
+        },
+        "file": {
+          "type": "string"
+        },
+        "size": {
+          "type": "integer"
+        },
+        "version": {
+          "$ref": "#/$defs/versionType"
+        },
+        "bandwidth": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name"
+      ]
+    },
+    "DataInType": {
+      "type": "object",
+      "properties": {
+        "sourceReservation": {
+          "$ref": "#/$defs/jobID"
+        },
+        "sourcePort": {
+          "$ref": "#/$defs/PortID"
+        },
+        "file": {
+          "type": "string"
+        },
+        "version": {
+          "$ref": "#/$defs/versionType"
+        }
+      },
+      "required": [
+        "sourceReservation",
+        "sourcePort"
+      ]
+    },
+    "DependencyType": {
+      "type": "object",
+      "properties": {
+        "pre": {
+          "$ref": "#/$defs/jobID"
+        },
+        "sync": {
+          "$ref": "#/$defs/jobID"
+        },
+        "version": {
+          "$ref": "#/$defs/versionType"
+        }
+      }
+    }
+  }
+}

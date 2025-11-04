@@ -1,7 +1,20 @@
 /// TODO Some functinalities are still messing from the original implementation (like xml parser etc)
 /// TODO Parser can save and load Reservations in xml format 
 /// TODO How do I do I create unique ids for the reservations? 
+/// TODO find better structure as UNIQUE_IDS
+use serde::{Deserialize};
+use std::collections::HashSet;
+use std::sync::Mutex;
+use uuid::Uuid;
+use lazy_static::lazy_static;
 
+use crate::loader::parser::parse_joson_file;
+
+
+// Utilized to store all currently utilized unique IDs for all reservations in the system
+lazy_static! {
+    static ref UNIQUE_RESERVATION_IDS: Mutex<HashSet<String>> = Mutex::new(HashSet::new());
+}
 
 /// Defines the lifecycle state of a job reservation within the system.
 ///
@@ -48,7 +61,7 @@ impl ReservationState {
 }
 
 /// Specifies the process state the reservation is currently in. 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 pub enum ReservationProceeding {
     /// Only perform the initial **probe** request to check availability.
     Probe,
@@ -75,10 +88,10 @@ pub enum ReservationProceeding {
 /// consistent synchronization across components.
 #[derive(Debug, Clone)]
 pub struct ReservationBase {
-    // --- IDENTITY & STATE ---
+    /// --- IDENTITY & STATE ---
 
     /// A unique identifier assigned to the reservation upon creation.
-    pub id: int,
+    pub id: String,
 
     /// The current state of this specific reservation instance.
     ///
@@ -88,24 +101,27 @@ pub struct ReservationBase {
 
     /// The client's instruction on how far the reservation process should proceed.
     pub proceeding: ReservationProceeding,
+
+    /// TODO Is this redandent???
+    pub used_aci_hierarchy: Vec<String>,
     
 
-    // --- TIME WINDOWS (All fields are in seconds) ---
+    /// --- TIME WINDOWS (All fields are in seconds) ---
 
     /// The time  this job arrived in the system.
-    pub arrival_time: i32,
+    pub arrival_time: i64,
 
     /// The earliest possible start time for the job.
-    pub booking_interval_start: i32,
+    pub booking_interval_start: i64,
 
     /// The latest possible end time for the job.
     pub booking_interval_end: i64,
 
     /// The scheduled start time of the job. Must be within the booking interval.
-    pub assigned_start: i32,
+    pub assigned_start: i64,
     
     /// The scheduled end time of the job. Must be within the booking interval.
-    pub assigned_end: i32,
+    pub assigned_end: i64,
 
 
     // --- RESOURCE & MOLDING ---
@@ -132,8 +148,98 @@ pub struct ReservationBase {
     moldable_capacity: i32, 
 }
 
+/// See ReservationBase for detailed information regarding the fields. 
+/// The following struct is a Data Transfer Object (DTO) for deserialization. 
+/// This struct mathces the shape of teh incomin Json modeling reservations. 
+#[serde(rename_all = "camelCase")]
+#[derive(Debug, Deserialize)]
+pub struct ReservationBaseDto {
+    /// --- IDENTITY & STATE ---
+    pub id: Option<String>,
+    pub proceeding: ReservationProceeding,
+    pub used_aci_hierarchy: Vec<String>,
+    
+
+    /// --- TIME WINDOWS (All fields are in seconds) ---
+    pub arrival_time: i64,
+    pub booking_interval_start: i64,
+    pub booking_interval_end: i64,
+    pub assigned_start: i64,
+    pub assigned_end: i64,
+
+
+    // --- RESOURCE & MOLDING ---
+    pub frag_delta: f32,
+    pub job_duration: i32,
+    pub reserved_capacity: i32,
+    pub moldable: bool,
+    moldable_capacity: i32, 
+}
 
 impl ReservationBase {
+    pub fn new(path_to_reservation: &str) -> Self {
+        let dto = parse_joson_file::<ReservationBaseDto>(path_to_reservation)
+            .expect("Failed to load or parse reservation file.");
+        
+        Self::form_dto(dto)
+
+    }
+
+    pub fn form_dto(dto: ReservationBaseDto) -> Self {
+        let id = Self::get_final_id(dto.id); 
+        let moldable_capacity = dto.reserved_capacity * dto.job_duration; 
+
+        ReservationBase {
+            id: id,
+            state: ReservationState::Open, 
+            proceeding: dto.proceeding,
+            used_aci_hierarchy: dto.used_aci_hierarchy,
+            arrival_time: dto.arrival_time,
+            booking_interval_start: dto.booking_interval_start,
+            booking_interval_end: dto.booking_interval_end,
+            assigned_start: dto.assigned_start,
+            assigned_end: dto.assigned_end,
+            frag_delta: dto.frag_delta,
+            job_duration: dto.job_duration,
+            reserved_capacity: dto.reserved_capacity,
+            moldable: dto.moldable,
+            moldable_capacity: moldable_capacity,
+        }
+    }
+
+    fn get_final_id(optional_id: Option<String>) -> String {
+        let mut id_set = match UNIQUE_RESERVATION_IDS.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => {
+                eprintln!("Mutex was poisoned. Recovering data.");
+                poisoned.into_inner()
+            }
+        };
+
+        // Check if the provided ID is valid and unused
+        if let Some(ref id) = optional_id {
+            if !id_set.contains(id) {
+                // ID was provided and is not in use.
+                id_set.insert(id.clone());
+                return id.clone();
+            } else {
+                // ID was provided but is already in use.
+                // TODO Logger Log Warning, that other Id was used to create reservation
+                eprintln!("Warning: Provided ID '{}' is already in use. Generating a new one.", id);
+            }
+        }
+
+        let mut new_id = Uuid::new_v4().to_string();
+        
+        // If new generated Id is allready in use create a new one.
+        while id_set.contains(&new_id) {
+            new_id = Uuid::new_v4().to_string();
+        }
+        
+        id_set.insert(new_id.clone());
+        new_id
+    }
+
     /// Recalculates and updates the internal `moldable_capacity` based on the current
     /// `reserved_capacity` and `job_duration`.
     fn update_moldable_capacity(&mut self) {
@@ -198,18 +304,14 @@ impl ReservationBase {
     /// Determines if two reservations are considered logically equal based on their unique ID.
     ///
     /// Two reservations are equal if they carry the same unique ID (`id`). If both reservations
-    /// have no ID assigned (`None`), they are only considered equal if they reference the
-    /// exact same object instance.
+    /// TODO Maybe later None possible, but should be prevented
+    /// TODO All revervations should have a valid unique ID 
     pub fn equal_name(&self, other: &Self) -> bool {
         if std::ptr::eq(self, other) {
             return true;
         }
 
-        match (&self.id, &other.id) {
-            (Some(name1), Some(name2)) => name1 == name2,
-            (Some(_), None) => false,
-            (None, Some(_)) => false,
-            (None, None) => false,
-        }
+        // Since `id` is now a non-optional String, we can just compare them directly.
+        self.id == other.id
     }
 }

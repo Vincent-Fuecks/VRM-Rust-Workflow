@@ -1,0 +1,19 @@
+{
+  "jobId": 0,
+  "arrivalTime": 1700000000,
+  "bookingIntervalStart": 1700003600,
+  "bookingIntervalEnd": 1700007200,
+  "assignedStart": 1700004000,
+  "assignedEnd": 1700007000,
+  "moldable": true,
+  "proceeding": "Commit",
+  "reservedCapacity": 100,
+  "jobDuration": 3000,
+  "state": "OPEN",
+  "moldableCapacity": 300000,
+  "usedAciHierarchy": [
+    "AI_A",
+    "AI_B"
+  ], 
+  "fragDelta": 0
+}
