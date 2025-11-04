@@ -1,7 +1,6 @@
 /// TODO Some functinalities are still messing from the original implementation (like xml parser etc)
 /// TODO Parser can save and load Reservations in xml format 
 /// TODO How do I do I create unique ids for the reservations? 
-///  
 
 
 /// Defines the lifecycle state of a job reservation within the system.
