@@ -99,7 +99,91 @@ pub struct ReservationBase {
     /// during the reservation process to fit available resources.
     pub moldable: bool,
 
-    /// Internal field: The total required work, calculated as (capacity * duration).
-    /// Used internally to adjust capacity and duration while preserving the total work required.
+    /// Internal field: The total required work, calculated as (`reserved_capacity` * `job_duration`).
+    ///
+    /// Used internally to adjust capacity and duration while preserving the total work required
+    /// for moldable reservations.
     moldable_capacity: i32, 
+}
+
+
+impl ReservationBase {
+    /// Recalculates and updates the internal `moldable_capacity` based on the current
+    /// `reserved_capacity` and `job_duration`.
+    fn update_moldable_capacity(&mut self) {
+        self.moldable_capacity = self.reserved_capacity * self.job_duration;
+    }
+
+
+    /// Sets a new job duration and recalculates the internal `moldable_capacity` based on this change.
+    ///
+    /// This method performs an **inherent change** in the job size (total work). To adjust the
+    /// duration while keeping the total work constant for moldable jobs, use [`adjust_job_duration`].
+    pub fn set_job_duration(&mut self, job_duration: i32) {
+        self.job_duration = job_duration;
+        self.moldable_capacity = self.moldable_capacity * self.job_duration;
+    }
+
+
+    /// Adjusts the job duration and recalculates the requested capacity for **moldable reservations**.
+    ///
+    /// This operation changes the duration and capacity such that the total required work
+    /// (`moldable_capacity`) remains constant. For inherent changes to the job size, use [`set_job_duration`].
+    pub fn adjust_job_duration(&mut self, duration: i32) {
+        if !self.moldable {
+            // TODO Logging --> Logger.error("adjustJobDuration for non moldable job " + this);
+            eprintln!("Warning: adjust_job_duration called for non-moldable job. Proceeding with adjustment.");
+        }
+
+        self.job_duration = duration.max(1);
+        self.reserved_capacity = (self.moldable_capacity / self.job_duration).max(1);
+    }
+
+    /// Adjusts the reserved capacity and recalculates the job duration for **moldable reservations**.
+    ///
+    /// This operation changes the capacity and duration such that the total required work
+    /// (`moldable_capacity`) remains constant. For inherent changes to the job size, use
+    /// [`set_reserved_capacity`].
+    ///
+    /// The capacity unit is specific to the job type (e.g., CPUs or Bandwidth).
+    pub fn adjust_capacity(&mut self, capacity: i32) {
+        if capacity != self.reserved_capacity {
+            if !self.moldable {
+                // TODO Logging --> Logger.error("adjustCapacity for non moldable job " + this);
+                eprintln!("Warning: adjust_capacity called for non-moldable job. Proceeding with adjustment.");
+            }
+
+            self.reserved_capacity = capacity.max(1);
+            self.job_duration = (self.moldable_capacity / self.reserved_capacity).max(1);
+        }
+    }
+
+    /// Sets a new reserved capacity and recalculates the internal `moldable_capacity` based on this change.
+    ///
+    /// This method performs an **inherent change** in the job size (total work). To adjust the
+    /// capacity while keeping the total work constant for moldable jobs, use  [`adjust_capacity`].
+    ///
+    /// The capacity unit is specific to the job type (e.g., CPUs or Bandwidth).
+    pub fn set_reserved_capacity(&mut self, reserved_capacity: i32) {
+        self.reserved_capacity = reserved_capacity;
+        self.moldable_capacity = self.reserved_capacity * self.job_duration;
+    }
+
+    /// Determines if two reservations are considered logically equal based on their unique ID.
+    ///
+    /// Two reservations are equal if they carry the same unique ID (`id`). If both reservations
+    /// have no ID assigned (`None`), they are only considered equal if they reference the
+    /// exact same object instance.
+    pub fn equal_name(&self, other: &Self) -> bool {
+        if std::ptr::eq(self, other) {
+            return true;
+        }
+
+        match (&self.id, &other.id) {
+            (Some(name1), Some(name2)) => name1 == name2,
+            (Some(_), None) => false,
+            (None, Some(_)) => false,
+            (None, None) => false,
+        }
+    }
 }
