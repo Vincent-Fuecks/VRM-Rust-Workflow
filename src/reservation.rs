@@ -1,7 +1,22 @@
+/// TODO Some functinalities are still messing from the original implementation (like xml parser etc)
+/// TODO Parser can save and load Reservations in xml format 
+/// TODO How do I do I create unique ids for the reservations? 
+///  
+
+
 /// Defines the lifecycle state of a job reservation within the system.
 ///
 /// This state tracks the progress of the reservation from initial request
 /// through processing, commitment, and eventual completion or failure.
+/// 
+/// The order, from lowest commitment (0) to highest (6), is:
+/// 1.  `Rejected`
+/// 2.  `Deleted`
+/// 3.  `Open`
+/// 4.  `ProbeAnswer`
+/// 5.  `ReserveAnswer`
+/// 6.  `Committed`
+/// 7.  `Finished`
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ReservationState {
     /// The last request of the reservation was explicitly denied or failed.
@@ -18,7 +33,19 @@ pub enum ReservationState {
     Committed,
     /// The execution phase of the job linked to this reservation has been finished successfully.
     Finished,
+}
 
+impl ReservationState {
+    /// Returns `true` if this reservation state has reached a commitment level equal to or higher
+    /// than the `other` state.
+    ///
+    /// The commitment order is defined by the variant declaration order (0-6).
+    /// For example, `Committed` is at least (`>=`) `ProbeAnswer`, but not `Finished`.
+    pub fn is_at_least(&self, other: Self) -> bool {
+        self.cmp(&other) != std::cmp::Ordering::Less
+        // Alternatively, leveraging PartialOrd directly:
+        // self >= &other
+    }
 }
 
 /// Specifies the process state the reservation is currently in. 
