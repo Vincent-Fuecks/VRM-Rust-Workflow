@@ -1,0 +1,11 @@
+[2025-11-09 12:45:46 INFO VRM_Rust_Workflow::logger] Logger initialized. Logging to console and 'logs/workflow_loader.log'.
+[2025-11-09 12:45:46 INFO VRM_Rust_Workflow] Logger initialized. Starting ClientRegistry.
+[2025-11-09 12:45:46 INFO VRM_Rust_Workflow] Loading from path: '/home/vincent/Desktop/Repository/VRM-Rust-Workflow/src/data/workflows.json'...
+[2025-11-09 12:45:46 INFO VRM_Rust_Workflow::domain::client] Adding new client '7209cffb-259f-404b-ac91-4795b4ad39e7' with 1 workflows.
+[2025-11-09 12:45:46 WARN VRM_Rust_Workflow::domain::workflow] Workflow 'Simulation-Run-0' has booking_interval_start (10) after booking_interval_end (0).
+[2025-11-09 12:45:46 INFO VRM_Rust_Workflow::domain::client] --- Registry Summary ---
+[2025-11-09 12:45:46 INFO VRM_Rust_Workflow::domain::client] Total unique clients: 1
+[2025-11-09 12:45:46 INFO VRM_Rust_Workflow::domain::client]   - Client ID: 7209cffb-259f-404b-ac91-4795b4ad39e7
+[2025-11-09 12:45:46 INFO VRM_Rust_Workflow::domain::client]     Workflows: 1
+[2025-11-09 12:45:46 INFO VRM_Rust_Workflow::domain::client]       * Workflow [0]: Simulation-Run-0
+[2025-11-09 12:45:46 INFO VRM_Rust_Workflow::domain::client] ------------------------

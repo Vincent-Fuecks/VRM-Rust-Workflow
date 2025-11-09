@@ -1,0 +1,59 @@
+{
+  "clients" : [
+    {
+      "id": "7209cffb-259f-404b-ac91-4795b4ad39e7",
+      "workflows": [ 
+        {
+          "name": "Simulation-Run-0",
+          "arrivalTime": 0,
+          "bookingIntervalStart": 10,
+          "bookingIntervalEnd": 0,
+
+          "tasks": [
+            {
+              "name": "Data-Preprocessing-1",
+              "state": "Open",
+              "requestProceeding": "Commit",
+
+              "nodeReservation": 
+                {
+                  "taskPath": "",
+                  "outputPath": "/data/logs/sim.out",
+                  "errorPath": "/data/logs/sim.err",
+                  "duration": 1800,
+                  "isMoldable": false, 
+                  "cpus": 8,
+                  "dependencies":
+                    {
+                      "pre": ["7bfb38aa-e4f7-4426-8144-79ed1069dbe2"],
+                      "sync": ["7bfb38aa-e4f7-4426-8144-79ed1069dbe2"]
+                    },
+                  "dataOut": [
+                    {
+                      "name": "preprocessed_data",
+                      "file": "preprocessed.h5",
+                      "size": 10000
+                    }
+                  ],
+                  "dataIn": [
+                    {
+                      "sourceReservation": "EXTERNAL",
+                      "sourcePort": "raw_data",
+                      "file": "raw_detector_data.bin"
+                    }
+                  ]
+                },
+              "linkReservation":
+                {
+                  "startPoint": "", 
+                  "endPoint": "",
+                  "amount": 100,
+                  "bandwidth" : 10
+                }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

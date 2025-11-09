@@ -7,6 +7,8 @@ use std::collections::HashSet;
 use std::sync::Mutex;
 use uuid::Uuid;
 use lazy_static::lazy_static;
+use std::collections::HashMap;
+use serde::{ Serialize};
 
 use crate::loader::parser::parse_joson_file;
 
@@ -29,7 +31,7 @@ lazy_static! {
 /// 5.  `ReserveAnswer`
 /// 6.  `Committed`
 /// 7.  `Finished`
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ReservationState {
     /// The last request of the reservation was explicitly denied or failed.
     Rejected,

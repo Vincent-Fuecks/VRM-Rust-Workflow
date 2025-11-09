@@ -11,3 +11,16 @@ pub fn parse_joson_file<T>(file_path: &str) -> Result<T, Box<dyn Error>> where T
 
     Ok(parsed_data)
 }
+
+
+pub fn get_json_as_str(file_path: &str) -> Option<String> {
+    let json_str = match fs::read_to_string(file_path) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("Error reading file '{}': {}", file_path, e);
+            return None;
+        }
+    };
+
+    return Some(json_str);
+}
