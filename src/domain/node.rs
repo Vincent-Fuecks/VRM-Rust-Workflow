@@ -1,6 +1,8 @@
 use crate::domain::reservation::{NodeReservation};
 
 /// Represents a "sync group" of WorkflowNodes that must be scheduled together.
+/// Contains a goup fo Workflow nodes, which are connected by sync dependencies. 
+/// 
 #[derive(Debug, Clone)]
 pub struct OverlayNode {
     pub id: String,
@@ -30,6 +32,7 @@ pub struct WorkflowNode {
     pub incoming_sync: Vec<String>,
     pub outgoing_sync: Vec<String>,
 
-    /// Key to the Workflow.overlay_nodes HashMap
+    /// Key to the Workflow.overlay_nodes HashMap.
+    /// HashMap contains all other nodes in the same sync group, including this node.
     pub overlay_node: String,
 }
