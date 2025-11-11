@@ -1,11 +1,14 @@
 use std::collections::HashMap;
+use union_find::{QuickUnionUf, UnionBySize, UnionFind};
 
-use crate::api::workflow_dto::{WorkflowDto};
-use crate::api::reservation_dto::{ReservationStateDto, ReservationProceedingDto};
-use crate::domain::workflow_node::{WorkflowNode};
-use crate::domain::reservation::{ReservationProceeding, ReservationState, ReservationBase, NodeReservation, LinkReservation};
+use crate::api::reservation_dto::{ReservationProceedingDto, ReservationStateDto};
+use crate::api::workflow_dto::WorkflowDto;
 use crate::domain::dependency::{DataDependency, SyncDependency, SyncGroupDependency};
-use crate::domain::sync_group::{SyncGroup};
+use crate::domain::reservation::{
+    LinkReservation, NodeReservation, ReservationBase, ReservationProceeding, ReservationState,
+};
+use crate::domain::sync_group::SyncGroup;
+use crate::domain::workflow_node::WorkflowNode;
 use crate::error::Error;
 
 #[derive(Debug, Clone)]
@@ -26,11 +29,11 @@ pub struct Workflow {
 
     /// Keys to Workflow.nodes
     pub exit_nodes: Vec<String>,
-    
+
     /// Keys to Workflow.sync_groups
     /// TODO could also be Workflow.nodes
     pub entry_sync_groups: Vec<String>,
-    
+
     /// Keys to Workflow.sync_groups
     /// TODO could also be Workflow.nodes
     pub exit_sync_groups: Vec<String>,
@@ -68,6 +71,11 @@ fn map_reservation_proceeding(dto_proc: ReservationProceedingDto) -> Reservation
 
 // Contains only help functions for the impl TryFrom<WorkflowDto> for Workflow
 impl Workflow {
+    // TODO in Workflwo.java is function addNewSubjob()
+    // Makes is possible to set a booking start and end time for task per input
+    // I see no advantage to do this in the end start and end of the workflwo are the importend points
+    // Could propose a problem in the reservation cycle may be more than nessessary is reserved
+
     /// Generates all WorklowNodes, from the parsed json
     fn generate_workflow_nodes(dto: &WorkflowDto) -> HashMap<String, WorkflowNode> {
         let mut nodes = HashMap::new();
@@ -75,7 +83,7 @@ impl Workflow {
         for task_dto in &dto.tasks {
             let node_res_dto = &task_dto.node_reservation;
             let node_id = task_dto.id.clone();
-            
+
             // A dto task is a NodeReservation.
             let node_base = ReservationBase {
                 id: node_id.clone(),
@@ -106,9 +114,9 @@ impl Workflow {
                 outgoing_data: Vec::new(),
                 incoming_sync: Vec::new(),
                 outgoing_sync: Vec::new(),
-                
+
                 // Will be set during sync group build
-                sync_group_key: String::new(), 
+                sync_group_key: String::new(),
             };
 
             nodes.insert(node_id, workflow_node);
@@ -122,8 +130,6 @@ impl TryFrom<WorkflowDto> for Workflow {
     type Error = Error;
 
     fn try_from(dto: WorkflowDto) -> Result<Self, Self::Error> {
-
-
         let workflow_id = dto.id.clone();
         let base = ReservationBase {
             id: workflow_id.clone(),
@@ -132,10 +138,10 @@ impl TryFrom<WorkflowDto> for Workflow {
             arrival_time: dto.arrival_time,
             booking_interval_start: dto.booking_interval_start,
             booking_interval_end: dto.booking_interval_end,
-            assigned_start: 0, 
-            assigned_end: 0,  
-            task_duration: 0,   
-            reserved_capacity: 0, 
+            assigned_start: 0,
+            assigned_end: 0,
+            task_duration: 0,
+            reserved_capacity: 0,
             is_moldable: false,
             moldable_work: 0,
         };
@@ -157,36 +163,41 @@ impl TryFrom<WorkflowDto> for Workflow {
             for data_out in &node_res_dto.data_out {
                 let port_name = &data_out.name;
                 let dangling_key = format!("{}/{}", source_node_id, port_name);
-                
+
                 let dep_id = format!(
                     "{}.{}.{}", // TODO should be done differently maybe with a struct as key?
-                    workflow_id,
-                    source_node_id,
-                    port_name
+                    workflow_id, source_node_id, port_name
                 );
 
                 let mut dep_base = ReservationBase {
                     id: dep_id.clone(),
                     state: ReservationState::Open,
-                    request_proceeding: map_reservation_proceeding(task_dto.request_proceeding),
-                    arrival_time: dto.arrival_time,
-                    booking_interval_start: dto.booking_interval_start,
-                    booking_interval_end: dto.booking_interval_end,
-                    assigned_start: 0,
-                    assigned_end: 0,
+                    request_proceeding: ReservationProceeding::Commit,
+                    arrival_time: i64::MIN,
+                    booking_interval_start: i64::MIN,
+                    booking_interval_end: i64::MIN,
+                    assigned_start: i64::MIN,
+                    assigned_end: i64::MIN,
                     task_duration: 1, // Default for links
-                    reserved_capacity: 0, 
-                    is_moldable: false, 
-                    moldable_work: 0, 
+                    reserved_capacity: 0,
+                    is_moldable: false,
+                    moldable_work: 0,
                 };
 
                 // This is a DataDependency (file transfer)
                 if let Some(size) = data_out.size {
                     dep_base.is_moldable = true;
                     dep_base.reserved_capacity = size;
-                    dep_base.moldable_work = size;
-                    
-                    let link_res = LinkReservation { base: dep_base, start_point: String::new(), end_point: String::new() };
+                    dep_base.task_duration = 1;
+                    // task_duration should be one (set because it is moldable)
+                    // TODO Add test
+                    dep_base.moldable_work = size * dep_base.task_duration;
+
+                    let link_res = LinkReservation {
+                        base: dep_base,
+                        start_point: String::new(),
+                        end_point: String::new(),
+                    };
 
                     let data_dep = DataDependency {
                         reservation: link_res,
@@ -196,15 +207,19 @@ impl TryFrom<WorkflowDto> for Workflow {
                         size: size,
                     };
                     dangling_deps.insert(dangling_key, DanglingDependency::Data(data_dep));
-                
+
                 // This is a SyncDependency (bandwidth)
                 } else if let Some(bandwidth) = data_out.bandwidth {
                     dep_base.is_moldable = false;
                     dep_base.reserved_capacity = bandwidth;
-                    dep_base.moldable_work = 0; // Not moldable
+                    dep_base.task_duration = 1;
 
-                    let link_res = LinkReservation { base: dep_base, start_point: String::new(), end_point: String::new() };
-                    
+                    let link_res = LinkReservation {
+                        base: dep_base,
+                        start_point: String::new(),
+                        end_point: String::new(),
+                    };
+
                     let sync_dep = SyncDependency {
                         reservation: link_res,
                         source_node: source_node_id.clone(),
@@ -217,15 +232,16 @@ impl TryFrom<WorkflowDto> for Workflow {
                 }
             }
         }
-        
+
         // Phase 2.2: Process DataIn (complete dangling dependencies)
         for task_dto in &dto.tasks {
             let target_node_id = &task_dto.id;
             let node_res_dto = &task_dto.node_reservation;
 
             for data_in in &node_res_dto.data_in {
-                let dangling_key = format!("{}/{}", data_in.source_reservation, data_in.source_port);
-                
+                let dangling_key =
+                    format!("{}/{}", data_in.source_reservation, data_in.source_port);
+
                 if let Some(dangling_dep) = dangling_deps.remove(&dangling_key) {
                     match dangling_dep {
                         DanglingDependency::Data(mut data_dep) => {
@@ -261,16 +277,20 @@ impl TryFrom<WorkflowDto> for Workflow {
                     arrival_time: dto.arrival_time,
                     booking_interval_start: dto.booking_interval_start,
                     booking_interval_end: dto.booking_interval_end,
-                    assigned_start: 0, 
+                    assigned_start: 0,
                     assigned_end: 0,
-                    task_duration: 0, 
+                    task_duration: 0,
                     reserved_capacity: 0,
-                    is_moldable: true, 
+                    is_moldable: true,
                     moldable_work: 0,
                 };
 
                 let data_dep = DataDependency {
-                    reservation: LinkReservation { base: dep_base, start_point: String::new(), end_point: String::new() },
+                    reservation: LinkReservation {
+                        base: dep_base,
+                        start_point: String::new(),
+                        end_point: String::new(),
+                    },
                     source_node: pre_source_id.clone(),
                     target_node: target_node_id.clone(),
                     port_name: "pre".to_string(),
@@ -281,24 +301,28 @@ impl TryFrom<WorkflowDto> for Workflow {
 
             // "sync" are SyncDependencies
             for sync_source_id in &dep_dto.sync {
-                 let dep_id = format!("{}.sync.{}.{}", workflow_id, sync_source_id, target_node_id);
-                 let dep_base = ReservationBase {
+                let dep_id = format!("{}.sync.{}.{}", workflow_id, sync_source_id, target_node_id);
+                let dep_base = ReservationBase {
                     id: dep_id.clone(),
                     state: ReservationState::Open,
                     request_proceeding: map_reservation_proceeding(task_dto.request_proceeding),
                     arrival_time: dto.arrival_time,
                     booking_interval_start: dto.booking_interval_start,
                     booking_interval_end: dto.booking_interval_end,
-                    assigned_start: 0, 
+                    assigned_start: 0,
                     assigned_end: 0,
-                    task_duration: 1, 
+                    task_duration: 1,
                     reserved_capacity: 0, // 0 bandwidth
-                    is_moldable: false, 
+                    is_moldable: false,
                     moldable_work: 0,
                 };
 
                 let sync_dep = SyncDependency {
-                    reservation: LinkReservation { base: dep_base, start_point: String::new(), end_point: String::new() },
+                    reservation: LinkReservation {
+                        base: dep_base,
+                        start_point: String::new(),
+                        end_point: String::new(),
+                    },
                     source_node: sync_source_id.clone(),
                     target_node: target_node_id.clone(),
                     port_name: "sync".to_string(),
@@ -307,31 +331,47 @@ impl TryFrom<WorkflowDto> for Workflow {
                 sync_dependencies.insert(dep_id, sync_dep);
             }
         }
-        
+
         // Phase 3: Populate node adjacency lists
         for (dep_id, data_dep) in &data_dependencies {
             if let Some(source_node) = nodes.get_mut(&data_dep.source_node) {
                 source_node.outgoing_data.push(dep_id.clone());
             } else {
-                log::warn!("DataDep source node '{}' not found for dep '{}'", data_dep.source_node, dep_id);
+                log::warn!(
+                    "DataDep source node '{}' not found for dep '{}'",
+                    data_dep.source_node,
+                    dep_id
+                );
             }
             if let Some(target_node) = nodes.get_mut(&data_dep.target_node) {
                 target_node.incoming_data.push(dep_id.clone());
             } else {
-                log::warn!("DataDep target node '{}' not found for dep '{}'", data_dep.target_node, dep_id);
+                log::warn!(
+                    "DataDep target node '{}' not found for dep '{}'",
+                    data_dep.target_node,
+                    dep_id
+                );
             }
         }
 
         for (dep_id, sync_dep) in &sync_dependencies {
-             if let Some(source_node) = nodes.get_mut(&sync_dep.source_node) {
+            if let Some(source_node) = nodes.get_mut(&sync_dep.source_node) {
                 source_node.outgoing_sync.push(dep_id.clone());
             } else {
-                log::warn!("SyncDep source node '{}' not found for dep '{}'", sync_dep.source_node, dep_id);
+                log::warn!(
+                    "SyncDep source node '{}' not found for dep '{}'",
+                    sync_dep.source_node,
+                    dep_id
+                );
             }
             if let Some(target_node) = nodes.get_mut(&sync_dep.target_node) {
                 target_node.incoming_sync.push(dep_id.clone());
             } else {
-                log::warn!("SyncDep target node '{}' not found for dep '{}'", sync_dep.target_node, dep_id);
+                log::warn!(
+                    "SyncDep target node '{}' not found for dep '{}'",
+                    sync_dep.target_node,
+                    dep_id
+                );
             }
         }
 
@@ -344,46 +384,48 @@ impl TryFrom<WorkflowDto> for Workflow {
         for node_id in nodes.keys() {
             let sync_group_id = node_id.clone();
 
-            sync_groups.insert(sync_group_id.clone(), SyncGroup {
-                id: sync_group_id.clone(),
+            sync_groups.insert(
+                sync_group_id.clone(),
+                SyncGroup {
+                    id: sync_group_id.clone(),
 
-                representative: None,
-                members: vec![node_id.clone()],
-                
-                sync_dependencies: Vec::new(),
-                
-                outgoing_sync_group_dependencies:  Vec::new(),
-                outgoing_data_dependencies:  Vec::new(),
+                    representative: None,
+                    members: vec![node_id.clone()],
 
-                incoming_sync_group_dependencies:  Vec::new(),
-                incoming_data_dependencies:  Vec::new(),
+                    sync_dependencies: Vec::new(),
 
-                rank_upward: 0,
-                rank_downward: 0,
+                    outgoing_sync_group_dependencies: Vec::new(),
+                    outgoing_data_dependencies: Vec::new(),
 
-                number_of_nodes_critical_path_downwards: 0,
-                number_of_nodes_critical_path_upwards: 0,
-                
-                // Temporary calculation values (internal state)
-                is_in_queue: false,
-                unprocessed_predecessors: 0,
-                spare_time: 0, 
+                    incoming_sync_group_dependencies: Vec::new(),
+                    incoming_data_dependencies: Vec::new(),
 
-                // FRAG-WINDOW Scheduling forces/properties
-                max_succ_force: 0.0,
-                max_pred_force: 0.0,
-                
-                // Search flags
-                is_discovered: false,
-                is_processed: false,
+                    rank_upward: 0,
+                    rank_downward: 0,
 
-                is_moveable: true,
-                is_moveable_interval_start: true, 
-                is_moveable_interval_end: true, 
-                start_position: 0.0,
-                end_position: 0.0, 
+                    number_of_nodes_critical_path_downwards: 0,
+                    number_of_nodes_critical_path_upwards: 0,
 
-            });
+                    // Temporary calculation values (internal state)
+                    is_in_queue: false,
+                    unprocessed_predecessors: 0,
+                    spare_time: 0,
+
+                    // FRAG-WINDOW Scheduling forces/properties
+                    max_succ_force: 0.0,
+                    max_pred_force: 0.0,
+
+                    // Search flags
+                    is_discovered: false,
+                    is_processed: false,
+
+                    is_moveable: true,
+                    is_moveable_interval_start: true,
+                    is_moveable_interval_end: true,
+                    start_position: 0.0,
+                    end_position: 0.0,
+                },
+            );
 
             node_to_sync_group.insert(node_id.clone(), sync_group_id);
         }
@@ -392,15 +434,17 @@ impl TryFrom<WorkflowDto> for Workflow {
         // This involves a graph traversal or a union-find data structure.
         // For now, we'll skip the merging part, so every node is in its own sync group.
         // The `sync` dependencies in the DTO imply which nodes to merge.
-        
+
         for node in nodes.values_mut() {
-            node.sync_group_key = node_to_sync_group.get(&node.reservation.base.id).unwrap().clone();
+            node.sync_group_key = node_to_sync_group
+                .get(&node.reservation.base.id)
+                .unwrap()
+                .clone();
         }
 
         // Phase 5: Build SyncGroupDependenies
         let mut sync_group_dependencies = HashMap::new();
         for (dep_id, data_dep) in &data_dependencies {
-
             if let (Some(source_sync_group_id), Some(target_sync_group_id)) = (
                 node_to_sync_group.get(&data_dep.source_node),
                 node_to_sync_group.get(&data_dep.target_node),
@@ -417,7 +461,7 @@ impl TryFrom<WorkflowDto> for Workflow {
                     sync_group_dependencies.insert(sync_group_dep_id.clone(), sync_group_dep);
 
                     // Add links to the sync_groupNodes
-                    // TODO sould be incoming and outgoing dependencies etc. 
+                    // TODO sould be incoming and outgoing dependencies etc.
                     // TODO For simplicity currently with String member --> incoming/outgoing
                     if let Some(source_sync_group) = sync_groups.get_mut(source_sync_group_id) {
                         source_sync_group.members.push(sync_group_dep_id.clone());
@@ -427,7 +471,6 @@ impl TryFrom<WorkflowDto> for Workflow {
                     }
                 }
             } else {
-
                 log::warn!(
                     "Skipping sync_group dependency '{}' because source ('{}') or target ('{}') node was not found in sync_group map.",
                     dep_id,
@@ -436,28 +479,31 @@ impl TryFrom<WorkflowDto> for Workflow {
                 );
             }
         }
-        
+
         // Phase 6: Find Entry/Exit Nodes
-        let entry_nodes = nodes.values()
+        let entry_nodes = nodes
+            .values()
             .filter(|n| n.incoming_data.is_empty() && n.incoming_sync.is_empty())
             .map(|n| n.reservation.base.id.clone())
             .collect();
-            
-        let exit_nodes = nodes.values()
+
+        let exit_nodes = nodes
+            .values()
             .filter(|n| n.outgoing_data.is_empty() && n.outgoing_sync.is_empty())
             .map(|n| n.reservation.base.id.clone())
             .collect();
 
-        let entry_sync_groups = sync_groups.values()
+        let entry_sync_groups = sync_groups
+            .values()
             .filter(|on| on.incoming_data_dependencies.is_empty())
             .map(|on| on.id.clone())
             .collect();
 
-        let exit_sync_groups = sync_groups.values()
+        let exit_sync_groups = sync_groups
+            .values()
             .filter(|on| on.outgoing_data_dependencies.is_empty())
             .map(|on| on.id.clone())
             .collect();
-
 
         Ok(Workflow {
             base,
