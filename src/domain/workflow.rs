@@ -29,11 +29,11 @@ pub struct Workflow {
     
     /// Keys to Workflow.sync_groups
     /// TODO could also be Workflow.nodes
-    pub sync_group_entry_nodes: Vec<String>,
+    pub entry_sync_groups: Vec<String>,
     
     /// Keys to Workflow.sync_groups
     /// TODO could also be Workflow.nodes
-    pub sync_group_exit_nodes: Vec<String>,
+    pub exit_sync_groups: Vec<String>,
 }
 
 // A temporary struct to hold dependencies that have a source but no target yet.
@@ -409,8 +409,8 @@ impl TryFrom<WorkflowDto> for Workflow {
                 if source_sync_group_id != target_sync_group_id {
                     let sync_group_dep = SyncGroupDependency {
                         id: dep_id.clone(),
-                        source_node: source_sync_group_id.clone(),
-                        target_node: target_sync_group_id.clone(),
+                        source_group: source_sync_group_id.clone(),
+                        target_group: target_sync_group_id.clone(),
                         data_dependency: dep_id.clone(),
                     };
                     let sync_group_dep_id = sync_group_dep.id.clone();
@@ -448,12 +448,12 @@ impl TryFrom<WorkflowDto> for Workflow {
             .map(|n| n.reservation.base.id.clone())
             .collect();
 
-        let sync_group_entry_nodes = sync_groups.values()
+        let entry_sync_groups = sync_groups.values()
             .filter(|on| on.incoming_data_dependencies.is_empty())
             .map(|on| on.id.clone())
             .collect();
 
-        let sync_group_exit_nodes = sync_groups.values()
+        let exit_sync_groups = sync_groups.values()
             .filter(|on| on.outgoing_data_dependencies.is_empty())
             .map(|on| on.id.clone())
             .collect();
@@ -468,8 +468,8 @@ impl TryFrom<WorkflowDto> for Workflow {
             sync_group_dependencies,
             entry_nodes,
             exit_nodes,
-            sync_group_entry_nodes,
-            sync_group_exit_nodes,
+            entry_sync_groups,
+            exit_sync_groups,
         })
     }
 }

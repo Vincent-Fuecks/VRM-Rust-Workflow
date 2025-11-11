@@ -46,10 +46,10 @@ pub struct SyncGroupDependency {
     pub id: String, 
 
     /// Key to Workflow.overlay_nodes, which is the sender. 
-    pub source_node: String,
+    pub source_group: String,
     
     /// Key to Workflow.overlay_nodes, which is the receiver. 
-    pub target_node: String,
+    pub target_group: String,
 
     /// Key to the DataDependency that this overlay edge represents.
     pub data_dependency: String,
