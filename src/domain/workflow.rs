@@ -4,7 +4,7 @@ use crate::api::workflow_dto::{WorkflowDto};
 use crate::api::reservation_dto::{ReservationStateDto, ReservationProceedingDto};
 use crate::domain::workflow_node::{WorkflowNode};
 use crate::domain::reservation::{ReservationProceeding, ReservationState, ReservationBase, NodeReservation, LinkReservation};
-use crate::domain::dependency::{DataDependency, SyncDependency, OverlayDependency};
+use crate::domain::dependency::{DataDependency, SyncDependency, SyncGroupDependency};
 use crate::domain::sync_group::{SyncGroup};
 use crate::error::Error;
 
@@ -17,10 +17,9 @@ pub struct Workflow {
     pub data_dependencies: HashMap<String, DataDependency>,
     pub sync_dependencies: HashMap<String, SyncDependency>,
 
-    // The overlay graph for scheduling sync groups 
-    // (where all nodes of sync groups are centralized to one node)
-    pub overlay_nodes: HashMap<String, SyncGroup>,
-    pub overlay_dependencies: HashMap<String, OverlayDependency>,
+    // The sync groups, which are utilized for scheduling sync groups.
+    pub sync_groups: HashMap<String, SyncGroup>,
+    pub sync_group_dependencies: HashMap<String, SyncGroupDependency>,
 
     /// Keys to Workflow.nodes
     pub entry_nodes: Vec<String>,
@@ -28,11 +27,13 @@ pub struct Workflow {
     /// Keys to Workflow.nodes
     pub exit_nodes: Vec<String>,
     
-    /// Keys to Workflow.overlay_nodes
-    pub overlay_entry_nodes: Vec<String>,
+    /// Keys to Workflow.sync_groups
+    /// TODO could also be Workflow.nodes
+    pub sync_group_entry_nodes: Vec<String>,
     
-    /// Keys to Workflow.overlay_nodes
-    pub overlay_exit_nodes: Vec<String>,
+    /// Keys to Workflow.sync_groups
+    /// TODO could also be Workflow.nodes
+    pub sync_group_exit_nodes: Vec<String>,
 }
 
 // A temporary struct to hold dependencies that have a source but no target yet.
@@ -106,8 +107,8 @@ impl Workflow {
                 incoming_sync: Vec::new(),
                 outgoing_sync: Vec::new(),
                 
-                // Will be set during overlay build
-                overlay_node: String::new(), 
+                // Will be set during sync group build
+                sync_group_key: String::new(), 
             };
 
             nodes.insert(node_id, workflow_node);
@@ -334,65 +335,101 @@ impl TryFrom<WorkflowDto> for Workflow {
             }
         }
 
-        // Phase 4: Build Overlay Graph
+        // Phase 4: Building Sync Groups
         // TODO This is a simplified version using union-find logic.
-        let mut overlay_nodes = HashMap::new();
-        let mut node_to_overlay: HashMap<String, String> = HashMap::new();
+        let mut sync_groups = HashMap::new();
+        let mut node_to_sync_group: HashMap<String, String> = HashMap::new();
 
-        // Each node starts in its own overlay group
+        // Each node starts in its own sync group
         for node_id in nodes.keys() {
-            let overlay_id = node_id.clone();
-            overlay_nodes.insert(overlay_id.clone(), SyncGroup {
-                id: overlay_id.clone(),
+            let sync_group_id = node_id.clone();
+
+            sync_groups.insert(sync_group_id.clone(), SyncGroup {
+                id: sync_group_id.clone(),
+
+                representative: None,
                 members: vec![node_id.clone()],
+                
+                sync_dependencies: Vec::new(),
+                
+                outgoing_sync_group_dependencies:  Vec::new(),
+                outgoing_data_dependencies:  Vec::new(),
+
+                incoming_sync_group_dependencies:  Vec::new(),
+                incoming_data_dependencies:  Vec::new(),
+
                 rank_upward: 0,
                 rank_downward: 0,
-                incoming_overlay: Vec::new(),
-                outgoing_overlay: Vec::new(),
+
+                number_of_nodes_critical_path_downwards: 0,
+                number_of_nodes_critical_path_upwards: 0,
+                
+                // Temporary calculation values (internal state)
+                is_in_queue: false,
+                unprocessed_predecessors: 0,
+                spare_time: 0, 
+
+                // FRAG-WINDOW Scheduling forces/properties
+                max_succ_force: 0.0,
+                max_pred_force: 0.0,
+                
+                // Search flags
+                is_discovered: false,
+                is_processed: false,
+
+                is_moveable: true,
+                is_moveable_interval_start: true, 
+                is_moveable_interval_end: true, 
+                start_position: 0.0,
+                end_position: 0.0, 
+
             });
-            node_to_overlay.insert(node_id.clone(), overlay_id);
+
+            node_to_sync_group.insert(node_id.clone(), sync_group_id);
         }
 
-        // TODO: Implement logic to merge overlay_nodes based on SyncDependencies.
+        // TODO: Implement logic to merge sync groups based on SyncDependencies.
         // This involves a graph traversal or a union-find data structure.
         // For now, we'll skip the merging part, so every node is in its own sync group.
         // The `sync` dependencies in the DTO imply which nodes to merge.
         
         for node in nodes.values_mut() {
-            node.overlay_node = node_to_overlay.get(&node.reservation.base.id).unwrap().clone();
+            node.sync_group_key = node_to_sync_group.get(&node.reservation.base.id).unwrap().clone();
         }
 
-        // Phase 5: Build OverlayDependencies
-        let mut overlay_dependencies = HashMap::new();
+        // Phase 5: Build SyncGroupDependenies
+        let mut sync_group_dependencies = HashMap::new();
         for (dep_id, data_dep) in &data_dependencies {
 
-            if let (Some(source_overlay_id), Some(target_overlay_id)) = (
-                node_to_overlay.get(&data_dep.source_node),
-                node_to_overlay.get(&data_dep.target_node),
+            if let (Some(source_sync_group_id), Some(target_sync_group_id)) = (
+                node_to_sync_group.get(&data_dep.source_node),
+                node_to_sync_group.get(&data_dep.target_node),
             ) {
-                // Only create overlay edges between different overlay groups
-                if source_overlay_id != target_overlay_id {
-                    let overlay_dep = OverlayDependency {
+                // Only create sync group edges between different sync groups
+                if source_sync_group_id != target_sync_group_id {
+                    let sync_group_dep = SyncGroupDependency {
                         id: dep_id.clone(),
-                        source_overlay: source_overlay_id.clone(),
-                        target_overlay: target_overlay_id.clone(),
+                        source_node: source_sync_group_id.clone(),
+                        target_node: target_sync_group_id.clone(),
                         data_dependency: dep_id.clone(),
                     };
-                    let overlay_dep_id = overlay_dep.id.clone();
-                    overlay_dependencies.insert(overlay_dep_id.clone(), overlay_dep);
+                    let sync_group_dep_id = sync_group_dep.id.clone();
+                    sync_group_dependencies.insert(sync_group_dep_id.clone(), sync_group_dep);
 
-                    // Add links to the OverlayNodes
-                    if let Some(source_overlay) = overlay_nodes.get_mut(source_overlay_id) {
-                        source_overlay.outgoing_overlay.push(overlay_dep_id.clone());
+                    // Add links to the sync_groupNodes
+                    // TODO sould be incoming and outgoing dependencies etc. 
+                    // TODO For simplicity currently with String member --> incoming/outgoing
+                    if let Some(source_sync_group) = sync_groups.get_mut(source_sync_group_id) {
+                        source_sync_group.members.push(sync_group_dep_id.clone());
                     }
-                    if let Some(target_overlay) = overlay_nodes.get_mut(target_overlay_id) {
-                        target_overlay.incoming_overlay.push(overlay_dep_id.clone());
+                    if let Some(target_sync_group) = sync_groups.get_mut(target_sync_group_id) {
+                        target_sync_group.members.push(sync_group_dep_id.clone());
                     }
                 }
             } else {
 
                 log::warn!(
-                    "Skipping overlay dependency '{}' because source ('{}') or target ('{}') node was not found in overlay map.",
+                    "Skipping sync_group dependency '{}' because source ('{}') or target ('{}') node was not found in sync_group map.",
                     dep_id,
                     data_dep.source_node,
                     data_dep.target_node
@@ -411,13 +448,13 @@ impl TryFrom<WorkflowDto> for Workflow {
             .map(|n| n.reservation.base.id.clone())
             .collect();
 
-        let overlay_entry_nodes = overlay_nodes.values()
-            .filter(|on| on.incoming_overlay.is_empty())
+        let sync_group_entry_nodes = sync_groups.values()
+            .filter(|on| on.incoming_data_dependencies.is_empty())
             .map(|on| on.id.clone())
             .collect();
 
-        let overlay_exit_nodes = overlay_nodes.values()
-            .filter(|on| on.outgoing_overlay.is_empty())
+        let sync_group_exit_nodes = sync_groups.values()
+            .filter(|on| on.outgoing_data_dependencies.is_empty())
             .map(|on| on.id.clone())
             .collect();
 
@@ -427,12 +464,12 @@ impl TryFrom<WorkflowDto> for Workflow {
             nodes,
             data_dependencies,
             sync_dependencies,
-            overlay_nodes,
-            overlay_dependencies,
+            sync_groups,
+            sync_group_dependencies,
             entry_nodes,
             exit_nodes,
-            overlay_entry_nodes,
-            overlay_exit_nodes,
+            sync_group_entry_nodes,
+            sync_group_exit_nodes,
         })
     }
 }
