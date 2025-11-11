@@ -39,8 +39,9 @@ pub struct SyncDependency {
 }
 
 /// An edge in the "overlay graph" connecting sync groups.
+/// TODO Adjust comments after rework of OverlayNode -> SyncGroup 
 #[derive(Debug, Clone)]
-pub struct OverlayDependency {
+pub struct SyncGroupDependency {
     // Underlying DataDependency ID
     pub id: String, 
 

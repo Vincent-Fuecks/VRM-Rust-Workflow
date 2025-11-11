@@ -2,9 +2,10 @@ use std::collections::HashMap;
 
 use crate::api::workflow_dto::{WorkflowDto};
 use crate::api::reservation_dto::{ReservationStateDto, ReservationProceedingDto};
-use crate::domain::node::{OverlayNode, WorkflowNode};
+use crate::domain::workflow_node::{WorkflowNode};
 use crate::domain::reservation::{ReservationProceeding, ReservationState, ReservationBase, NodeReservation, LinkReservation};
 use crate::domain::dependency::{DataDependency, SyncDependency, OverlayDependency};
+use crate::domain::sync_group::{SyncGroup};
 use crate::error::Error;
 
 #[derive(Debug, Clone)]
@@ -18,7 +19,7 @@ pub struct Workflow {
 
     // The overlay graph for scheduling sync groups 
     // (where all nodes of sync groups are centralized to one node)
-    pub overlay_nodes: HashMap<String, OverlayNode>,
+    pub overlay_nodes: HashMap<String, SyncGroup>,
     pub overlay_dependencies: HashMap<String, OverlayDependency>,
 
     /// Keys to Workflow.nodes
@@ -341,7 +342,7 @@ impl TryFrom<WorkflowDto> for Workflow {
         // Each node starts in its own overlay group
         for node_id in nodes.keys() {
             let overlay_id = node_id.clone();
-            overlay_nodes.insert(overlay_id.clone(), OverlayNode {
+            overlay_nodes.insert(overlay_id.clone(), SyncGroup {
                 id: overlay_id.clone(),
                 members: vec![node_id.clone()],
                 rank_upward: 0,
