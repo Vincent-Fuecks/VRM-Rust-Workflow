@@ -4,15 +4,15 @@
       "id": "7209cffb-259f-404b-ac91-4795b4ad39e7",
       "workflows": [ 
         {
-          "name": "Simulation-Run-0",
+          "id": "Simulation-Run-0",
           "arrivalTime": 0,
           "bookingIntervalStart": 10,
           "bookingIntervalEnd": 0,
 
           "tasks": [
             {
-              "name": "Data-Preprocessing-1",
-              "state": "Open",
+              "id": "Data-Preprocessing-1",
+              "reservationState": "Open",
               "requestProceeding": "Commit",
 
               "nodeReservation": 
@@ -25,8 +25,8 @@
                   "cpus": 8,
                   "dependencies":
                     {
-                      "pre": ["7bfb38aa-e4f7-4426-8144-79ed1069dbe2"],
-                      "sync": ["7bfb38aa-e4f7-4426-8144-79ed1069dbe2"]
+                      "pre": ["Data-Preprocessing-0"],
+                      "sync": ["Data-Preprocessing-0"]
                     },
                   "dataOut": [
                     {

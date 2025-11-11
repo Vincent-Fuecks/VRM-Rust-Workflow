@@ -1,5 +1,5 @@
 [package]
-name = "VRM-Rust-Workflow"
+name = "vrm_rust_workflow"
 version = "0.1.0"
 edition = "2024"
 
@@ -12,3 +12,4 @@ lazy_static = "1.4"
 log = "0.4.21"
 fern = { version = "0.6", features = ["colored"] }
 chrono = "0.4.38"
+thiserror = "2.0.17"

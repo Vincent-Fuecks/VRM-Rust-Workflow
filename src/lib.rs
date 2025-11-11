@@ -1,14 +1,23 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+use crate::api::client_dto::SystemModelDto;
+use crate::domain::client::SystemModel;
+use crate::loader::parser::parse_json_file;
+use crate::error::Result;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub mod api;
+pub mod domain;
+pub mod loader;
+pub mod logger;
+pub mod error;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
+pub fn generate_system_model(file_path: &str) -> Result<SystemModel> {
+    logger::init();
+    log::info!("Logger initialized. Starting SystemModel construction.");
+
+    let root_dto: SystemModelDto = parse_json_file::<SystemModelDto>(file_path)?;
+    log::info!("JSON file parsed successfully.");
+
+    let system_model = SystemModel::from_dto(root_dto)?;
+    log::info!("Internal SystemModel constructed successfully.");
+
+    Ok(system_model)
 }

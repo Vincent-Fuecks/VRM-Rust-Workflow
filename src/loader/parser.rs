@@ -1,26 +1,22 @@
-use serde::{Deserialize};
-use std::error::Error;
+use serde::de::DeserializeOwned;
 use std::fs;
 
-pub fn parse_joson_file<T>(file_path: &str) -> Result<T, Box<dyn Error>> where T: for<'a> Deserialize<'a>, {
+use crate::error::{Error, Result};
+
+/// Parses a JSON file into a given type `T`.
+///
+/// This function reads a file from `file_path`, attempts to parse it
+/// as JSON, and returns an instance of `T`.
+///
+/// Errors are automatically converted into `crate::error::Error` variants:
+/// - `Error::IoError` if the file cannot be read.
+/// - `Error::DeserializationError` if the JSON is malformed.
+pub fn parse_json_file<T: DeserializeOwned>(file_path: &str) -> Result<T> {
     let data = fs::read_to_string(file_path)
-        .map_err(|e| format!("Failed to read config file '{:?}': {}", file_path, e))?;
+        .map_err(|e| Error::IoError(e))?;
 
     let parsed_data: T = serde_json::from_str(&data)
-        .map_err(|e| format!("Failed to parse JSON from '{:?}': {}", file_path, e))?;
+        .map_err(|e| Error::DeserializationError(e))?;
 
     Ok(parsed_data)
-}
-
-
-pub fn get_json_as_str(file_path: &str) -> Option<String> {
-    let json_str = match fs::read_to_string(file_path) {
-        Ok(s) => s,
-        Err(e) => {
-            eprintln!("Error reading file '{}': {}", file_path, e);
-            return None;
-        }
-    };
-
-    return Some(json_str);
 }
