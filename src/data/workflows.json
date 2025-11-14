@@ -25,7 +25,7 @@
                   "cpus": 8,
                   "dependencies":
                     {
-                      "pre": ["Data-Preprocessing-0"],
+                      "data": ["Data-Preprocessing-0"],
                       "sync": ["Data-Preprocessing-0"]
                     },
                   "dataOut": [

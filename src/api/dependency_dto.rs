@@ -1,7 +1,7 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct DependencyDto {
-    pub pre: Vec<String>,
+    pub data: Vec<String>,
     pub sync: Vec<String>,
 }
