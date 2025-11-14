@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
-use crate::domain::workflow::Workflow;
 use crate::api::client_dto::{ClientDto, SystemModelDto};
-use crate::error::{Result};
+use crate::domain::workflow::Workflow;
+use crate::error::Result;
 
 /// Represents a client, which can have multiple workflows.
 #[derive(Debug, Clone)]
@@ -32,8 +32,8 @@ impl SystemModel {
 impl Client {
     pub fn from_dto(dto: ClientDto) -> Result<Self> {
         let mut workflows = HashMap::new();
+
         for workflow_dto in dto.workflows {
-            
             let workflow = Workflow::try_from(workflow_dto)?;
             workflows.insert(workflow.base.id.clone(), workflow);
         }
