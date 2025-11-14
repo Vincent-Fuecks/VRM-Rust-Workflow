@@ -1,4 +1,4 @@
-use crate::domain::{reservation::NodeReservation};
+use crate::domain::reservation::NodeReservation;
 
 /// Represents a node in the workflow graph (a computation task).
 #[derive(Debug, Clone)]
@@ -11,7 +11,7 @@ pub struct WorkflowNode {
     pub incoming_sync: Vec<String>,
     pub outgoing_sync: Vec<String>,
 
-    /// Key of the Workflow.sync_groups HashMap.
+    /// Key of the Workflow.co_allocations HashMap.
     /// HashMap contains all other nodes in the same sync group, including this node.
-    pub sync_group_key: String,
+    pub co_allocation_key: String,
 }
