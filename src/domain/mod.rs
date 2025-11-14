@@ -1,6 +1,7 @@
+pub mod client;
+pub mod co_allocation;
+pub mod dependency;
 pub mod reservation;
 pub mod workflow;
 pub mod workflow_node;
-pub mod dependency;
-pub mod client;
-pub mod sync_group;
+pub mod workflow_tests;

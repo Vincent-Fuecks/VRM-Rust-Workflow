@@ -1,27 +1,33 @@
-use crate::domain::dependency::{DataDependency, SyncDependency, SyncGroupDependency};
+use std::collections::HashMap;
+
+use crate::domain::dependency::{CoAllocationDependency, DataDependency, SyncDependency};
 use crate::domain::workflow_node::WorkflowNode;
 
-/// Represents a "sync group" of WorkflowNodes that must be scheduled together.
-/// Contains a goup fo Workflow nodes, which are connected by sync dependencies.
+/// A CoAllocation is a set of one or more compute tasks (WorkflowNodes) that must be scheduled to run at the exact same time (called "co-allocation" or "gang scheduling.").
+/// A CoAllocation is formed by any WorkflowNodes that are linked, directly or indirectly, by a SyncDependency.
+/// (e.g. We have the following three SyncDependencies A -> B        B -> C      D -> E => CoAllocation(A,B,C) and CoAllocation(D,E)
 ///
+/// **Importend**: The scheduler later schedules **not** the individual WorkflowNodes, it schedules the **CoAllocation** as one unit.
+/// Therefore, when the scheduler reserves resources for a CoAllocation, it must find a time slot where all member nodes (e.g. A, B, and C) can run simultaneously.
+// The CoAllocation's assigned_start time becomes the assigned_start time for all its member nodes.
 #[derive(Debug, Clone)]
-pub struct SyncGroup {
+pub struct CoAllocation {
     pub id: String,
 
     /// WorkflowNode, which is representing all WorkflowNodes in this sync group
     pub representative: Option<WorkflowNode>,
 
-    /// Keys to Workflow.nodes, which are part of this SyncGroup.
+    /// Keys to Workflow.nodes, which are part of this CoAllocation.
     pub members: Vec<String>,
 
-    /// SyncDependencies connecting WorkflowNodes of this SyncGroup.
+    /// SyncDependencies connecting WorkflowNodes of this CoAllocation.
     pub sync_dependencies: Vec<SyncDependency>,
 
     // TODO Should be maybe done per WorkflowNode Ids? Maybe better?
-    pub outgoing_sync_group_dependencies: Vec<SyncGroupDependency>,
+    pub outgoing_co_allocation_dependencies: Vec<CoAllocationDependency>,
     pub outgoing_data_dependencies: Vec<DataDependency>,
 
-    pub incoming_sync_group_dependencies: Vec<SyncGroupDependency>,
+    pub incoming_co_allocation_dependencies: Vec<CoAllocationDependency>,
     pub incoming_data_dependencies: Vec<DataDependency>,
 
     // Rank for scheduling
@@ -60,9 +66,12 @@ pub struct SyncGroup {
     pub is_in_queue: bool,
 
     /// Temporary value for topological order calculation (unprocessedPredecessors).
-    pub unprocessed_predecessors: i64,
+    pub unprocessed_predecessor_count: i64,
 
-    /// Spare time distributed temporary to this SyncGroup during calculation of booking interval.
+    /// Temporary value for topological order calculation (unprocessed_successorCount).
+    pub unprocessed_successor_count: i64,
+
+    /// Spare time distributed temporary to this CoAllocation during calculation of booking interval.
     pub spare_time: i64,
 
     // FRAG-WINDOW Scheduling forces/properties
@@ -85,4 +94,21 @@ pub struct SyncGroup {
     pub is_moveable_interval_end: bool,
     pub start_position: f64,
     pub end_position: f64,
+}
+
+impl CoAllocation {
+    pub fn get_co_allocation_duration(&self, nodes: &HashMap<String, WorkflowNode>) -> i64 {
+        let mut max_duration: i64 = 0;
+
+        for node_key in &self.members {
+            if let Some(member) = nodes.get(node_key) {
+                if member.reservation.base.task_duration > max_duration {
+                    max_duration = member.reservation.base.task_duration;
+                }
+            } else {
+                log::warn!("Warning: Node key '{}' not found in nodes map.", node_key);
+            }
+        }
+        return max_duration;
+    }
 }
