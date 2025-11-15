@@ -1,0 +1,182 @@
+{
+  "clients" : [
+    {
+      "id": "7209cffb-259f-404b-ac91-4795b4ad39e7",
+      "workflows": [ 
+        {
+          "id": "Simulation-Run-0",
+          "arrivalTime": 0,
+          "bookingIntervalStart": 10,
+          "bookingIntervalEnd": 0,
+
+          "tasks": [
+            {
+              "id": "A",
+              "reservationState": "Open",
+              "requestProceeding": "Commit",
+
+              "nodeReservation": 
+                {
+                  "taskPath": "",
+                  "outputPath": "/data/logs/sim.out",
+                  "errorPath": "/data/logs/sim.err",
+                  "duration": 1800,
+                  "isMoldable": false, 
+                  "cpus": 8,
+                  "dependencies":
+                    {
+                      "data": [],
+                      "sync": []
+                    },
+                  "dataOut": [
+                    {
+                      "name": "preprocessed_data",
+                      "file": "preprocessed.h5",
+                      "size": 10000
+                    }
+                  ],
+                  "dataIn": [
+                    {
+                      "sourceReservation": "EXTERNAL",
+                      "sourcePort": "raw_data",
+                      "file": "raw_detector_data.bin"
+                    }
+                  ]
+                },
+              "linkReservation":
+                {
+                  "startPoint": "", 
+                  "endPoint": "",
+                  "amount": 100,
+                  "bandwidth" : 10
+                }
+            },
+                        {
+              "id": "B",
+              "reservationState": "Open",
+              "requestProceeding": "Commit",
+
+              "nodeReservation": 
+                {
+                  "taskPath": "",
+                  "outputPath": "/data/logs/sim.out",
+                  "errorPath": "/data/logs/sim.err",
+                  "duration": 1800,
+                  "isMoldable": false, 
+                  "cpus": 8,
+                  "dependencies":
+                    {
+                      "data": ["A"],
+                      "sync": ["B"]
+                    },
+                  "dataOut": [
+                    {
+                      "name": "preprocessed_data",
+                      "file": "preprocessed.h5",
+                      "size": 10000
+                    }
+                  ],
+                  "dataIn": [
+                    {
+                      "sourceReservation": "EXTERNAL",
+                      "sourcePort": "raw_data",
+                      "file": "raw_detector_data.bin"
+                    }
+                  ]
+                },
+              "linkReservation":
+                {
+                  "startPoint": "", 
+                  "endPoint": "",
+                  "amount": 100,
+                  "bandwidth" : 10
+                }
+            },
+            {
+              "id": "C",
+              "reservationState": "Open",
+              "requestProceeding": "Commit",
+
+              "nodeReservation": 
+                {
+                  "taskPath": "",
+                  "outputPath": "/data/logs/sim.out",
+                  "errorPath": "/data/logs/sim.err",
+                  "duration": 1800,
+                  "isMoldable": false, 
+                  "cpus": 8,
+                  "dependencies":
+                    {
+                      "data": ["A"],
+                      "sync": ["B", "C", "D"]
+                    },
+                  "dataOut": [
+                    {
+                      "name": "preprocessed_data",
+                      "file": "preprocessed.h5",
+                      "size": 10000
+                    }
+                  ],
+                  "dataIn": [
+                    {
+                      "sourceReservation": "EXTERNAL",
+                      "sourcePort": "raw_data",
+                      "file": "raw_detector_data.bin"
+                    }
+                  ]
+                },
+              "linkReservation":
+                {
+                  "startPoint": "", 
+                  "endPoint": "",
+                  "amount": 100,
+                  "bandwidth" : 10
+                }
+            },
+            {
+              "id": "D",
+              "reservationState": "Open",
+              "requestProceeding": "Commit",
+
+              "nodeReservation": 
+                {
+                  "taskPath": "",
+                  "outputPath": "/data/logs/sim.out",
+                  "errorPath": "/data/logs/sim.err",
+                  "duration": 1800,
+                  "isMoldable": false, 
+                  "cpus": 8,
+                  "dependencies":
+                    {
+                      "data": ["A"],
+                      "sync": ["C"]
+                    },
+                  "dataOut": [
+                    {
+                      "name": "preprocessed_data",
+                      "file": "preprocessed.h5",
+                      "size": 10000
+                    }
+                  ],
+                  "dataIn": [
+                    {
+                      "sourceReservation": "EXTERNAL",
+                      "sourcePort": "raw_data",
+                      "file": "raw_detector_data.bin"
+                    }
+                  ]
+                },
+              "linkReservation":
+                {
+                  "startPoint": "", 
+                  "endPoint": "",
+                  "amount": 100,
+                  "bandwidth" : 10
+                }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

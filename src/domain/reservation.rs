@@ -2,7 +2,7 @@
 ///
 /// This state tracks the progress of the reservation from initial request
 /// through processing, commitment, and eventual completion or failure.
-/// 
+///
 /// The order, from lowest commitment (0) to highest (6).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ReservationState {
@@ -50,20 +50,18 @@ pub enum ReservationProceeding {
     Delete,
 }
 
-/// The fundamental structure holding common data for any resource reservation
-/// within the **distributed resource reservation system**.
+/// The fundamental structure holding common data for any resource reservation system.
 ///
 /// This base provides essential metadata, time information, and capacity requirements,
 /// regardless of whether the reservation targets a computational node, network link or workflow.
-/// Its fields are vital for synchronization across the distributed components.
-/// 
-/// It is also possible, that more than one object representing the same reservation. 
-/// Each component has to take care to sync the state of all these objects, 
-/// e.g., between the object in the reservation database and the return value of some request. 
-/// 
-/// To support this synchronization each reservation has to carry a unique id within the VRM setup. 
-/// The component initially creating the reservation has to take care to generate only unique names. 
-/// Objects representing the same reservation, but in different states 
+///
+/// It is also possible, that more than one object representing the same reservation.
+/// Each component has to take care to sync the state of all these objects,
+/// e.g., between the object in the reservation database and the return value of some request.
+///
+/// To support this synchronization each reservation has to carry a unique id within the VRM setup.
+/// The component initially creating the reservation has to take care to generate only unique names.
+/// Objects representing the same reservation, but in different states
 /// or different configurations have to carry the very same id.
 #[derive(Debug, Clone)]
 pub struct ReservationBase {
@@ -75,7 +73,6 @@ pub struct ReservationBase {
 
     /// The **requested action** for the reservation (e.g., `Probe`, `Reserve`, `Commit`).
     pub request_proceeding: ReservationProceeding,
-
 
     // Time windows in s
     /// The time at which the reservation request **arrived** in the system.
@@ -93,13 +90,12 @@ pub struct ReservationBase {
     /// The precise time the resource was **formally assigned to end** the task. (0 if not set).
     pub assigned_end: i64,
 
-
     // Resource properties
     /// The requested and reserved **duration** of the task (in seconds).
     pub task_duration: i64, // 'duration' in NodeReservationDto
 
     /// The total **amount of resource capacity** requested and reserved of this task
-    /// Unit is according to the Task: 
+    /// Unit is according to the Task:
     /// NodeReservation: Number of CPUs
     /// LinkReservation: Bandwidth in Mbps
     pub reserved_capacity: i64,
@@ -110,8 +106,7 @@ pub struct ReservationBase {
     /// Internal field: The total required work, calculated as `reserved_capacity` * `task_duration`.
     /// This value remains constant for non-moldable jobs.
     pub moldable_work: i64,
-
-    // TODO 
+    // TODO
     // pub frag_delta: f64,
 }
 

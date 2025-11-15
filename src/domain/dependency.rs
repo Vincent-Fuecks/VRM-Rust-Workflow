@@ -1,6 +1,6 @@
 use crate::domain::reservation::LinkReservation;
 
-// TODO Should be used as Key
+// TODO Should be used as Keys in workflows.rs
 // #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 // pub enum DependencyType {
 //     Data,
@@ -52,19 +52,18 @@ pub struct SyncDependency {
     pub bandwidth: i64,
 }
 
-/// An edge in the "overlay graph" connecting sync groups.
-/// TODO Adjust comments after rework of OverlayNode -> SyncGroup
+/// An edge in the "CoAllocations graph" connecting sync groups.
 #[derive(Debug, Clone)]
 pub struct CoAllocationDependency {
     // Underlying DataDependency ID
     pub id: String,
 
-    /// Key to Workflow.overlay_nodes, which is the sender.
+    /// Key to Workflow.co_allocations, which is the sender.
     pub source_group: String,
 
-    /// Key to Workflow.overlay_nodes, which is the receiver.
+    /// Key to Workflow.co_allocations, which is the receiver.
     pub target_group: String,
 
-    /// Key to the DataDependency that this overlay edge represents.
+    /// Key to the DataDependency that this CoAllocation edge represents.
     pub data_dependency: String,
 }

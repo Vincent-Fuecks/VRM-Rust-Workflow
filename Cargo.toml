@@ -13,3 +13,4 @@ log = "0.4.21"
 fern = { version = "0.6", features = ["colored"] }
 chrono = "0.4.38"
 thiserror = "2.0.17"
+union-find = "0.4.3"
