@@ -7,6 +7,10 @@ use vrm_rust_workflow::{
     generate_system_model,
 };
 
+/// The CoAllocation is formed by any WorkflowNodes that are linked, directly or indirectly, by a SyncDependency.
+/// This test case, consits of three SyncDependencies A -> B        B -> C      D -> E
+/// => CoAllocation(A,B,C) and CoAllocation(D,E)
+/// Plus a DataDependency between the two CoAllocations (CoAllocation(A,B,C) and CoAllocation(D,E))
 #[test]
 fn test_co_allocation_graph_creation() {
     let file_path: &str = "/home/vincent/Desktop/Repository/VRM-Rust-Workflow/src/data/test/test_workflow_with_simple_co_allocation_graph.json";
