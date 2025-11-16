@@ -25,7 +25,7 @@
                   "cpus": 8,
                   "dependencies":
                     {
-                      "pre": [],
+                      "data": [],
                       "sync": []
                     },
                   "dataOut": [
@@ -66,7 +66,7 @@
                   "cpus": 8,
                   "dependencies":
                     {
-                      "pre": [],
+                      "data": [],
                       "sync": []
                     },
                   "dataOut": [
@@ -107,7 +107,7 @@
                   "cpus": 8,
                   "dependencies":
                     {
-                      "pre": ["Data-Preprocessing-1", "Data-Preprocessing-2"],
+                      "data": ["Data-Preprocessing-1", "Data-Preprocessing-2"],
                       "sync": ["Data-Preprocessing-1", "Data-Preprocessing-2"]
                     },
                   "dataOut": [
@@ -148,7 +148,7 @@
                   "cpus": 8,
                   "dependencies":
                     {
-                      "pre": ["Data-Preprocessing-3"],
+                      "data": ["Data-Preprocessing-3"],
                       "sync": ["Data-Preprocessing-3"]
                     },
                   "dataOut": [

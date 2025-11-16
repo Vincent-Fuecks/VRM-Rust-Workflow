@@ -26,7 +26,7 @@
                   "dependencies":
                     {
                       "data": [],
-                      "sync": []
+                      "sync": ["B"]
                     },
                   "dataOut": [
                     {
@@ -51,7 +51,7 @@
                   "bandwidth" : 10
                 }
             },
-                        {
+            {
               "id": "B",
               "reservationState": "Open",
               "requestProceeding": "Commit",
@@ -66,8 +66,8 @@
                   "cpus": 8,
                   "dependencies":
                     {
-                      "data": ["A"],
-                      "sync": ["B"]
+                      "data": [],
+                      "sync": ["A", "C"]
                     },
                   "dataOut": [
                     {
@@ -107,8 +107,8 @@
                   "cpus": 8,
                   "dependencies":
                     {
-                      "data": ["A"],
-                      "sync": ["B", "C", "D"]
+                      "data": [],
+                      "sync": ["B"]
                     },
                   "dataOut": [
                     {
@@ -148,8 +148,49 @@
                   "cpus": 8,
                   "dependencies":
                     {
-                      "data": ["A"],
-                      "sync": ["C"]
+                      "data": ["B"],
+                      "sync": ["E"]
+                    },
+                  "dataOut": [
+                    {
+                      "name": "preprocessed_data",
+                      "file": "preprocessed.h5",
+                      "size": 10000
+                    }
+                  ],
+                  "dataIn": [
+                    {
+                      "sourceReservation": "EXTERNAL",
+                      "sourcePort": "raw_data",
+                      "file": "raw_detector_data.bin"
+                    }
+                  ]
+                },
+              "linkReservation":
+                {
+                  "startPoint": "", 
+                  "endPoint": "",
+                  "amount": 100,
+                  "bandwidth" : 10
+                }
+            },
+            {
+              "id": "E",
+              "reservationState": "Open",
+              "requestProceeding": "Commit",
+
+              "nodeReservation": 
+                {
+                  "taskPath": "",
+                  "outputPath": "/data/logs/sim.out",
+                  "errorPath": "/data/logs/sim.err",
+                  "duration": 1800,
+                  "isMoldable": false, 
+                  "cpus": 8,
+                  "dependencies":
+                    {
+                      "data": [],
+                      "sync": ["D"]
                     },
                   "dataOut": [
                     {
