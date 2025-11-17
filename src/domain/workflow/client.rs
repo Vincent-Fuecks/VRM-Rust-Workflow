@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::api::client_dto::{ClientDto, SystemModelDto};
+use crate::api::workflow_dto::client_dto::{ClientDto, SystemModelDto};
 use crate::domain::workflow::workflow::Workflow;
 use crate::error::Result;
 

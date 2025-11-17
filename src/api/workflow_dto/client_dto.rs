@@ -1,6 +1,6 @@
-use serde::{Deserialize};
+use serde::Deserialize;
 
-use crate::api::workflow_dto::WorkflowDto;
+use crate::api::workflow_dto::workflow_dto::WorkflowDto;
 
 #[derive(Debug, Deserialize)]
 pub struct SystemModelDto {

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use crate::api::reservation_dto::{ReservationProceedingDto, ReservationStateDto};
-use crate::api::workflow_dto::{TaskDto, WorkflowDto};
+use crate::api::workflow_dto::reservation_dto::{ReservationProceedingDto, ReservationStateDto};
+use crate::api::workflow_dto::workflow_dto::{TaskDto, WorkflowDto};
 use crate::domain::workflow::co_allocation::CoAllocation;
 use crate::domain::workflow::dependency::{CoAllocationDependency, DataDependency, SyncDependency};
 use crate::domain::workflow::reservation::{

@@ -1,6 +1,6 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
-use crate::api::dependency_dto::DependencyDto;
+use crate::api::workflow_dto::dependency_dto::DependencyDto;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -31,7 +31,7 @@ pub struct ReservationDto {
     pub id: Option<String>,
     pub proceeding: ReservationProceedingDto,
     pub used_aci_hierarchy: Vec<String>,
-    
+
     pub arrival_time: i64,
     pub booking_interval_start: i64,
     pub booking_interval_end: i64,

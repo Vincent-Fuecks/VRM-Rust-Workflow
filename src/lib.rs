@@ -1,4 +1,4 @@
-use crate::api::client_dto::SystemModelDto;
+use crate::api::workflow_dto::client_dto::SystemModelDto;
 use crate::domain::workflow::client::SystemModel;
 use crate::error::Result;
 use crate::loader::parser::parse_json_file;
