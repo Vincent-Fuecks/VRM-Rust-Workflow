@@ -1,0 +1,95 @@
+{
+    "ADC": [
+        {
+            "id": "ADC-001",
+            "schedulerTyp": "HEFT", 
+            "requestOrder": "Start-First",
+            "numOfSlots" : 265, 
+            "slotWidth": 256,
+
+            "timeOut": 256, 
+            "maxOptimizationTime": 256, 
+            "rejectNewReservationsAt" : 1000
+        }
+    ],
+
+    "AcI": [
+        {
+            "id": "AcI-001",
+            "AdcId": "Adc-001",
+            "slotWidth": 256,
+            "commitTimeout": 256,
+            "numOfSlots": 256,
+            "connectedToRouter" : "Router-001",
+            "rmsSystem" : {
+                "id": "nullrms-001",
+                "typ": "nullrms",
+                "router": [
+                    {
+                        "id": "Router-001",
+                        "typ": "endpoint",
+                        "linkResource": [
+                            {
+                                "endpoint": "Router-002",
+                                "bandwidth": 102400
+                            }
+                        ]
+                    },
+                    {
+                        "id": "Router-002",
+                        "typ": "intermediate",
+                        "linkResource": [
+                            {
+                                "endpoint": "Router-001",
+                                "bandwidth": 1000
+                            }
+                        ]
+                    }
+                ]
+            }
+        },
+        {
+            "id": "AcI-002",
+            "AdcId": "Adc-001",
+            "slotWidth": 256,
+            "commitTimeout": 256,
+            "numOfSlots": 256,
+            "connectedToRouter" : "Router-001",
+            "rmsSystem" : {
+                "id": "nullrms-001",
+                "typ": "nullrms",
+                "router": [
+                    {
+                        "id": "Router-001",
+                        "typ": "endpoint",
+                        "linkResource": [
+                            {
+                                "endpoint": "Router-002",
+                                "bandwidth": 102400
+                            }
+                        ]
+                    },
+                    {
+                        "id": "Router-002",
+                        "typ": "intermediate",
+                        "linkResource": [
+                            {
+                                "endpoint": "Router-001",
+                                "bandwidth": 1000
+                            }
+                        ]
+                    }
+                ],
+            "nodeResource": [
+                {
+                    "id": "Node-001",
+                    "capacity": 256,
+                    "connectedToRouter": [
+                        "Router-001", "Router-002"
+                    ]
+                }
+            ]
+            }
+        }
+    ]
+}
