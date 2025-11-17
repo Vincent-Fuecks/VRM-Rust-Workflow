@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::api::client_dto::{ClientDto, SystemModelDto};
-use crate::domain::workflow::Workflow;
+use crate::domain::workflow::workflow::Workflow;
 use crate::error::Result;
 
 /// Represents a client, which can have multiple workflows.

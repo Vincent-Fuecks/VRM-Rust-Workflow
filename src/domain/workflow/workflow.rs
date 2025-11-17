@@ -2,12 +2,12 @@ use std::collections::HashMap;
 
 use crate::api::reservation_dto::{ReservationProceedingDto, ReservationStateDto};
 use crate::api::workflow_dto::{TaskDto, WorkflowDto};
-use crate::domain::co_allocation::CoAllocation;
-use crate::domain::dependency::{CoAllocationDependency, DataDependency, SyncDependency};
-use crate::domain::reservation::{
+use crate::domain::workflow::co_allocation::CoAllocation;
+use crate::domain::workflow::dependency::{CoAllocationDependency, DataDependency, SyncDependency};
+use crate::domain::workflow::reservation::{
     LinkReservation, NodeReservation, ReservationBase, ReservationProceeding, ReservationState,
 };
-use crate::domain::workflow_node::WorkflowNode;
+use crate::domain::workflow::workflow_node::WorkflowNode;
 use crate::error::Error;
 
 use union_find::{QuickUnionUf, UnionBySize, UnionFind};

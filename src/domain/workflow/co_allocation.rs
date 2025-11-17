@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use crate::domain::dependency::{CoAllocationDependency, DataDependency, SyncDependency};
-use crate::domain::workflow_node::WorkflowNode;
+use crate::domain::workflow::dependency::{CoAllocationDependency, DataDependency, SyncDependency};
+use crate::domain::workflow::workflow_node::WorkflowNode;
 
 /// A CoAllocation is a set of one or more compute tasks (WorkflowNodes) that must be scheduled to run at the exact same time (called "co-allocation" or "gang scheduling.").
 /// A CoAllocation is formed by any WorkflowNodes that are linked, directly or indirectly, by a SyncDependency.

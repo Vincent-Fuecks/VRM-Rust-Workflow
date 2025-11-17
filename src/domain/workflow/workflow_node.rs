@@ -1,4 +1,4 @@
-use crate::domain::reservation::NodeReservation;
+use crate::domain::workflow::reservation::NodeReservation;
 
 /// Represents a node in the workflow graph (a computation task).
 #[derive(Debug, Clone)]

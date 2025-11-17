@@ -1,4 +1,4 @@
-use crate::domain::reservation::LinkReservation;
+use crate::domain::workflow::reservation::LinkReservation;
 
 // TODO Should be used as Keys in workflows.rs
 // #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]

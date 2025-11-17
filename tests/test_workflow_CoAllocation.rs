@@ -1,5 +1,5 @@
 use vrm_rust_workflow::{
-    domain::{
+    domain::workflow::{
         client::SystemModel,
         reservation::{ReservationProceeding, ReservationState},
     },
