@@ -1,3 +1,99 @@
+use std::any::Any;
+
+pub trait Reservation: std::fmt::Debug + Any {
+    fn is_moldable(&self) -> bool;
+    fn get_reserved_capacity(&self) -> i64;
+    fn get_id(&self) -> String;
+    fn get_assigned_start(&self) -> i64;
+    fn get_assigned_end(&self) -> i64;
+
+    fn set_state(&mut self, reservation_sate: ReservationState);
+    fn set_assigned_start(&mut self, time: i64);
+    fn set_assigned_end(&mut self, time: i64);
+
+    /// Downcasting to NodeReservation/LinkReservation
+    fn as_any(&self) -> &dyn Any;
+}
+
+impl Reservation for NodeReservation {
+    fn get_id(&self) -> String {
+        self.base.id
+    }
+
+    fn get_assigned_end(&self) -> i64 {
+        self.base.assigned_end
+    }
+
+    fn get_assigned_start(&self) -> i64 {
+        self.base.assigned_start
+    }
+
+    fn is_moldable(&self) -> bool {
+        self.base.is_moldable
+    }
+
+    fn get_reserved_capacity(&self) -> i64 {
+        self.base.reserved_capacity
+    }
+
+    fn set_assigned_end(&mut self, time: i64) {
+        self.base.assigned_end = time;
+    }
+
+    fn set_assigned_start(&mut self, time: i64) {
+        self.base.assigned_start = time;
+    }
+    fn set_state(&mut self, reservation_sate: ReservationState) {
+        self.base.state = reservation_sate;
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl Reservation for LinkReservation {
+    fn get_id(&self) -> String {
+        self.base.id
+    }
+
+    fn get_assigned_end(&self) -> i64 {
+        self.base.assigned_end
+    }
+
+    fn get_assigned_start(&self) -> i64 {
+        self.base.assigned_start
+    }
+
+    fn is_moldable(&self) -> bool {
+        self.base.is_moldable
+    }
+
+    fn get_reserved_capacity(&self) -> i64 {
+        self.base.reserved_capacity
+    }
+
+    fn set_assigned_end(&mut self, time: i64) {
+        self.base.assigned_end = time;
+    }
+
+    fn set_assigned_start(&mut self, time: i64) {
+        self.base.assigned_start = time;
+    }
+    fn set_state(&mut self, reservation_sate: ReservationState) {
+        self.base.state = reservation_sate;
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+#[derive(PartialEq, Eq, Hash, Clone, Debug)]
+pub struct ReservationKey {
+    pub id: String,
+}
+
 /// Defines the lifecycle state of a job reservation within the system.
 ///
 /// This state tracks the progress of the reservation from initial request
