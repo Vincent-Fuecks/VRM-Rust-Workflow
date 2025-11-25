@@ -16,7 +16,7 @@ lazy_static! {
 pub struct SlottedSchedule {
     id: String,
     slots: Vec<Slot>,
-    capacity: i64,
+    pub capacity: i64,
     slot_width: i64,
     start_slot_index: i64,
     end_slot_index: i64,
