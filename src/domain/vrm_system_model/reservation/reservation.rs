@@ -1,97 +1,127 @@
-use std::any::Any;
+use std::{any::Any, ops::Not};
 
-pub trait Reservation: std::fmt::Debug + Any {
-    fn is_moldable(&self) -> bool;
-    fn get_reserved_capacity(&self) -> i64;
-    fn get_id(&self) -> String;
-    fn get_assigned_start(&self) -> i64;
-    fn get_assigned_end(&self) -> i64;
+pub trait Reservation: std::fmt::Debug + Any + Send + Sync {
+    fn get_base(&self) -> &ReservationBase;
 
-    fn set_state(&mut self, reservation_sate: ReservationState);
-    fn set_assigned_start(&mut self, time: i64);
-    fn set_assigned_end(&mut self, time: i64);
+    fn get_base_mut(&mut self) -> &mut ReservationBase;
 
-    /// Downcasting to NodeReservation/LinkReservation
+    fn box_clone(&self) -> Box<dyn Reservation>;
+
     fn as_any(&self) -> &dyn Any;
-}
 
-impl Reservation for NodeReservation {
-    fn get_id(&self) -> String {
-        self.base.id
-    }
-
-    fn get_assigned_end(&self) -> i64 {
-        self.base.assigned_end
+    fn get_id(&self) -> ReservationKey {
+        self.get_base().id.clone()
     }
 
     fn get_assigned_start(&self) -> i64 {
-        self.base.assigned_start
-    }
-
-    fn is_moldable(&self) -> bool {
-        self.base.is_moldable
-    }
-
-    fn get_reserved_capacity(&self) -> i64 {
-        self.base.reserved_capacity
-    }
-
-    fn set_assigned_end(&mut self, time: i64) {
-        self.base.assigned_end = time;
-    }
-
-    fn set_assigned_start(&mut self, time: i64) {
-        self.base.assigned_start = time;
-    }
-    fn set_state(&mut self, reservation_sate: ReservationState) {
-        self.base.state = reservation_sate;
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
-
-impl Reservation for LinkReservation {
-    fn get_id(&self) -> String {
-        self.base.id
+        self.get_base().assigned_start
     }
 
     fn get_assigned_end(&self) -> i64 {
-        self.base.assigned_end
-    }
-
-    fn get_assigned_start(&self) -> i64 {
-        self.base.assigned_start
+        self.get_base().assigned_end
     }
 
     fn is_moldable(&self) -> bool {
-        self.base.is_moldable
+        self.get_base().is_moldable
     }
 
     fn get_reserved_capacity(&self) -> i64 {
-        self.base.reserved_capacity
+        self.get_base().reserved_capacity
+    }
+
+    fn get_task_duration(&self) -> i64 {
+        self.get_base().task_duration
+    }
+
+    fn get_state(&self) -> ReservationState {
+        self.get_base().state
+    }
+
+    fn get_booking_interval_start(&self) -> i64 {
+        self.get_base().booking_interval_start
+    }
+
+    fn get_booking_interval_end(&self) -> i64 {
+        self.get_base().booking_interval_end
+    }
+
+    fn get_moldable_work(&self) -> i64 {
+        self.get_base().moldable_work
     }
 
     fn set_assigned_end(&mut self, time: i64) {
-        self.base.assigned_end = time;
+        self.get_base_mut().assigned_end = time;
     }
 
     fn set_assigned_start(&mut self, time: i64) {
-        self.base.assigned_start = time;
-    }
-    fn set_state(&mut self, reservation_sate: ReservationState) {
-        self.base.state = reservation_sate;
+        self.get_base_mut().assigned_start = time;
     }
 
-    fn as_any(&self) -> &dyn Any {
-        self
+    fn set_state(&mut self, reservation_state: ReservationState) {
+        self.get_base_mut().state = reservation_state;
+    }
+
+    fn set_task_duration(&mut self, duration: i64) {
+        self.get_base_mut().task_duration = duration;
+    }
+
+    fn set_reserved_capacity(&mut self, reserved_capacity: i64) {
+        self.get_base_mut().reserved_capacity = reserved_capacity;
+    }
+
+    fn set_booking_interval_start(&mut self, start_time: i64) {
+        self.get_base_mut().booking_interval_start = start_time;
+    }
+
+    fn set_booking_interval_end(&mut self, end_time: i64) {
+        self.get_base_mut().booking_interval_end = end_time;
+    }
+
+    fn set_frag_delta(&mut self, frag_delta: f64) {
+        self.get_base_mut().frag_delta = frag_delta;
+    }
+
+    fn adjust_capacity(&mut self, capacity: i64) {
+        if capacity != self.get_base().reserved_capacity {
+            if self.is_moldable().not() {
+                log::warn!("adjustCapacity for non moldable job {}", self.get_base().get_id(),);
+            }
+
+            if capacity == 0 {
+                self.set_task_duration(self.get_moldable_work());
+                self.set_reserved_capacity(1);
+            } else {
+                self.set_task_duration(self.get_moldable_work() / capacity);
+                self.set_reserved_capacity(capacity);
+            }
+
+            if self.get_task_duration() <= 0 {
+                self.set_task_duration(1);
+            }
+        }
     }
 }
 
-#[derive(PartialEq, Eq, Hash, Clone, Debug)]
+impl Clone for Box<dyn Reservation> {
+    fn clone(&self) -> Box<dyn Reservation> {
+        self.box_clone()
+    }
+}
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash)]
 pub struct ReservationKey {
     pub id: String,
+}
+
+impl ReservationKey {
+    pub fn new(id: impl Into<String>) -> Self {
+        ReservationKey { id: id.into() }
+    }
+}
+
+impl std::fmt::Display for ReservationKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.id)
+    }
 }
 
 /// Defines the lifecycle state of a job reservation within the system.
@@ -162,7 +192,7 @@ pub enum ReservationProceeding {
 #[derive(Debug, Clone)]
 pub struct ReservationBase {
     /// A globally unique identifier for this reservation across all distributed components.
-    pub id: String,
+    pub id: ReservationKey,
 
     /// The current **lifecycle state** of the reservation (e.g., `Open`, `Committed`, `Finished`).
     pub state: ReservationState,
@@ -203,48 +233,31 @@ pub struct ReservationBase {
     /// This value remains constant for non-moldable jobs.
     pub moldable_work: i64,
     // TODO
-    // pub frag_delta: f64,
+    pub frag_delta: f64,
 }
 
-/// This structure extends [`ReservationBase`] to include fields specific to
-/// **computational node** (e.g., CPU cores).
-///
-/// The maximum task execution time (**duration**) has to be provided in advance.
-#[derive(Debug, Clone)]
-pub struct NodeReservation {
-    /// The common base properties shared by all reservations.
-    pub base: ReservationBase,
+impl ReservationBase {
+    pub fn is_moldable(&self) -> bool {
+        self.is_moldable
+    }
 
-    // Node specific fields
-    /// File system **path** pointing to the executable for this reservation/task.
-    pub task_path: Option<String>,
+    pub fn get_reserved_capacity(&self) -> i64 {
+        self.reserved_capacity
+    }
 
-    /// The file path where the **standard output** (stdout) during task execution will be piped.
-    pub output_path: Option<String>,
+    pub fn get_assigned_start(&self) -> i64 {
+        self.assigned_start
+    }
 
-    /// The file path where the **standard error** (stderr) during task execution will be piped.
-    pub error_path: Option<String>,
-}
+    pub fn get_assigned_end(&self) -> i64 {
+        self.assigned_end
+    }
 
-/// This structure extends [`ReservationBase`] to include fields specific to
-/// network connectivity.
-///
-/// Link reservations typically have two use cases:
-/// 1. **Data Transfer:** Reserving bandwidth for file transfer between two sites.
-///    In this case, the reservation may be **moldable**, meaning the duration
-///    can be adjusted based on available bandwidth.
-/// 2. **Co-allocated Communication:** Reserving a specific, fixed amount of
-///    bandwidth for short-term coordination and communication between tasks
-///    associated with co-allocated compute reservations. The specified bandwidth
-///    **must** be provided for the entire duration.
-#[derive(Debug, Clone)]
-pub struct LinkReservation {
-    /// The common base properties shared by all reservations.
-    pub base: ReservationBase,
+    pub fn get_id(&self) -> ReservationKey {
+        self.id.clone()
+    }
 
-    // Link specific fields
-    /// Unique identifier of the start router for the link.
-    pub start_point: String,
-    /// Unique identifier of the end router for the link.
-    pub end_point: String,
+    pub fn set_state(&mut self, state: ReservationState) {
+        self.state = state;
+    }
 }

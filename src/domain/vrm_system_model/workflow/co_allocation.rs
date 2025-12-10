@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 
-use crate::domain::workflow::dependency::{CoAllocationDependency, DataDependency, SyncDependency};
-use crate::domain::workflow::workflow_node::WorkflowNode;
+use crate::domain::vrm_system_model::reservation::reservation::ReservationKey;
+use crate::domain::vrm_system_model::workflow::dependency::{
+    CoAllocationDependency, DataDependency, SyncDependency,
+};
+use crate::domain::vrm_system_model::workflow::workflow_node::WorkflowNode;
 
 /// A CoAllocation is a set of one or more compute tasks (WorkflowNodes) that must be scheduled to run at the exact same time (called "co-allocation" or "gang scheduling.").
 /// A CoAllocation is formed by any WorkflowNodes that are linked, directly or indirectly, by a SyncDependency.
@@ -12,13 +15,13 @@ use crate::domain::workflow::workflow_node::WorkflowNode;
 // The CoAllocation's assigned_start time becomes the assigned_start time for all its member nodes.
 #[derive(Debug, Clone)]
 pub struct CoAllocation {
-    pub id: String,
+    pub id: ReservationKey,
 
     /// WorkflowNode, which is representing all WorkflowNodes in this sync group
     pub representative: Option<WorkflowNode>,
 
     /// Keys to Workflow.nodes, which are part of this CoAllocation.
-    pub members: Vec<String>,
+    pub members: Vec<ReservationKey>,
 
     /// SyncDependencies connecting WorkflowNodes of this CoAllocation.
     pub sync_dependencies: Vec<SyncDependency>,
@@ -97,7 +100,7 @@ pub struct CoAllocation {
 }
 
 impl CoAllocation {
-    pub fn get_co_allocation_duration(&self, nodes: &HashMap<String, WorkflowNode>) -> i64 {
+    pub fn get_co_allocation_duration(&self, nodes: &HashMap<ReservationKey, WorkflowNode>) -> i64 {
         let mut max_duration: i64 = 0;
 
         for node_key in &self.members {

@@ -57,17 +57,12 @@ pub enum SchedulerType {
 impl TryFrom<ADCDto> for ADC {
     type Error = Error;
 
-    fn try_from(dto: ADCDto) -> Result<Self, Self::Error> {
-        let scheduler_typ = SchedulerType::from_str(&dto.scheduler_typ).ok_or_else(|| {
-            Error::VrmSystemModelConstructionError("ADC Scheduler Typ is Unkown".to_string());
-        })?;
+    fn try_from(dto: ADCDto) -> Result<ADC, Self::Error> {
+        let scheduler_typ: SchedulerType = SchedulerType::from_str(&dto.scheduler_typ);
 
-        let aci_selection_strategy = AcISelectionStrategy::from_str(&dto.request_order)
-            .ok_or_else(|| {
-                Error::VrmSystemModelConstructionError("ADC Scheduler Typ is Unkown".to_string());
-            })?;
+        let aci_selection_strategy = AcISelectionStrategy::from_str(&dto.request_order);
 
-        Ok(ADC {
+        let adc = ADC {
             id: dto.id.clone(),
             scheduler_typ: scheduler_typ,
             aci_selection_strategy: aci_selection_strategy,
@@ -76,35 +71,37 @@ impl TryFrom<ADCDto> for ADC {
             timeout: dto.timeout.clone(),
             max_optimization_time: dto.max_optimization_time.clone(),
             reject_new_reservations_at: dto.reject_new_reservations_at.clone(),
-        })
+        };
+
+        Ok(adc)
     }
 }
 
 impl AcISelectionStrategy {
-    pub fn from_str(aci_selection_strategy: &str) -> Option<Self> {
+    pub fn from_str(aci_selection_strategy: &str) -> AcISelectionStrategy {
         match aci_selection_strategy {
-            "Start-First" => Some(AcISelectionStrategy::StartFirst),
-            "Round-Robin" => Some(AcISelectionStrategy::StartNext),
-            "Next" => Some(AcISelectionStrategy::LoadAscending),
-            "Size" => Some(AcISelectionStrategy::LoadDescending),
-            "Reverse-Size" => Some(AcISelectionStrategy::ResourceSizeAscending),
-            "Reverse-Load" => Some(AcISelectionStrategy::ResourceSizeDescending),
-            _ => None,
+            "Start-First" => AcISelectionStrategy::StartFirst,
+            "Round-Robin" => AcISelectionStrategy::StartNext,
+            "Next" => AcISelectionStrategy::LoadAscending,
+            "Size" => AcISelectionStrategy::LoadDescending,
+            "Reverse-Size" => AcISelectionStrategy::ResourceSizeAscending,
+            "Reverse-Load" => AcISelectionStrategy::ResourceSizeDescending,
+            _ => AcISelectionStrategy::StartFirst,
         }
     }
 }
 
 // TODO Only mock
 impl SchedulerType {
-    pub fn from_str(scheduler_type_str: &str) -> Option<Self> {
+    pub fn from_str(scheduler_type_str: &str) -> SchedulerType {
         match scheduler_type_str {
-            "EXHAUSTIVE-EFT" => Some(SchedulerType::ExhaustiveEft),
-            "EXHAUSTIVE-FRAG" => Some(SchedulerType::ExhaustiveFrag),
-            "HEFT" => Some(SchedulerType::Heft),
-            "FRAG-HEFT" => Some(SchedulerType::FragHeft),
-            "FRAG-WINDOW" => Some(SchedulerType::FragWindow),
-            "FRAG-WINDOW-ZHAO" => Some(SchedulerType::FragWindowZhao),
-            _ => None,
+            "EXHAUSTIVE-EFT" => SchedulerType::ExhaustiveEft,
+            "EXHAUSTIVE-FRAG" => SchedulerType::ExhaustiveFrag,
+            "HEFT" => SchedulerType::Heft,
+            "FRAG-HEFT" => SchedulerType::FragHeft,
+            "FRAG-WINDOW" => SchedulerType::FragWindow,
+            "FRAG-WINDOW-ZHAO" => SchedulerType::FragWindowZhao,
+            _ => SchedulerType::Heft,
         }
     }
 }

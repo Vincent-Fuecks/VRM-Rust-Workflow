@@ -22,7 +22,7 @@ impl VrmSystemModel {
         }
 
         for aci_dto in root_dto.acis {
-            let aci = AcI::from_dto(aci_dto)?;
+            let aci = AcI::try_from(aci_dto)?;
             acis.insert(aci.id.clone(), aci);
         }
 

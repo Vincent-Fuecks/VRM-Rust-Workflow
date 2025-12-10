@@ -1,8 +1,8 @@
 use vrm_rust_workflow::{
-    domain::workflow::{
-        client::SystemModel,
-        reservation::{ReservationProceeding, ReservationState},
+    domain::vrm_system_model::reservation::reservation::{
+        ReservationKey, ReservationProceeding, ReservationState,
     },
+    domain::vrm_system_model::workflow::client::SystemModel,
     error::{Error, Result},
     generate_system_model,
 };
@@ -27,33 +27,37 @@ fn test_co_allocation_graph_creation() {
 
         let workflow = client
             .workflows
-            .get("Simulation-Run-0")
+            .get(&ReservationKey::new("Simulation-Run-0"))
             .expect("Clients should contain workflow with this Id!");
 
         // Test CoAllocation Graph is correctly constructed
         let allowed_key_for_co_allocation_0 = vec!["A", "B", "C"];
-        let allowed_key_for_co_allocation_1 = vec!["D", "E"];
+
+        let allowed_key_for_co_allocation_0 = vec![
+            ReservationKey::new("A"),
+            ReservationKey::new("B"),
+            ReservationKey::new("C"),
+        ];
+        let allowed_key_for_co_allocation_1 =
+            vec![ReservationKey::new("D"), ReservationKey::new("E")];
+
         let allowed_key_for_co_allocation = vec![
             allowed_key_for_co_allocation_0,
             allowed_key_for_co_allocation_1,
         ];
 
-        let mut co_allocation_keys_sorted: Vec<String> =
+        let mut co_allocation_keys_sorted: Vec<ReservationKey> =
             workflow.co_allocations.keys().map(|s| s.clone()).collect();
 
         co_allocation_keys_sorted.sort();
 
         for (i, key_ref) in co_allocation_keys_sorted.iter().enumerate() {
-            assert!(allowed_key_for_co_allocation[i].contains(&key_ref.as_str()));
+            assert!(allowed_key_for_co_allocation[i].contains(key_ref));
         }
 
         // Test CoAllocation Grahp Exit and Entry Node
-        assert!(
-            allowed_key_for_co_allocation[0].contains(&workflow.entry_co_allocation[0].as_str())
-        );
-        assert!(
-            allowed_key_for_co_allocation[1].contains(&workflow.exit_co_allocation[0].as_str())
-        );
+        assert!(allowed_key_for_co_allocation[0].contains(&workflow.entry_co_allocation[0]));
+        assert!(allowed_key_for_co_allocation[1].contains(&workflow.exit_co_allocation[0]));
 
         // Test CoAllocation Dependencies
         for key_ref in workflow.co_allocation_dependencies.values() {
@@ -77,16 +81,28 @@ fn test_workflow_node_creation_for_system_model() {
         let workflows = client.workflows.clone();
         assert_eq!(workflows.len(), 1);
 
-        assert!(workflows.contains_key("Simulation-Run-0"));
-        let workflow = workflows.get("Simulation-Run-0").unwrap();
+        assert!(workflows.contains_key(&ReservationKey::new("Simulation-Run-0")));
+        let workflow = workflows
+            .get(&ReservationKey::new("Simulation-Run-0"))
+            .unwrap();
 
-        assert!(workflow.nodes.contains_key("Data-Preprocessing-3"));
-        let node = workflow.nodes.get("Data-Preprocessing-3").unwrap();
+        assert!(
+            workflow
+                .nodes
+                .contains_key(&ReservationKey::new("Data-Preprocessing-3"))
+        );
+        let node = workflow
+            .nodes
+            .get(&ReservationKey::new("Data-Preprocessing-3"))
+            .unwrap();
 
         let reservation = &node.reservation;
 
         // Test ReservationBase attributes
-        assert_eq!(reservation.base.id, "Data-Preprocessing-3");
+        assert_eq!(
+            reservation.base.id,
+            ReservationKey::new("Data-Preprocessing-3")
+        );
         assert_eq!(reservation.base.state, ReservationState::Open);
         assert_eq!(
             reservation.base.request_proceeding,
@@ -122,19 +138,22 @@ fn test_workflow_node_creation_for_system_model() {
         assert_eq!(node.incoming_data.clone().sort(), incoming_data.sort());
 
         // Outgoing Data
-        let expected_outgoing_data =
-            vec!["Simulation-Run-0.data.Data-Preprocessing-3.Data-Preprocessing-4"];
+        let expected_outgoing_data = vec![ReservationKey::new(
+            "Simulation-Run-0.data.Data-Preprocessing-3.Data-Preprocessing-4",
+        )];
         assert_eq!(node.outgoing_data, expected_outgoing_data);
 
         // Incoming Sync
         let mut incoming_sync = vec![
-            "Simulation-Run-0.sync.Data-Preprocessing-2.Data-Preprocessing-3",
-            "Simulation-Run-0.sync.Data-Preprocessing-1.Data-Preprocessing-3",
+            ReservationKey::new("Simulation-Run-0.sync.Data-Preprocessing-2.Data-Preprocessing-3"),
+            ReservationKey::new("Simulation-Run-0.sync.Data-Preprocessing-1.Data-Preprocessing-3"),
         ];
         assert_eq!(node.incoming_sync.clone().sort(), incoming_sync.sort());
 
         // Outgoing Sync
-        let outgoing_sync = vec!["Simulation-Run-0.sync.Data-Preprocessing-3.Data-Preprocessing-4"];
+        let outgoing_sync = vec![ReservationKey::new(
+            "Simulation-Run-0.sync.Data-Preprocessing-3.Data-Preprocessing-4",
+        )];
         assert_eq!(node.outgoing_sync, outgoing_sync);
     } else {
         assert_eq!(true, false, "Error during loading process!");

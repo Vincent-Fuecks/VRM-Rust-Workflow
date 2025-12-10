@@ -1,7 +1,4 @@
-use std::cmp::Ordering;
-
 use crate::domain::vrm_system_model::resource::resources::Resources;
-use crate::domain::workflow::reservation::Reservation;
 
 /// This is a trait for a local Resource Management System (RMS) capable of making advance reservations.
 ///
@@ -121,11 +118,11 @@ pub trait AdvanceReservationRMS {
     /// # Returns
     /// * `Option<Reservation>` - The best available reservation candidate in the `STATE_PROBEANSWER` state,
     ///   or `None` if no valid slot was found.
-    fn probe_best(
-        &self,
-        reservation: &Reservation,
-        comparator: &dyn Fn(&Reservation, &Reservation) -> Ordering,
-    ) -> Option<Reservation>;
+    // fn probe_best(
+    //     &self,
+    //     reservation: &dyn Reservation,
+    //     comparator: &dyn Fn(&dyn Reservation, &dyn Reservation) -> Ordering,
+    // ) -> Option<dyn Reservation>;
 
     /// Submits a task reservation to the local RMS.
     ///
@@ -142,11 +139,11 @@ pub trait AdvanceReservationRMS {
     ///
     /// * `Option<Reservation>` - A reservation object with updated details (including assigned times).
     ///   State will be `STATE_RESERVEANSWER` on success or `STATE_REJECTED` on failure.
-    fn reserve(
-        &mut self,
-        res: Reservation,
-        shadow_schedule_id: Option<&str>,
-    ) -> Option<Reservation>;
+    // fn reserve(
+    //     &mut self,
+    //     res: dyn Reservation,
+    //     shadow_schedule_id: Option<&str>,
+    // ) -> Option<dyn Reservation>;
 
     /// Cancels a previously submitted task in the local RMS.
     ///
@@ -160,11 +157,11 @@ pub trait AdvanceReservationRMS {
     /// # Returns
     /// * `Option<Reservation>` - The updated reservation object. State will be `DELETED` on success
     ///   or `STATE_REJECTED` if the task could not be found or deleted.
-    fn delete_task(
-        &mut self,
-        res: &Reservation,
-        shadow_schedule_id: Option<&str>,
-    ) -> Option<Reservation>;
+    // fn delete_task(
+    //     &mut self,
+    //     res: &dyn Reservation,
+    //     shadow_schedule_id: Option<&str>,
+    // ) -> Option<dyn Reservation>;
 
     /// Finalizes a reservation, marking it as committed.
     ///
@@ -178,7 +175,7 @@ pub trait AdvanceReservationRMS {
     ///
     /// # Returns
     /// * `Option<Reservation>` - The updated reservation object. State will be `COMMITED` on success.
-    fn commit(&mut self, res: Reservation) -> Option<Reservation>;
+    // fn commit(&mut self, res: dyn Reservation) -> Option<dyn Reservation>;
 
     /// Retrieves the definitions of resources managed by this RMS.
     ///

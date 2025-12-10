@@ -1,4 +1,6 @@
-use crate::domain::workflow::reservation::LinkReservation;
+use crate::domain::vrm_system_model::reservation::{
+    link_reservation::LinkReservation, reservation::ReservationKey,
+};
 
 // TODO Should be used as Keys in workflows.rs
 // #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
@@ -21,10 +23,10 @@ pub struct DataDependency {
     pub reservation: LinkReservation,
 
     /// Key to Workflow.nodes, which is the sender.
-    pub source_node: String,
+    pub source_node: ReservationKey,
 
     /// Key to Workflow.nodes, which is the receiver.
-    pub target_node: String,
+    pub target_node: ReservationKey,
 
     /// TODO
     pub port_name: String,
@@ -40,10 +42,10 @@ pub struct SyncDependency {
     pub reservation: LinkReservation,
 
     /// Key to Workflow.nodes, which is the sender.
-    pub source_node: String,
+    pub source_node: ReservationKey,
 
     /// Key to Workflow.nodes, which is the receiver.
-    pub target_node: String,
+    pub target_node: ReservationKey,
 
     /// TODO
     pub port_name: String,
@@ -56,14 +58,14 @@ pub struct SyncDependency {
 #[derive(Debug, Clone)]
 pub struct CoAllocationDependency {
     // Underlying DataDependency ID
-    pub id: String,
+    pub id: ReservationKey,
 
     /// Key to Workflow.co_allocations, which is the sender.
-    pub source_group: String,
+    pub source_group: ReservationKey,
 
     /// Key to Workflow.co_allocations, which is the receiver.
-    pub target_group: String,
+    pub target_group: ReservationKey,
 
     /// Key to the DataDependency that this CoAllocation edge represents.
-    pub data_dependency: String,
+    pub data_dependency: ReservationKey,
 }

@@ -1,206 +1,114 @@
+use crate::domain::simulator::simulator::SystemSimulator;
+use crate::domain::vrm_system_model::reservation::{reservation::ReservationKey, reservations::Reservations};
 use crate::domain::vrm_system_model::schedule::slot::Slot;
 use crate::domain::vrm_system_model::scheduler_trait::Schedule;
-use crate::domain::vrm_system_model::scheduler_type::SchedulerType;
-use crate::domain::vrm_system_model::utils::load_buffer::LoadBuffer;
-use crate::domain::workflow::reservation::{Reservation, ReservationKey, ReservationState};
-use crate::domain::workflow::reservations::Reservations;
+use crate::domain::vrm_system_model::utils::{
+    load_buffer::{GlobalLoadContext, LoadBuffer},
+    statistics::{StatParameter, StatisticEvent},
+    vrm_component_trait::VRMComponent,
+};
 
-use lazy_static::lazy_static;
-use std::collections::{HashMap, HashSet};
-use std::sync::Mutex;
+use std::i64;
+use std::sync::Arc;
 
-lazy_static! {
-    static ref FRAGMENTATION_POWER: Mutex<i64> = Mutex::new(2);
-}
+pub mod core_functions;
+pub mod fragmentation;
+pub mod schedule_trait;
 
+#[derive(Debug, Clone)]
 pub struct SlottedSchedule {
-    id: String,
+    /// **Unique identifier** for this SlottedSchedule.
+    id: ReservationKey,
+
+    /// A list of all time **Slots** defined for this schedule.
     slots: Vec<Slot>,
+
+    /// The maximum total amount of resource "pieces" (e.g., cores, units) managed by this schedule.
     pub capacity: i64,
+
+    /// The duration of a single time slot.
     slot_width: i64,
+
+    /// The index of the earliest possible slot that can be used for scheduling.
     start_slot_index: i64,
+
+    /// The index of the latest possible slot that defines the scheduling window's end.
     end_slot_index: i64,
+
+    /// The **absolute start time** (e.g., Unix timestamp) of the current scheduling window being viewed.
     scheduling_window_start_time: i64,
+
+    /// The **absolute end time** (e.g., Unix timestamp) of the current scheduling window being viewed.
     scheduling_window_end_time: i64,
+
+    /// Internal buffer used to track transient or potential resource load.
     load_buffer: LoadBuffer,
-    accepted_reservations: Reservations,
-    is_frag_cach_up_to_date: bool,
-    fragmentation_cach: f64,
-    quadratic_mean_fragmentation_calculation: bool,
+
+    /// A map of all currently **active reservations** associated with this schedule.
+    active_reservations: Reservations,
+
+    /// Flag indicating if the stored **fragmentation_cache** value is valid and up-to-date.
+    is_frag_cache_up_to_date: bool,
+
+    /// The cached value of the system **fragmentation**.
+    fragmentation_cache: f64,
+
+    /// A configuration flag to determine if the system should utilize the **quadratic mean**
+    /// or the standard formula for fragmentation calculation.
+    use_quadratic_mean_fragmentation: bool,
+
+    /// A flag indicating whether fragmentation calculation is required for the **prob requests**.
     is_frag_needed: bool,
+
+    simulator: Box<dyn SystemSimulator>,
 }
 
 impl SlottedSchedule {
-    /**
-     *
-     * @param name schedule name
-     * @param numberOfRealSlots number of real slots used as scheduling window
-     * @param slotWidth amount of time contained in one slot
-     * @param capacity amount of resource "pieces" managed by this schedule
-     */
-    pub fn new(id: String, number_of_real_slots: i64, slot_width: i64, capacity: i64) -> Self {
-        let mut slots: Vec<Slot> = Vec::with_capacity(number_of_real_slots);
+    pub fn new(id: ReservationKey, number_of_real_slots: i64, slot_width: i64, capacity: i64, simulator: Box<dyn SystemSimulator>) -> Self {
+        let mut slots: Vec<Slot> = Vec::new();
 
-        for i in 0..number_of_real_slots {
-            slots[i] = Slot::new(capacity)
+        // number_of_real_slots is the number of slots in the considered scheduling window
+        for _ in 0..number_of_real_slots {
+            slots.push(Slot::new(capacity));
         }
 
-        SlottedSchedule {
+        let mut slotted_schedule: SlottedSchedule = SlottedSchedule {
             id: id,
             slots: slots,
             capacity: capacity,
             slot_width: slot_width,
-            start_slot_index: (),
-            end_slot_index: (),
+            start_slot_index: 0,
+            end_slot_index: -1,
             scheduling_window_start_time: 0,
             scheduling_window_end_time: -1,
-            load_buffer: LoadBuffer::new(&Self),
-            accepted_reservations: (),
-            is_frag_cach_up_to_date: true,
-            fragmentation_cach: 0.0,
-            quadratic_mean_fragmentation_calculation: true,
+            load_buffer: LoadBuffer::new(Arc::new(GlobalLoadContext::new())),
+            active_reservations: Reservations::new_empty(),
+            is_frag_cache_up_to_date: true,
+            fragmentation_cache: 0.0,
+            use_quadratic_mean_fragmentation: true,
+            // Always false
             is_frag_needed: false,
-        }
-    }
+            simulator: simulator,
+        };
 
-    /**
-     * computes the index of the virtual time-slot containing the given point in time.
-     * @param time in seconds
-     * @return slot index, containing this point in time
-     * This is a virtual index, so there can be less real slots in the schedule then this index imply.
-     */
-    pub fn get_slot_index(&self, time: i64) -> i64 {
-        let index: i64 = (time as f64 / self.slot_width as f64).floor() as i64;
+        slotted_schedule.update();
 
-        if index < 0 {
-            return 0;
-        }
-
-        return index;
-    }
-
-    /**
-     * computes the real index of a slot in the slot-vector for an virtual slot index in the schedule
-     * @param index index in the schedule.
-     * This is a virtual index, so there can be less real slots in the schedule then the index imply.
-     * @return the real index of a slot in the slot-vector
-     */
-    pub fn get_real_slot_index(&self, index: i64) {
-        return (index % self.slots.len()) as i64;
-    }
-
-    /**
-     * returns the Slot with the given index
-     * @param index index for the searched slot.
-     * This is a virtual index, so there can be less real slots in the schedule then this index imply.
-     * @return Slot with the given index
-     */
-    pub fn get_slot(&self, index: i64) -> Option<Slot> {
-        if index < 0 {
-            return None;
-        }
-
-        if index < self.start_slot_index || index > (self.end_slot_index + 1) {
-            return None;
-        }
-
-        let real_index: i64 = self.get_real_slot_index(index);
-        return self.slots.get(real_index);
-    }
-
-    /**
-     * computes the start time of a virtual slot in seconds.
-     * @param index index of the slot we want to get the start time for,
-     * This is a virtual index, so there can be less real slots in the schedule then the index imply.
-     * @return start time of the slot with index slotIndex
-     */
-    pub fn get_slot_start_time(&self, index: i64) {
-        return index * self.slot_width;
-    }
-
-    /**
-     * computes the end time of a virtual slot in seconds.
-     * @param index index of the slot we want to get the end time for
-     * This is a virtual index, so there can be less real slots in the schedule then the index imply.
-     * @return end time of the slot with index slotIndex
-     */
-    pub fn get_slot_end_time(&self, index: i64) {
-        return index * self.slot_width + self.slot_width - 1;
+        return slotted_schedule;
     }
 }
 
-impl Schedule for SlottedSchedule {
-    fn clear(&mut self) {
-        log::warn!(
-            "In SlottedSchedule id: {}, where all Slots cleared.",
-            self.id
-        );
+impl VRMComponent for SlottedSchedule {
+    fn generate_statistics(&mut self) -> StatisticEvent {
+        let load_metrics =
+            self.load_buffer.get_effective_overall_load(self.capacity as f64, self.get_effective_start_time(), self.get_effective_end_time());
 
-        for mut slot in self.slots {
-            slot.reset();
-        }
+        let mut event = StatisticEvent::new();
+        event.set(StatParameter::ComponentUtilization, load_metrics.utilization);
+        event
+            .set(StatParameter::ReservationWorkload, load_metrics.avg_reserved_capacity * ((load_metrics.start_time - load_metrics.end_time) as f64));
 
-        self.accepted_reservations.clear();
-    }
+        event.set(StatParameter::ComponentCapacity, self.capacity);
 
-    fn update(&mut self) {
-        // TODO long currentTime = Simulator.getCurrentTimeSeconds();
-        let current_time: i64 = 42;
-        let new_start_slot_index = self.get_slot_index(current_time);
-
-        if self.start_slot_index < new_start_slot_index {
-            self.is_frag_cach_up_to_date = false;
-        }
-
-        let mut keys_to_remove: HashSet<ReservationKey> = HashSet::new();
-
-        for clean_index in self.start_slot_index..new_start_slot_index {
-            if let Some(slot) = self.get_slot(clean_index) {
-                for key in &slot.reservation_keys {
-                    if let Some(reservation) = self.accepted_reservations.get(key) {
-                        let last_slot_of_reservation =
-                            self.get_slot_index(reservation.get_assigned_end());
-
-                        if last_slot_of_reservation == clean_index {
-                            keys_to_remove.insert(key.clone());
-                        }
-                    }
-                }
-            }
-        }
-
-        for key in keys_to_remove {
-            self.accepted_reservations.reservations.remove(&key)
-        }
-
-        for clean_index in self.start_slot_index..new_start_slot_index {
-            if let Some(slot) = self.get_slot_mut(clean_index) {
-                // TODO: this.loadBuffer.add(nextSlot.getLoad(), cleanIndex);
-
-                slot.reset();
-            }
-        }
-
-        self.start_slot_index = new_start_slot_index;
-        self.end_slot_index = new_start_slot_index + self.slots.len() - 1;
-        self.scheduling_window_start_time = self.get_slot_start_time(self.start_slot_index);
-        self.scheduling_window_end_time = self.get_slot_end_time(self.end_slot_index);
-    }
-
-    fn delete_reservation(&mut self, reservation: &Reservation) -> Option<Reservation> {
-        let key = ReservationKey { id: reservation.id };
-
-        // Can not Del unreserved reservation
-        if !self.accepted_reservations.reservations.contains_key(key) {
-            log::error!(
-                "DEL Reservatlion form Schedule: {}, However Schedule does not contain reservation with id: {}",
-                self.id,
-                reservation.get_id()
-            );
-
-            reservation.set_state(ReservationState::Rejected);
-            return reservation;
-        }
-        // TODO
+        return event;
     }
 }

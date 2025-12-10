@@ -1,14 +1,15 @@
 use std::collections::HashMap;
 
 use crate::api::workflow_dto::client_dto::{ClientDto, SystemModelDto};
-use crate::domain::workflow::workflow::Workflow;
+use crate::domain::vrm_system_model::reservation::reservation::ReservationKey;
+use crate::domain::vrm_system_model::workflow::workflow::Workflow;
 use crate::error::Result;
 
 /// Represents a client, which can have multiple workflows.
 #[derive(Debug, Clone)]
 pub struct Client {
     pub id: String,
-    pub workflows: HashMap<String, Workflow>,
+    pub workflows: HashMap<ReservationKey, Workflow>,
 }
 
 /// The root of the internal model, which can have multiple clients.

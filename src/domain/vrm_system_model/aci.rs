@@ -15,7 +15,7 @@ pub enum ScheduleID {
 
 #[derive(Debug, Clone)]
 pub struct AcI {
-    id: String,
+    pub id: String,
     adc_id: String,
     slot_width: i64,
     num_of_slots: i64,
@@ -64,9 +64,9 @@ impl TryFrom<AcIDto> for AcI {
             slot_width: dto.slot_width,
             num_of_slots: dto.num_of_slots,
             commit_timeout: dto.commit_timeout,
-            router_connections: (),
-            schedule_id: (),
-            rms_system: (),
+            router_connections: todo!(),
+            schedule_id: todo!(),
+            rms_system: todo!(),
         })
     }
 }
