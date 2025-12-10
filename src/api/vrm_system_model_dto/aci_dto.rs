@@ -5,42 +5,32 @@ use serde::Deserialize;
 pub struct AcIDto {
     pub id: String,
     pub adc_id: String,
-    pub slot_width: i64,
-    pub num_of_slots: i64,
     pub commit_timeout: i64,
-    pub connected_to_routers: Vec<String>,
-    pub scheduler_typ: String,
     pub rms_system: RMSSystemDto,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RMSSystemDto {
-    pub id: String,
     pub typ: String,
-    pub routers: Vec<RouterDto>,
-    pub physical_nodes: Vec<NodeResourceDto>,
+    pub scheduler_type: String,
+    pub grid_nodes: Vec<GridNodeDto>,
+    pub network_links: Vec<NetworkLinkDto>,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RouterDto {
+pub struct GridNodeDto {
     pub id: String,
-    pub typ: String,
-    pub physical_links: Option<Vec<LinkResourceDto>>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct LinkResourceDto {
-    pub id: String,
-    pub endpoint: String,
-    pub capacity: i64,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct NodeResourceDto {
-    pub id: String,
-    pub cpus: i64,
+    pub cpus: String,
     pub connected_to_router: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NetworkLinkDto {
+    pub id: String,
+    pub start_point: String,
+    pub end_point: String,
+    pub capacity: i64,
 }

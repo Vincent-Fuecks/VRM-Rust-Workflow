@@ -64,7 +64,14 @@ pub struct SlottedSchedule {
 }
 
 impl SlottedSchedule {
-    pub fn new(id: ReservationKey, number_of_real_slots: i64, slot_width: i64, capacity: i64, simulator: Box<dyn SystemSimulator>) -> Self {
+    pub fn new(
+        id: ReservationKey,
+        number_of_real_slots: i64,
+        slot_width: i64,
+        capacity: i64,
+        use_quadratic_mean_fragmentation: bool,
+        simulator: Box<dyn SystemSimulator>,
+    ) -> Self {
         let mut slots: Vec<Slot> = Vec::new();
 
         // number_of_real_slots is the number of slots in the considered scheduling window
@@ -85,7 +92,7 @@ impl SlottedSchedule {
             active_reservations: Reservations::new_empty(),
             is_frag_cache_up_to_date: true,
             fragmentation_cache: 0.0,
-            use_quadratic_mean_fragmentation: true,
+            use_quadratic_mean_fragmentation: use_quadratic_mean_fragmentation,
             // Always false
             is_frag_needed: false,
             simulator: simulator,

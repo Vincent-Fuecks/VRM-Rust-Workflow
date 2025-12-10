@@ -81,6 +81,7 @@ pub trait Schedule: Debug + Send + Sync {
     /// An `Option` containing the single `Box<dyn Reservation>` that best fits the criteria, or `None` if no feasible candidates were found.
     fn probe_best<C>(&mut self, request_key: ReservationKey, comparator: C) -> Option<Box<dyn Reservation>>
     where
+        Self: Sized,
         C: FnMut(Box<dyn Reservation>, Box<dyn Reservation>) -> Ordering;
 
     /// Attempts to execute a **final reservation** using a provided candidate.

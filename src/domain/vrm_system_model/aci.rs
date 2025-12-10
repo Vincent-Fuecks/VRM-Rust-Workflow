@@ -1,6 +1,8 @@
 use std::collections::HashSet;
 
-use crate::api::vrm_system_model_dto::aci_dto::{AcIDto, RMSSystemDto, RouterDto};
+use crate::api::vrm_system_model_dto::aci_dto::{AcIDto, RMSSystemDto};
+use crate::domain::vrm_system_model::reservation::reservation::ReservationKey;
+use crate::domain::vrm_system_model::scheduler_type::SchedulerType;
 use crate::error::Error;
 
 #[derive(Debug, Clone)]
@@ -15,72 +17,23 @@ pub enum ScheduleID {
 
 #[derive(Debug, Clone)]
 pub struct AcI {
-    pub id: String,
-    adc_id: String,
-    slot_width: i64,
-    num_of_slots: i64,
+    pub id: ReservationKey,
+    adc_id: ReservationKey,
     commit_timeout: i64,
-    router_connections: Vec<String>,
-    schedule_id: ScheduleID,
     rms_system: RMSSystem,
-}
-
-#[derive(Debug, Clone)]
-pub struct RMSSystem {
-    id: String,
-    typ: String,
-    routers: Vec<Router>,
-    physical_nodes: Vec<PhysicalNode>,
-}
-
-#[derive(Debug, Clone)]
-pub struct Router {
-    id: String,
-    typ: String,
-    physical_links: Option<Vec<PhysicalLink>>,
-}
-
-#[derive(Debug, Clone)]
-pub struct PhysicalLink {
-    id: String,
-    endpoint: String,
-    capacity: i64,
-}
-
-#[derive(Debug, Clone)]
-pub struct PhysicalNode {
-    id: String,
-    cpus: i64,
-    connected_to_router: Vec<String>,
 }
 
 impl TryFrom<AcIDto> for AcI {
     type Error = Error;
 
     fn try_from(dto: AcIDto) -> Result<Self, Self::Error> {
+        let rms_system = None;
+
         Ok(AcI {
-            id: dto.id.clone(),
-            adc_id: dto.adc_id,
-            slot_width: dto.slot_width,
-            num_of_slots: dto.num_of_slots,
+            id: ReservationKey { id: dto.id.clone() },
+            adc_id: ReservationKey { id: dto.adc_id },
             commit_timeout: dto.commit_timeout,
-            router_connections: todo!(),
-            schedule_id: todo!(),
             rms_system: todo!(),
         })
     }
-}
-
-impl AcI {
-    fn build_router_conections(dto: &RMSSystemDto) {
-        let mut connected_to_routers: HashSet<String> = HashSet::new();
-
-        for router in &dto.routers {
-            if !connected_to_routers.contains(&router.id) {
-                connected_to_routers.insert(router.id.clone());
-            }
-        }
-    }
-
-    fn build_rms_system(dto: &RMSSystemDto) {}
 }

@@ -6,7 +6,6 @@
             "requestOrder": "Start-First",
             "numOfSlots" : 265, 
             "slotWidth": 256,
-
             "timeout": 256, 
             "maxOptimizationTime": 256, 
             "rejectNewReservationsAt" : 1000
@@ -17,94 +16,132 @@
         {
             "id": "AcI-001",
             "AdcId": "Adc-001",
-            "slotWidth": 256,
             "commitTimeout": 256,
-            "numOfSlots": 256,
-            "connectedToRouter" : ["Router-001", "Router-002"],
-            "schedulerTyp": "SlottedSchedule",
-            "rmsSystem": "nullrms",
-            "physicalNodes": [
+            "rmsSystem": [
                 {
-                    "id": "Node-001",
-                    "cpus": 256, 
-                    "connectedToRouter": ["Router-001"]
-                },
-                {
-                    "id": "Node-002",
-                    "cpus": 256, 
-                    "connectedToRouter": ["Router-002"]
-                }
-            ],
-            "routers": [
-                {
-                    "id": "Router-001", 
-                    "typ": "endpoint",
-                    "physicalLinks": [
+                    "type": "NullRms",
+                    "schedulerTyp": "SlottedSchedule",
+                    "gridNodes": [
+                        {
+                            "id": "Node-001",
+                            "cpus": 256, 
+                            "connectedToRouter": ["Router-001"]
+                        },
+                        {
+                            "id": "Node-002",
+                            "cpus": 256, 
+                            "connectedToRouter": ["Router-002"]
+                        },
+                        {
+                            "id": "Node-003",
+                            "cpus": 256, 
+                            "connectedToRouter": ["Router-003"]
+                        },
+                        {
+                            "id": "Node-004",
+                            "cpus": 256, 
+                            "connectedToRouter": ["Router-001", "Router-003"]
+                        }
+                    ],
+                    "networkLinks": [
                         {
                             "id": "Router-001--To--Router-002",
-                            "endpoint": "Router-002",
+                            "startPoint": "Router-001", 
+                            "endPoint": "Router-002",
                             "capacity": "10000" 
-                        }
-                    ]
-                },
-                {
-                    "id": "Router-002", 
-                    "typ": "intermediate",
-                    "physicalLinks": [
+                        },
+                        {
+                            "id": "Router-001--To--Router-003",
+                            "startPoint": "Router-001",
+                            "endPoint": "Router-003",
+                            "capacity": "10000" 
+                        },
                         {
                             "id": "Router-002--To--Router-001",
+                            "startPoint": "Router-002",
                             "endpoint": "Router-001",
                             "capacity": "5000" 
-                        }
+                        },
+                        {
+                            "id": "Router-002--To--Router-003",
+                            "startPoint": "Router-002",
+                            "endPoint": "Router-003",
+                            "capacity": "5000" 
+                        },
+                        {
+                            "id": "Router-002--To--Router-001",
+                            "startPoint": "Router-002",
+                            "endpoint": "Router-001",
+                            "capacity": "5000" 
+                        }                    
                     ]
                 }
             ]
         },
-                {
-            "id": "AcI-002",
+        {
+            "id": "AcI-001",
             "AdcId": "Adc-001",
-            "slotWidth": 256,
             "commitTimeout": 256,
-            "numOfSlots": 256,
-            "connectedToRouter" : ["Router-001", "Router-002"],
-            "schedulerTyp": "SlottedSchedule",
-            "rmsSystem": "nullrms",
-            "physicalNodes": [
+            "rmsSystem": [
                 {
-                    "id": "Node-001",
-                    "cpus": 256, 
-                    "connectedToRouter": ["Router-001"]
-                },
-                {
-                    "id": "Node-002",
-                    "cpus": 256, 
-                    "connectedToRouter": ["Router-002"]
-                }
-            ],
-            "routers": [
-                {
-                    "id": "Router-001", 
-                    "typ": "endpoint",
-                    "physicalLinks": [
+                    "type": "NullRms",
+                    "schedulerTyp": "SlottedSchedule",
+                    "gridNodes": [
+                        {
+                            "id": "Node-001",
+                            "cpus": 256, 
+                            "connectedToRouter": ["Router-001"]
+                        },
+                        {
+                            "id": "Node-002",
+                            "cpus": 256, 
+                            "connectedToRouter": ["Router-002"]
+                        },
+                        {
+                            "id": "Node-003",
+                            "cpus": 256, 
+                            "connectedToRouter": ["Router-003"]
+                        },
+                        {
+                            "id": "Node-004",
+                            "cpus": 256, 
+                            "connectedToRouter": ["Router-001", "Router-003"]
+                        }
+                    ],
+                    "networkLinks": [
                         {
                             "id": "Router-001--To--Router-002",
-                            "endpoint": "Router-002",
+                            "startPoint": "Router-001", 
+                            "endPoint": "Router-002",
                             "capacity": "10000" 
-                        }
-                    ]
-                },
-                {
-                    "id": "Router-002", 
-                    "typ": "intermediate",
-                    "physicalLinks": [
+                        },
+                        {
+                            "id": "Router-001--To--Router-003",
+                            "startPoint": "Router-001",
+                            "endPoint": "Router-003",
+                            "capacity": "10000" 
+                        },
                         {
                             "id": "Router-002--To--Router-001",
+                            "startPoint": "Router-002",
                             "endpoint": "Router-001",
                             "capacity": "5000" 
-                        }
+                        },
+                        {
+                            "id": "Router-002--To--Router-003",
+                            "startPoint": "Router-002",
+                            "endPoint": "Router-003",
+                            "capacity": "5000" 
+                        },
+                        {
+                            "id": "Router-002--To--Router-001",
+                            "startPoint": "Router-002",
+                            "endpoint": "Router-001",
+                            "capacity": "5000" 
+                        }                    
                     ]
                 }
             ]
-        }
+        }        
     ]
 }
