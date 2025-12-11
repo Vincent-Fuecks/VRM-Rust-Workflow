@@ -2,6 +2,8 @@ use crate::domain::simulator::simulator::SystemSimulator;
 use crate::domain::vrm_system_model::reservation::reservation::ReservationKey;
 use crate::domain::vrm_system_model::schedule::slotted_schedule::SlottedSchedule;
 use crate::domain::vrm_system_model::scheduler_trait::Schedule;
+use crate::error::ConversionError;
+use std::str::FromStr;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SchedulerType {
@@ -11,6 +13,31 @@ pub enum SchedulerType {
     SlottedSchedule12,
     SlottedSchedule12000,
     UnlimitedSchedule,
+}
+
+pub enum SchedulerTypeDto {
+    FreeListSchedule,
+    SlottedSchedule,
+    SlottedScheduleResubmitFrag,
+    SlottedSchedule12,
+    SlottedSchedule12000,
+    UnlimitedSchedule,
+}
+
+impl FromStr for SchedulerType {
+    type Err = ConversionError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "FreeListSchedule" => Ok(SchedulerType::FreeListSchedule),
+            "SlottedSchedule" => Ok(SchedulerType::SlottedSchedule),
+            "SlottedScheduleResubmitFrag" => Ok(SchedulerType::SlottedScheduleResubmitFrag),
+            "SlottedSchedule12" => Ok(SchedulerType::SlottedSchedule12),
+            "SlottedSchedule12000" => Ok(SchedulerType::SlottedSchedule12000),
+            "UnlimitedSchedule" => Ok(SchedulerType::UnlimitedSchedule),
+            _ => Err(ConversionError::UnknownSchedulerType(s.to_string())),
+        }
+    }
 }
 
 impl SchedulerType {

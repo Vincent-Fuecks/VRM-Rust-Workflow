@@ -19,8 +19,10 @@
             "commitTimeout": 256,
             "rmsSystem": [
                 {
-                    "type": "NullRms",
+                    "type": "nullBroker",
                     "schedulerTyp": "SlottedSchedule",
+                    "slotWidth": 256,
+                    "numOfSlots": 256,
                     "gridNodes": [
                         {
                             "id": "Node-001",
@@ -86,6 +88,8 @@
                 {
                     "type": "NullRms",
                     "schedulerTyp": "SlottedSchedule",
+                    "slotWidth": 256,
+                    "numOfSlots": 256,
                     "gridNodes": [
                         {
                             "id": "Node-001",

@@ -1,9 +1,9 @@
-use std::collections::HashSet;
-
-use crate::api::vrm_system_model_dto::aci_dto::{AcIDto, RMSSystemDto};
+use crate::api::vrm_system_model_dto::aci_dto::AcIDto;
+use crate::domain::simulator::simulator::SystemSimulator;
 use crate::domain::vrm_system_model::reservation::reservation::ReservationKey;
-use crate::domain::vrm_system_model::scheduler_type::SchedulerType;
-use crate::error::Error;
+use crate::domain::vrm_system_model::rms::rms::Rms;
+use crate::domain::vrm_system_model::rms::rms_type::RmsType;
+use crate::error::ConversionError;
 
 #[derive(Debug, Clone)]
 pub enum ScheduleID {
@@ -15,25 +15,23 @@ pub enum ScheduleID {
     UnlimitedSchedule,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct AcI {
     pub id: ReservationKey,
     adc_id: ReservationKey,
     commit_timeout: i64,
-    rms_system: RMSSystem,
+    rms_system: Box<dyn Rms>,
 }
 
-impl TryFrom<AcIDto> for AcI {
-    type Error = Error;
+impl TryFrom<(AcIDto, Box<dyn SystemSimulator>)> for AcI {
+    type Error = ConversionError;
 
-    fn try_from(dto: AcIDto) -> Result<Self, Self::Error> {
-        let rms_system = None;
+    fn try_from(args: (AcIDto, Box<dyn SystemSimulator>)) -> Result<Self, ConversionError> {
+        let (dto, simulator) = args;
 
-        Ok(AcI {
-            id: ReservationKey { id: dto.id.clone() },
-            adc_id: ReservationKey { id: dto.adc_id },
-            commit_timeout: dto.commit_timeout,
-            rms_system: todo!(),
-        })
+        let aci_name = dto.id.clone();
+        let rms_system = RmsType::get_instance(dto.rms_system, simulator, dto.id)?;
+
+        Ok(AcI { id: ReservationKey { id: aci_name }, adc_id: ReservationKey { id: dto.adc_id }, commit_timeout: dto.commit_timeout, rms_system })
     }
 }

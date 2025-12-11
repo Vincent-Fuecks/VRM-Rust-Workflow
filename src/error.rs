@@ -15,4 +15,11 @@ pub enum Error {
     VrmSystemModelConstructionError,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ConversionError {
+    UnknownSchedulerType(String),
+    UnknownRmsType(String),
+    VrmConstructionError(String),
+}
+
 pub type Result<T> = std::result::Result<T, Error>;

@@ -14,6 +14,8 @@ pub struct AcIDto {
 pub struct RMSSystemDto {
     pub typ: String,
     pub scheduler_type: String,
+    pub slot_width: i64,
+    pub num_of_slots: i64,
     pub grid_nodes: Vec<GridNodeDto>,
     pub network_links: Vec<NetworkLinkDto>,
 }
@@ -22,7 +24,7 @@ pub struct RMSSystemDto {
 #[serde(rename_all = "camelCase")]
 pub struct GridNodeDto {
     pub id: String,
-    pub cpus: String,
+    pub cpus: i64,
     pub connected_to_router: Vec<String>,
 }
 
