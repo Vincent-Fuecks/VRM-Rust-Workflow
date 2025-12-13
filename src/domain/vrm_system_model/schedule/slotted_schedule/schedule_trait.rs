@@ -258,10 +258,11 @@ impl Schedule for super::SlottedSchedule {
         return candidates;
     }
 
-    fn probe_best<C>(&mut self, request_key: ReservationKey, mut comparator: C) -> Option<Box<dyn Reservation>>
-    where
-        C: FnMut(Box<dyn Reservation>, Box<dyn Reservation>) -> Ordering,
-    {
+    fn probe_best(
+        &mut self,
+        request_key: ReservationKey,
+        comparator: &mut dyn FnMut(Box<dyn Reservation>, Box<dyn Reservation>) -> Ordering,
+    ) -> Option<Box<dyn Reservation>> {
         let possible_reservations: Reservations = self.probe(request_key);
         if possible_reservations.is_empty() {
             return None;
@@ -288,5 +289,9 @@ impl Schedule for super::SlottedSchedule {
 
         self.active_reservations.insert(new_reservation_key.clone(), reservation);
         self.active_reservations.set_state(&new_reservation_key, ReservationState::ReserveAnswer);
+    }
+
+    fn clone_box(&self) -> Box<dyn Schedule> {
+        Box::new(self.clone())
     }
 }

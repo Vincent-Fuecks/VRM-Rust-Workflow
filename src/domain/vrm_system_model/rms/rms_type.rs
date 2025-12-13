@@ -1,6 +1,6 @@
 use crate::api::vrm_system_model_dto::aci_dto::RMSSystemDto;
 use crate::domain::simulator::simulator::SystemSimulator;
-use crate::domain::vrm_system_model::rms::{null_rms::NullRms, rms::Rms};
+use crate::domain::vrm_system_model::rms::{null_broker::NullBroker, null_rms::NullRms, rms::Rms};
 use crate::error::ConversionError;
 use std::str::FromStr;
 
@@ -22,7 +22,8 @@ impl RmsType {
             }
 
             RmsType::NullBroker => {
-                todo!()
+                let broker_instance = NullBroker::try_from((dto, simulator, aci_name))?;
+                Ok(Box::new(broker_instance))
             }
             RmsType::Slurm => {
                 todo!()

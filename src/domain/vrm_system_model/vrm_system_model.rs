@@ -8,30 +8,31 @@ use crate::domain::vrm_system_model::reservation::reservation::ReservationKey;
 use crate::error::ConversionError;
 use std::sync::LazyLock;
 
+const SIMULATOR: LazyLock<Box<dyn SystemSimulator>> = LazyLock::new(|| {
+    let simulator = Simulator::new(true);
+    Box::new(simulator)
+});
+
 #[derive(Debug)]
 pub struct VrmSystemModel {
     adcs: HashMap<ReservationKey, ADC>,
     acis: HashMap<ReservationKey, AcI>,
 }
-const SIMULATOR: LazyLock<Box<dyn SystemSimulator>> = LazyLock::new(|| {
-    let simulator = Simulator::new(true);
-    Box::new(simulator)
-});
-impl VrmSystemModel {
-    pub fn from_dto(&self, root_dto: VrmSystemModelDto) -> Result<Self, ConversionError> {
-        let mut adcs = HashMap::new();
-        let mut acis = HashMap::new();
 
+impl VrmSystemModel {
+    pub fn from_dto(&mut self, root_dto: VrmSystemModelDto) -> Result<(), ConversionError> {
         for adc_dto in root_dto.adcs {
-            let adc = ADC::try_from(adc_dto);
-            adcs.insert(ReservationKey::new(adc_dto.id.clone()), adc);
+            let adc_id = ReservationKey::new(adc_dto.id.clone());
+            let adc = ADC::try_from(adc_dto)?;
+            self.adcs.insert(adc_id, adc);
         }
 
         for aci_dto in root_dto.acis {
+            let aci_id = ReservationKey::new(aci_dto.id.clone());
             let aci = AcI::try_from((aci_dto, SIMULATOR.clone()))?;
-            acis.insert(ReservationKey::new(aci_dto.id.clone()), aci);
+            self.acis.insert(aci_id, aci);
         }
 
-        Ok(VrmSystemModel { adcs: adcs, acis: acis })
+        Ok(())
     }
 }

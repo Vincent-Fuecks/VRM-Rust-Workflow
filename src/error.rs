@@ -15,11 +15,22 @@ pub enum Error {
     VrmSystemModelConstructionError,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Error)]
 pub enum ConversionError {
+    #[error("Unknown scheduler type: {0}")]
     UnknownSchedulerType(String),
+
+    #[error("Unknown RMS type: {0}")]
     UnknownRmsType(String),
+
+    #[error("VRM construction error: {0}")]
     VrmConstructionError(String),
+
+    #[error("ADC construction error: {0}")]
+    AdcConstructionError(String),
+
+    #[error("A system error occurred during conversion: {0}")]
+    SystemError(#[from] Error),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

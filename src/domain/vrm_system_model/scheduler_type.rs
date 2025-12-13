@@ -74,9 +74,4 @@ impl SchedulerType {
             }
         }
     }
-
-    // Returns a trait object; TODO Is this necessary?
-    pub fn clone_box(&self) -> Box<dyn Schedule> {
-        todo!()
-    }
 }

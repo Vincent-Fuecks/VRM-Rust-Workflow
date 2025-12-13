@@ -2,11 +2,11 @@ use crate::api::vrm_system_model_dto::aci_dto::RMSSystemDto;
 use crate::domain::simulator::simulator::SystemSimulator;
 use crate::domain::vrm_system_model::reservation::reservation::ReservationKey;
 use crate::domain::vrm_system_model::resource::{grid_node::GridNode, network_link::NetworkLink};
-use crate::domain::vrm_system_model::rms::null_rms::NullRms;
+use crate::domain::vrm_system_model::schedule::slotted_schedule::SlottedSchedule;
 use crate::domain::vrm_system_model::scheduler_trait::Schedule;
-use crate::domain::vrm_system_model::scheduler_type::{SchedulerType, SchedulerTypeDto};
+use crate::domain::vrm_system_model::scheduler_type::SchedulerType;
 use crate::error::ConversionError;
-use core::panic;
+
 use std::any::Any;
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -15,6 +15,30 @@ pub trait Rms: std::fmt::Debug + Any + Send + Sync {
     fn get_base(&self) -> &RmsBase;
     fn get_base_mut(&mut self) -> &mut RmsBase;
     fn as_any(&self) -> &dyn Any;
+
+    fn get_shadow_schedule_keys(&self) -> Vec<ReservationKey> {
+        return self.get_base().shadow_schedules.keys().map(|key| key.clone()).collect();
+    }
+
+    fn get_shadow_schedules(&self) -> &HashMap<ReservationKey, Box<dyn Schedule>> {
+        return &self.get_base().shadow_schedules;
+    }
+
+    fn get_mut_shadow_schedules(&mut self) -> &HashMap<ReservationKey, Box<dyn Schedule>> {
+        return &self.get_base_mut().shadow_schedules;
+    }
+
+    fn get_schedule_box_copy(&mut self) -> Box<dyn Schedule> {
+        return self.get_base_mut().schedule.clone_box();
+    }
+
+    fn get_shadow_schedule(&self, shadow_schedule_id: ReservationKey) -> &Box<dyn Schedule> {
+        return self.get_base().shadow_schedules.get(&shadow_schedule_id).expect("Shadow schedule id was in shadow schedules not found.");
+    }
+
+    fn get_mut_shadow_schedule(&mut self, shadow_schedule_id: ReservationKey) -> &mut Box<dyn Schedule> {
+        return self.get_base_mut().shadow_schedules.get_mut(&shadow_schedule_id).expect("Shadow schedule id was in shadow schedules not found.");
+    }
 }
 
 #[derive(Debug)]
@@ -53,11 +77,21 @@ impl TryFrom<(RMSSystemDto, Box<dyn SystemSimulator>, String)> for RmsBase {
         for link in dto.network_links.iter() {
             network_capacity += link.capacity;
 
+            let link_schedule_name = format!("Schedule NetworkLink {} -> {}", link.start_point, link.end_point);
+            let link_schedule = SlottedSchedule::new(
+                ReservationKey::new(link_schedule_name),
+                dto.num_of_slots,
+                dto.slot_width,
+                link.capacity,
+                true,
+                simulator.clone_box(),
+            );
+
             network_links.push(NetworkLink {
                 id: ReservationKey { id: link.id.clone() },
-                start_point: ReservationKey { id: link.start_point.clone() },
-                end_point: ReservationKey { id: link.end_point.clone() },
-                capacity: link.capacity,
+                source: ReservationKey { id: link.start_point.clone() },
+                target: ReservationKey { id: link.end_point.clone() },
+                schedule: link_schedule,
             });
         }
 

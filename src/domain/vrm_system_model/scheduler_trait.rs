@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::cmp::Ordering;
 use std::fmt::Debug;
 
@@ -6,7 +7,7 @@ use crate::domain::vrm_system_model::reservation::{reservation::Reservation, res
 use crate::domain::vrm_system_model::utils::load_buffer::LoadMetrics;
 
 // TODO Sync is potentially unsafe; if total struct Sync than this should be redundant
-pub trait Schedule: Debug + Send + Sync {
+pub trait Schedule: Debug + Send + Sync + Any {
     /// Calculates the resource **fragmentation score** over a specific, user-defined time range.
     ///
     /// # Arguments
@@ -79,10 +80,11 @@ pub trait Schedule: Debug + Send + Sync {
     /// # Returns
     ///
     /// An `Option` containing the single `Box<dyn Reservation>` that best fits the criteria, or `None` if no feasible candidates were found.
-    fn probe_best<C>(&mut self, request_key: ReservationKey, comparator: C) -> Option<Box<dyn Reservation>>
-    where
-        Self: Sized,
-        C: FnMut(Box<dyn Reservation>, Box<dyn Reservation>) -> Ordering;
+    fn probe_best(
+        &mut self,
+        request_key: ReservationKey,
+        comparator: &mut dyn FnMut(Box<dyn Reservation>, Box<dyn Reservation>) -> Ordering,
+    ) -> Option<Box<dyn Reservation>>;
 
     /// Attempts to execute a **final reservation** using a provided candidate.
     ///
@@ -124,4 +126,12 @@ pub trait Schedule: Debug + Send + Sync {
     /// This process deletes all reservations that have expired (assigned end time is past the new start time)
     /// and moves the load from the now-expired slots into the `load_buffer` for historical tracking.
     fn update(&mut self);
+
+    fn clone_box(&self) -> Box<dyn Schedule>;
+}
+
+impl Clone for Box<dyn Schedule> {
+    fn clone(&self) -> Box<dyn Schedule> {
+        self.clone_box()
+    }
 }
