@@ -2,6 +2,7 @@ use crate::domain::simulator::simulator::SystemSimulator;
 use crate::domain::vrm_system_model::reservation::{reservation::ReservationKey, reservations::Reservations};
 use crate::domain::vrm_system_model::schedule::slot::Slot;
 use crate::domain::vrm_system_model::scheduler_trait::Schedule;
+use crate::domain::vrm_system_model::utils::id::SlottedScheduleId;
 use crate::domain::vrm_system_model::utils::{
     load_buffer::{GlobalLoadContext, LoadBuffer},
     statistics::{StatParameter, StatisticEvent},
@@ -18,7 +19,7 @@ pub mod schedule_trait;
 #[derive(Debug, Clone)]
 pub struct SlottedSchedule {
     /// **Unique identifier** for this SlottedSchedule.
-    id: ReservationKey,
+    id: SlottedScheduleId,
 
     /// A list of all time **Slots** defined for this schedule.
     slots: Vec<Slot>,
@@ -65,7 +66,7 @@ pub struct SlottedSchedule {
 
 impl SlottedSchedule {
     pub fn new(
-        id: ReservationKey,
+        id: SlottedScheduleId,
         number_of_real_slots: i64,
         slot_width: i64,
         capacity: i64,
@@ -80,7 +81,7 @@ impl SlottedSchedule {
         }
 
         let mut slotted_schedule: SlottedSchedule = SlottedSchedule {
-            id: id,
+            id: SlottedScheduleId::new(id),
             slots: slots,
             capacity: capacity,
             slot_width: slot_width,

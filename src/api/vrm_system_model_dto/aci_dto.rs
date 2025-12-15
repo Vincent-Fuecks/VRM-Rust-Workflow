@@ -9,7 +9,7 @@ pub struct AcIDto {
     pub rms_system: RMSSystemDto,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct RMSSystemDto {
     pub typ: String,
@@ -20,7 +20,7 @@ pub struct RMSSystemDto {
     pub network_links: Vec<NetworkLinkDto>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct GridNodeDto {
     pub id: String,
@@ -28,7 +28,7 @@ pub struct GridNodeDto {
     pub connected_to_router: Vec<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct NetworkLinkDto {
     pub id: String,

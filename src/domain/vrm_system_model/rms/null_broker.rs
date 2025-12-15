@@ -1,12 +1,15 @@
 use crate::api::vrm_system_model_dto::aci_dto::RMSSystemDto;
 use crate::domain::simulator::simulator::SystemSimulator;
 use crate::domain::vrm_system_model::rms::rms::{Rms, RmsBase};
+use crate::domain::vrm_system_model::schedule::topology::NetworkTopology;
+
 use crate::error::ConversionError;
 use std::any::Any;
 
 #[derive(Debug)]
 pub struct NullBroker {
     pub base: RmsBase,
+    pub network_topology: NetworkTopology,
 }
 
 impl Rms for NullBroker {
@@ -27,16 +30,14 @@ impl TryFrom<(RMSSystemDto, Box<dyn SystemSimulator>, String)> for NullBroker {
     type Error = ConversionError;
 
     fn try_from(args: (RMSSystemDto, Box<dyn SystemSimulator>, String)) -> Result<Self, Self::Error> {
-        let base = RmsBase::try_from(args)?;
+        let (dto, simulator, aci_name) = args;
+        let base = RmsBase::try_from((dto.clone(), simulator.clone(), aci_name.clone()))?;
+        let network_topology = NetworkTopology::try_from((dto, simulator, aci_name))?;
 
         if base.grid_nodes.is_empty() {
             log::info!("Empty NullBroker Grid: The newly created NullBroker contains no Gird Nodes.");
         }
 
-        if base.network_links.is_empty() {
-            log::info!("Empty NullBroker Network: The newly created NullBroker contains no Network. NullRms should be utilized instead.");
-        }
-
-        Ok(NullBroker { base })
+        Ok(NullBroker { base, network_topology: network_topology })
     }
 }

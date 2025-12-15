@@ -24,9 +24,6 @@ impl TryFrom<(RMSSystemDto, Box<dyn SystemSimulator>, String)> for NullRms {
         if base.grid_nodes.is_empty() {
             log::info!("Empty NullRms Grid: The newly created NullRms contains no Gird Nodes.");
         }
-        if base.network_links.is_empty().not() {
-            log::info!("Not Empty NullRms Network: NullRms should not contain a Network. NullBroker or Slurm should be utilized instead.");
-        }
 
         Ok(NullRms { base })
     }

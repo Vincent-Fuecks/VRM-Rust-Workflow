@@ -2,6 +2,8 @@ use crate::domain::simulator::simulator::SystemSimulator;
 use crate::domain::vrm_system_model::reservation::reservation::ReservationKey;
 use crate::domain::vrm_system_model::schedule::slotted_schedule::SlottedSchedule;
 use crate::domain::vrm_system_model::scheduler_trait::Schedule;
+use crate::domain::vrm_system_model::utils::id::SlottedScheduleId;
+
 use crate::error::ConversionError;
 use std::str::FromStr;
 
@@ -44,7 +46,7 @@ impl SchedulerType {
     // Factory method to create a concrete Schedule implementation
     pub fn get_instance(
         &self,
-        id: ReservationKey,
+        id: SlottedScheduleId,
         number_of_slots: i64,
         slot_width: i64,
         capacity: i64,

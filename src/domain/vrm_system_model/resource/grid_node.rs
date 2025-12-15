@@ -1,8 +1,8 @@
-use crate::domain::vrm_system_model::reservation::reservation::ReservationKey;
+use crate::domain::vrm_system_model::utils::id::{GridNodeId, RouterId};
 
 #[derive(Debug, Clone)]
 pub struct GridNode {
-    pub id: ReservationKey,
+    pub id: GridNodeId,
     pub cpus: i64,
-    pub connected_to_router: Vec<ReservationKey>,
+    pub connected_to_router: Vec<RouterId>,
 }

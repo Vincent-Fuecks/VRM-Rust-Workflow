@@ -1,6 +1,5 @@
 pub mod aci;
 pub mod adc;
-pub mod advance_reservation_rms_trait;
 pub mod reservation;
 pub mod resource;
 pub mod rms;
