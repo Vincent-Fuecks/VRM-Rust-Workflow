@@ -2,7 +2,7 @@ use crate::domain::vrm_system_model::reservation::reservation::{Reservation, Res
 use crate::domain::vrm_system_model::reservation::reservations::Reservations;
 use crate::domain::vrm_system_model::rms::rms::Rms;
 use crate::domain::vrm_system_model::schedule;
-use crate::domain::vrm_system_model::utils::load_buffer::LoadMetrics;
+use crate::domain::vrm_system_model::utils::load_buffer::LoadMetric;
 
 use std::cmp::Ordering;
 
@@ -70,12 +70,12 @@ pub trait AdvanceReservationRms: Rms {
         return self.get_mut_shadow_schedule(shadow_schedule_id).get_system_fragmentation();
     }
 
-    fn get_load_metrics(&mut self, start: i64, end: i64, shadow_schedule_id: ReservationKey) -> LoadMetrics {
-        return self.get_mut_shadow_schedule(shadow_schedule_id).get_load_metrics(start, end);
+    fn get_load_metric(&mut self, start: i64, end: i64, shadow_schedule_id: ReservationKey) -> LoadMetric {
+        return self.get_mut_shadow_schedule(shadow_schedule_id).get_load_metric(start, end);
     }
 
-    fn get_simulation_load_current_schedule(&mut self) -> LoadMetrics {
-        return self.get_base_mut().schedule.get_simulation_load();
+    fn get_simulation_load_current_schedule(&mut self) -> LoadMetric {
+        return self.get_base_mut().schedule.get_simulation_load_metric();
     }
 
     fn probe(&mut self, reservation_key: ReservationKey, shadow_schedule_id: ReservationKey) -> Reservations {

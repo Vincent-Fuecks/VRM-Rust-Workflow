@@ -4,7 +4,7 @@ use std::fmt::Debug;
 
 use crate::domain::vrm_system_model::reservation::reservation::ReservationKey;
 use crate::domain::vrm_system_model::reservation::{reservation::Reservation, reservations::Reservations};
-use crate::domain::vrm_system_model::utils::load_buffer::LoadMetrics;
+use crate::domain::vrm_system_model::utils::load_buffer::LoadMetric;
 
 // TODO Sync is potentially unsafe; if total struct Sync than this should be redundant
 pub trait Schedule: Debug + Send + Sync + Any {
@@ -37,13 +37,13 @@ pub trait Schedule: Debug + Send + Sync + Any {
     /// # Returns
     ///
     /// A `LoadMetrics` structure detailing the average capacity utilization and reserved capacity.
-    fn get_load_metrics(&mut self, start_time: i64, end_time: i64) -> LoadMetrics;
+    fn get_load_metric(&mut self, start_time: i64, end_time: i64) -> LoadMetric;
 
     /// Retrieves load metrics for the **effective overall simulation period**.
     ///
     /// This period excludes initial and final slots defined by system configuration
     /// (`SLOTS_TO_DROP_ON_START`/`SLOTS_TO_DROP_ON_END`).
-    fn get_simulation_load(&mut self) -> LoadMetrics;
+    fn get_simulation_load_metric(&mut self) -> LoadMetric;
 
     /// Performs a **feasibility probe** to find all possible time slots where a given reservation
     /// request can be accommodated.

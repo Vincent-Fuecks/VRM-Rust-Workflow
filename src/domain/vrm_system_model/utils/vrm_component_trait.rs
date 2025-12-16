@@ -1,5 +1,6 @@
 use crate::domain::vrm_system_model::utils::statistics::StatisticEvent;
 
+/// Base trait for all components within the **Virtual Resource Management (VRM)** ecosystem.
 pub trait VRMComponent {
     /// Generates a comprehensive `StatisticEvent` containing key performance indicators
     /// for the component's current operational state.

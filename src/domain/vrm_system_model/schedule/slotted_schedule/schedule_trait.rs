@@ -3,7 +3,7 @@ use crate::domain::vrm_system_model::reservation::{
     reservations::Reservations,
 };
 use crate::domain::vrm_system_model::scheduler_trait::Schedule;
-use crate::domain::vrm_system_model::utils::load_buffer::{LoadMetrics, SLOTS_TO_DROP_ON_END, SLOTS_TO_DROP_ON_START};
+use crate::domain::vrm_system_model::utils::load_buffer::{LoadMetric, SLOTS_TO_DROP_ON_END, SLOTS_TO_DROP_ON_START};
 
 use std::cmp::Ordering;
 use std::collections::HashSet;
@@ -21,7 +21,7 @@ impl Schedule for super::SlottedSchedule {
         self.active_reservations.clear();
     }
 
-    fn get_simulation_load(&mut self) -> LoadMetrics {
+    fn get_simulation_load_metric(&mut self) -> LoadMetric {
         let index_of_first_slot: i64 = self.load_buffer.context.get_first_load() + SLOTS_TO_DROP_ON_START;
         let start_time_of_first_slot: i64 = self.get_slot_start_time(index_of_first_slot);
 
@@ -182,7 +182,7 @@ impl Schedule for super::SlottedSchedule {
         return;
     }
 
-    fn get_load_metrics(&mut self, start_time: i64, mut end_time: i64) -> LoadMetrics {
+    fn get_load_metric(&mut self, start_time: i64, mut end_time: i64) -> LoadMetric {
         self.update();
 
         if end_time == i64::MIN {
@@ -216,7 +216,7 @@ impl Schedule for super::SlottedSchedule {
         let avg_reserved_capacity: f64 =
             if number_of_slots != 0 { (reserved_capacity_sum as f64) / (number_of_slots as f64) } else { self.capacity as f64 };
 
-        LoadMetrics {
+        LoadMetric {
             start_time,
             end_time,
             avg_reserved_capacity: avg_reserved_capacity,

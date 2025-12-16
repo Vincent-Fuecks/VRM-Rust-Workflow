@@ -38,6 +38,10 @@ pub struct NetworkLinkTag;
 pub struct RmsTag;
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Copy)]
 pub struct SlottedScheduleTag;
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Copy)]
+pub struct AciTag;
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Copy)]
+pub struct AdcTag;
 
 pub type ReservationId = Id<ReservationTag>;
 pub type RouterId = Id<RouterTag>;
@@ -45,3 +49,5 @@ pub type GridNodeId = Id<GridNodeTag>;
 pub type NetworkLinkId = Id<NetworkLinkTag>;
 pub type RmsId = Id<RmsTag>;
 pub type SlottedScheduleId = Id<SlottedScheduleTag>;
+pub type AciId = Id<AciTag>;
+pub type AdcId = Id<AdcTag>;

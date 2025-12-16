@@ -51,7 +51,7 @@ impl GlobalLoadContext {
 /// This struct represents the final "cut" and processed view of the resource usage,
 /// excluding warm-up and cool-down periods.
 #[derive(Debug, Clone)]
-pub struct LoadMetrics {
+pub struct LoadMetric {
     /// The timestamp representing the start of the valid data interval.
     pub start_time: i64,
 
@@ -164,7 +164,7 @@ impl LoadBuffer {
         self.slots_since_last_load = 0;
     }
 
-    pub fn get_effective_overall_load(&mut self, capacity: f64, start_time_of_first_slot: i64, start_time_of_last_slot: i64) -> LoadMetrics {
+    pub fn get_effective_overall_load(&mut self, capacity: f64, start_time_of_first_slot: i64, start_time_of_last_slot: i64) -> LoadMetric {
         let last_global = self.context.get_last_load();
         let empty_slots_to_add = last_global - self.slot_index_last_local_load;
 
@@ -179,7 +179,7 @@ impl LoadBuffer {
 
         // Handle case where no loads logged
         if first_global == i64::MAX {
-            return LoadMetrics {
+            return LoadMetric {
                 start_time: start_time_of_first_slot,
                 end_time: start_time_of_last_slot,
                 avg_reserved_capacity: 0.0,
@@ -196,7 +196,7 @@ impl LoadBuffer {
 
         let utilization = if capacity > 0.0 { avg_reserved_capacity / capacity } else { 0.0 };
 
-        LoadMetrics {
+        LoadMetric {
             start_time: start_time_of_first_slot,
             end_time: start_time_of_last_slot,
             avg_reserved_capacity,
