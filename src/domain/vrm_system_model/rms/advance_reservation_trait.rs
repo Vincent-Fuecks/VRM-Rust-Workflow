@@ -96,7 +96,7 @@ pub trait AdvanceReservationRms: Rms {
 
     // TODO is this right?
     fn commit(&mut self, mut reservation: Box<dyn Reservation>) -> Box<dyn Reservation> {
-        log::info!("RmsNull committed reservation with id: {}. Please look at the implementation maybe it is wrong", reservation.get_id());
+        log::info!("RmsNull committed reservation with id: {}. Please look at the implementation maybe it is wrong", reservation.get_name());
 
         reservation.set_state(ReservationState::Committed);
         return reservation;
@@ -107,12 +107,12 @@ pub trait AdvanceReservationRms: Rms {
             log::error!("Removing shadow schedule was not possible. Shadow schedule id ({}) was not found", shadow_schedule_id);
         }
     }
-
-    fn probe_best<C>(&mut self, request_key: ReservationKey, mut comparator: C) -> Option<Box<dyn Reservation>>
-    where
-        C: FnMut(Box<dyn Reservation>, Box<dyn Reservation>) -> Ordering,
-    {
-        return self.get_base_mut().schedule.probe_best(request_key, &mut comparator);
+    fn probe_best(
+        &mut self,
+        request_key: ReservationKey,
+        comparator: &mut dyn FnMut(Box<dyn Reservation>, Box<dyn Reservation>) -> Ordering,
+    ) -> Option<Box<dyn Reservation>> {
+        return self.get_base_mut().schedule.probe_best(request_key, comparator);
     }
 
     fn delete_task(&mut self, reservation_key: ReservationKey, shadow_schedule_id: &ReservationKey) -> Option<Box<dyn Reservation>> {

@@ -1,5 +1,7 @@
 use std::{any::Any, ops::Not};
 
+use crate::domain::vrm_system_model::utils::id::ReservationName;
+
 pub trait Reservation: std::fmt::Debug + Any + Send + Sync {
     fn get_base(&self) -> &ReservationBase;
 
@@ -9,8 +11,8 @@ pub trait Reservation: std::fmt::Debug + Any + Send + Sync {
 
     fn as_any(&self) -> &dyn Any;
 
-    fn get_id(&self) -> ReservationKey {
-        self.get_base().id.clone()
+    fn get_name(&self) -> ReservationName {
+        self.get_base().name.clone()
     }
 
     fn get_assigned_start(&self) -> i64 {
@@ -84,7 +86,7 @@ pub trait Reservation: std::fmt::Debug + Any + Send + Sync {
     fn adjust_capacity(&mut self, capacity: i64) {
         if capacity != self.get_base().reserved_capacity {
             if self.is_moldable().not() {
-                log::warn!("adjustCapacity for non moldable job {}", self.get_base().get_id(),);
+                log::warn!("adjustCapacity for non moldable job {}", self.get_base().get_name(),);
             }
 
             if capacity == 0 {
@@ -192,7 +194,7 @@ pub enum ReservationProceeding {
 #[derive(Debug, Clone)]
 pub struct ReservationBase {
     /// A globally unique identifier for this reservation across all distributed components.
-    pub id: ReservationKey,
+    pub name: ReservationName,
 
     /// The current **lifecycle state** of the reservation (e.g., `Open`, `Committed`, `Finished`).
     pub state: ReservationState,
@@ -253,8 +255,8 @@ impl ReservationBase {
         self.assigned_end
     }
 
-    pub fn get_id(&self) -> ReservationKey {
-        self.id.clone()
+    pub fn get_name(&self) -> ReservationName {
+        self.name.clone()
     }
 
     pub fn set_state(&mut self, state: ReservationState) {

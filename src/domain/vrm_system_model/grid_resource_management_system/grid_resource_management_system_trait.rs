@@ -1,3 +1,8 @@
+use crate::domain::vrm_system_model::grid_resource_management_system::reservation_submitter_trait::ReservationSubmitter;
+use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationKey};
+use crate::domain::vrm_system_model::utils::id::ShadowScheduleId;
+use crate::domain::vrm_system_model::utils::load_buffer::LoadMetric;
+
 use std::cmp::Ordering;
 
 /// A specialized interface for a fully-featured **Distributed Resource Management System**.
@@ -41,15 +46,20 @@ pub trait ExtendedReservationProcessor {
     /// # Returns
     /// A `Reservations` object, of which all contained reservation are set to the state
     /// `ReservationState::ProbeAnswer`.
-    fn probe(&self, requester: &ReservationSubmitter, reservation: &Reservation, shadow_schedule_id: Option<String>) -> Vec<Reservation>;
+    fn probe(
+        &self,
+        requester: Box<dyn ReservationSubmitter>,
+        reservation: Box<dyn Reservation>,
+        shadow_schedule_id: Option<ShadowScheduleId>,
+    ) -> Vec<Box<dyn Reservation>>;
 
     /// Finds the optimal reservation configuration based on a custom comparison logic.
     ///
     /// This utility method probes the system and automatically selects the "best"
     /// option (e.g., earliest start time or lowest cost) as defined by the `comparator`.
-    fn probe_best<F>(&self, reservation: &Reservation, comparator: F) -> Option<Reservation>
+    fn probe_best<F>(&self, reservation: Box<dyn Reservation>, comparator: F) -> Option<Box<dyn Reservation>>
     where
-        F: Fn(&Reservation, &Reservation) -> Ordering;
+        F: Fn(Box<dyn Reservation>, Box<dyn Reservation>) -> Ordering;
 
     /// Sends a **Reserve Request** to initiate a preliminary commitment.
     ///
@@ -67,7 +77,12 @@ pub trait ExtendedReservationProcessor {
     /// # Returns
     /// A `Reservation` object. Success is indicated by `ReservationState::ReserveAnswer`.
     /// If resources cannot be held, returns `ReservationState::Rejected`.
-    fn reserve(&self, requester: &ReservationSubmitter, reservation: &Reservation, shadow_schedule_id: Option<String>) -> Reservation;
+    fn reserve(
+        &self,
+        requester: Box<dyn ReservationSubmitter>,
+        reservation: Box<dyn Reservation>,
+        shadow_schedule_id: Option<ShadowScheduleId>,
+    ) -> Box<dyn Reservation>;
 
     /// Sends a **Commit Request** to finalize a reservation.
     ///
@@ -87,7 +102,7 @@ pub trait ExtendedReservationProcessor {
     /// # Returns
     /// A `Reservation` indicating the final status. Success is confirmed if the
     /// state is `ReservationState::Committed`.
-    fn commit(&self, requester: &ReservationSubmitter, reservation: &Reservation) -> Reservation;
+    fn commit(&self, requester: Box<dyn ReservationSubmitter>, reservation: Box<dyn Reservation>) -> Box<dyn Reservation>;
 
     /// Sends a **Delete Request** to remove a task from the schedule.
     ///
@@ -102,7 +117,12 @@ pub trait ExtendedReservationProcessor {
     /// # Returns
     /// A `Reservation` indicating the final status. Success is confirmed if
     /// the state is `ReservationState::Deleted`.
-    fn delete(&self, requester: &ReservationSubmitter, reservation: &Reservation, shadow_schedule_id: Option<String>) -> Reservation;
+    fn delete(
+        &self,
+        requester: Box<dyn ReservationSubmitter>,
+        reservation: Box<dyn Reservation>,
+        shadow_schedule_id: Option<ShadowScheduleId>,
+    ) -> Box<dyn Reservation>;
 
     /// Calculates the **Satisfaction Index** for a specific time window.
     ///
@@ -115,19 +135,19 @@ pub trait ExtendedReservationProcessor {
     /// * `start` - Unix timestamp for the start of the analysis window.
     /// * `end` - Unix timestamp for the end of the analysis window.
     /// * `shadow_schedule_id` - The schedule context to analyze.
-    fn get_satisfaction(&self, start: u64, end: u64, shadow_schedule_id: Option<String>) -> f64;
+    fn get_satisfaction(&self, start: u64, end: u64, shadow_schedule_id: Option<ShadowScheduleId>) -> f64;
 
     /// Calculates the **System-Wide Satisfaction Index** across the full schedule range.
     ///
     /// Similar to [`Self::get_satisfaction`], but considers the global state of the
     /// resource manager rather than a specific window.
-    fn get_system_satisfaction(&self, shadow_schedule_id: Option<String>) -> f64;
+    fn get_system_satisfaction(&self, shadow_schedule_id: Option<ShadowScheduleId>) -> f64;
 
     /// Retrieves a list of all **Resource Descriptions** managed by this interface.
     ///
     /// This may return individual physical resources or combined virtual
     /// resources depending on the system's abstraction policy.
-    fn get_resources(&self) -> Vec<ResourceDescription>;
+    fn get_resources(&self) -> Vec<String>;
 
     /// Creates a **Secondary Shadow Schedule**.
     ///
@@ -136,7 +156,7 @@ pub trait ExtendedReservationProcessor {
     ///
     /// # Arguments
     /// * `shadow_schedule_id` - A unique identifier for the new sandbox environment.
-    fn create_shadow_schedule(&self, shadow_schedule_id: String);
+    fn create_shadow_schedule(&self, shadow_schedule_id: ShadowScheduleId);
 
     /// Destroys a shadow schedule and discards all pending changes (**Rollback**).
     ///
@@ -147,7 +167,7 @@ pub trait ExtendedReservationProcessor {
     /// TODO Panic is handled?
     /// Implementing types should handle cases where the ID is `None` (representing
     /// the live schedule), as the live schedule cannot be rolled back here.
-    fn rollback_shadow_schedule(&self, shadow_schedule_id: String);
+    fn rollback_shadow_schedule(&self, shadow_schedule_id: ShadowScheduleId);
 
     /// Performs an **Atomic Switch** from a shadow schedule to the live schedule.
     ///

@@ -1,9 +1,9 @@
 use crate::api::vrm_system_model_dto::aci_dto::RMSSystemDto;
 use crate::domain::simulator::simulator::SystemSimulator;
+use crate::domain::vrm_system_model::reservation::reservation_store::ReservationStore;
 use crate::domain::vrm_system_model::rms::rms::{Rms, RmsBase};
 use crate::error::ConversionError;
 use std::any::Any;
-use std::ops::Not;
 
 #[derive(Debug)]
 pub struct NullRms {
@@ -16,13 +16,19 @@ impl NullRms {
     }
 }
 
-impl TryFrom<(RMSSystemDto, Box<dyn SystemSimulator>, String)> for NullRms {
+impl TryFrom<(RMSSystemDto, Box<dyn SystemSimulator>, String, ReservationStore)> for NullRms {
     type Error = ConversionError;
 
-    fn try_from(args: (RMSSystemDto, Box<dyn SystemSimulator>, String)) -> Result<Self, Self::Error> {
+    fn try_from(args: (RMSSystemDto, Box<dyn SystemSimulator>, String, ReservationStore)) -> Result<Self, Self::Error> {
         let base = RmsBase::try_from(args)?;
-        if base.grid_nodes.is_empty() {
+        if base.resources.get_node_resource_count() == 0 {
             log::info!("Empty NullRms Grid: The newly created NullRms contains no Gird Nodes.");
+        }
+
+        if base.resources.get_link_resource_count() >= 0 {
+            log::info!(
+                "Not Empty NullRms Link Network: The newly created NullRms contains links. These are ignored by the NullRms do you like to use NullBroker or Slurm as Rms system?"
+            );
         }
 
         Ok(NullRms { base })

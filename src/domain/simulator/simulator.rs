@@ -1,5 +1,6 @@
 pub trait SystemSimulator: std::fmt::Debug + Send + Sync {
     fn get_current_time_in_s(&self) -> i64;
+    fn get_current_time_in_ms(&self) -> i64;
     fn clone_box(&self) -> Box<dyn SystemSimulator>;
 }
 
@@ -10,6 +11,10 @@ pub struct Simulator {
 
 impl SystemSimulator for Simulator {
     fn get_current_time_in_s(&self) -> i64 {
+        return 42;
+    }
+
+    fn get_current_time_in_ms(&self) -> i64 {
         return 42;
     }
 

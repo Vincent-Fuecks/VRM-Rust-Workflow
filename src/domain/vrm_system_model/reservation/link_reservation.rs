@@ -1,7 +1,7 @@
 use std::any::Any;
 
 use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationBase};
-
+use crate::domain::vrm_system_model::utils::id::RouterId;
 /// This structure extends [`ReservationBase`] to include fields specific to
 /// network connectivity.
 ///
@@ -20,9 +20,9 @@ pub struct LinkReservation {
 
     // Link specific fields
     /// Unique identifier of the start router for the link.
-    pub start_point: String,
+    pub start_point: RouterId,
     /// Unique identifier of the end router for the link.
-    pub end_point: String,
+    pub end_point: RouterId,
 }
 
 impl Reservation for LinkReservation {

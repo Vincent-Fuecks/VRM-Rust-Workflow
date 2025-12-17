@@ -1,4 +1,5 @@
 use crate::domain::simulator::simulator::SystemSimulator;
+use crate::domain::vrm_system_model::reservation::reservation_store::{self, ReservationStore};
 use crate::domain::vrm_system_model::reservation::{reservation::ReservationKey, reservations::Reservations};
 use crate::domain::vrm_system_model::schedule::slot::Slot;
 use crate::domain::vrm_system_model::scheduler_trait::Schedule;
@@ -16,7 +17,7 @@ pub mod core_functions;
 pub mod fragmentation;
 pub mod schedule_trait;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct SlottedSchedule {
     /// **Unique identifier** for this SlottedSchedule.
     id: SlottedScheduleId,
@@ -62,6 +63,8 @@ pub struct SlottedSchedule {
     is_frag_needed: bool,
 
     simulator: Box<dyn SystemSimulator>,
+
+    reservation_store: ReservationStore,
 }
 
 impl SlottedSchedule {
@@ -72,6 +75,7 @@ impl SlottedSchedule {
         capacity: i64,
         use_quadratic_mean_fragmentation: bool,
         simulator: Box<dyn SystemSimulator>,
+        reservation_store: ReservationStore,
     ) -> Self {
         let mut slots: Vec<Slot> = Vec::new();
 
@@ -94,9 +98,10 @@ impl SlottedSchedule {
             is_frag_cache_up_to_date: true,
             fragmentation_cache: 0.0,
             use_quadratic_mean_fragmentation: use_quadratic_mean_fragmentation,
-            // Always false
+            // TODO Always false
             is_frag_needed: false,
             simulator: simulator,
+            reservation_store,
         };
 
         slotted_schedule.update();

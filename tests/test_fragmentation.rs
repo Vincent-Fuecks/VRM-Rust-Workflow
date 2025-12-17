@@ -13,6 +13,10 @@ impl SystemSimulator for MockSystemSimulator {
         0
     }
 
+    fn get_current_time_in_ms(&self) -> i64 {
+        0
+    }
+
     // Required method to enable cloning of the trait object
     fn clone_box(&self) -> Box<dyn SystemSimulator> {
         Box::new(self.clone())

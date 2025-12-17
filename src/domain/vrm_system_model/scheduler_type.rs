@@ -1,5 +1,6 @@
 use crate::domain::simulator::simulator::SystemSimulator;
 use crate::domain::vrm_system_model::reservation::reservation::ReservationKey;
+use crate::domain::vrm_system_model::reservation::reservation_store::ReservationStore;
 use crate::domain::vrm_system_model::schedule::slotted_schedule::SlottedSchedule;
 use crate::domain::vrm_system_model::scheduler_trait::Schedule;
 use crate::domain::vrm_system_model::utils::id::SlottedScheduleId;
@@ -51,6 +52,7 @@ impl SchedulerType {
         slot_width: i64,
         capacity: i64,
         simulator: Box<dyn SystemSimulator>,
+        reservation_store: ReservationStore,
     ) -> Box<dyn Schedule> {
         let use_quadratic_mean_fragmentation = true;
 
@@ -58,19 +60,35 @@ impl SchedulerType {
             SchedulerType::FreeListSchedule => {
                 todo!()
             }
-            SchedulerType::SlottedSchedule => {
-                Box::new(SlottedSchedule::new(id, number_of_slots, slot_width, capacity, use_quadratic_mean_fragmentation, simulator))
-            }
+            SchedulerType::SlottedSchedule => Box::new(SlottedSchedule::new(
+                id,
+                number_of_slots,
+                slot_width,
+                capacity,
+                use_quadratic_mean_fragmentation,
+                simulator,
+                reservation_store,
+            )),
 
             SchedulerType::SlottedSchedule12 => {
                 let number_of_real_slots = (number_of_slots * (slot_width + 11)) / 12;
-                Box::new(SlottedSchedule::new(id, number_of_real_slots, 12, capacity, use_quadratic_mean_fragmentation, simulator))
+                Box::new(SlottedSchedule::new(id, number_of_real_slots, 12, capacity, use_quadratic_mean_fragmentation, simulator, reservation_store))
             }
             SchedulerType::SlottedSchedule12000 => {
                 let number_of_real_slots = (number_of_slots * (slot_width + 11999)) / 12000;
-                Box::new(SlottedSchedule::new(id, number_of_real_slots, 12000, capacity, use_quadratic_mean_fragmentation, simulator))
+                Box::new(SlottedSchedule::new(
+                    id,
+                    number_of_real_slots,
+                    12000,
+                    capacity,
+                    use_quadratic_mean_fragmentation,
+                    simulator,
+                    reservation_store,
+                ))
             }
-            SchedulerType::SlottedScheduleResubmitFrag => Box::new(SlottedSchedule::new(id, number_of_slots, slot_width, capacity, false, simulator)),
+            SchedulerType::SlottedScheduleResubmitFrag => {
+                Box::new(SlottedSchedule::new(id, number_of_slots, slot_width, capacity, false, simulator, reservation_store))
+            }
             SchedulerType::UnlimitedSchedule => {
                 todo!()
             }

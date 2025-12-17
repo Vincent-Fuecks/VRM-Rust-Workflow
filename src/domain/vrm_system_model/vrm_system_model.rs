@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 use crate::api::vrm_system_model_dto::vrm_dto::VrmSystemModelDto;
 use crate::domain::simulator::simulator::{Simulator, SystemSimulator};
-use crate::domain::vrm_system_model::aci::AcI;
 use crate::domain::vrm_system_model::adc::ADC;
+use crate::domain::vrm_system_model::grid_resource_management_system::aci::AcI;
 use crate::domain::vrm_system_model::reservation::reservation::ReservationKey;
 use crate::error::ConversionError;
 use std::sync::LazyLock;

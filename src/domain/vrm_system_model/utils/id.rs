@@ -31,9 +31,9 @@ pub struct ReservationTag;
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Copy)]
 pub struct RouterTag;
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Copy)]
-pub struct GridNodeTag;
+pub struct NodeResourceTag;
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Copy)]
-pub struct NetworkLinkTag;
+pub struct LinkResourceTag;
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Copy)]
 pub struct RmsTag;
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Copy)]
@@ -42,12 +42,15 @@ pub struct SlottedScheduleTag;
 pub struct AciTag;
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Copy)]
 pub struct AdcTag;
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Copy)]
+pub struct ShadowScheduleTag;
 
-pub type ReservationId = Id<ReservationTag>;
+pub type ReservationName = Id<ReservationTag>;
 pub type RouterId = Id<RouterTag>;
-pub type GridNodeId = Id<GridNodeTag>;
-pub type NetworkLinkId = Id<NetworkLinkTag>;
+pub type NodeResourceId = Id<NodeResourceTag>;
+pub type LinkResourceId = Id<LinkResourceTag>;
 pub type RmsId = Id<RmsTag>;
 pub type SlottedScheduleId = Id<SlottedScheduleTag>;
 pub type AciId = Id<AciTag>;
 pub type AdcId = Id<AdcTag>;
+pub type ShadowScheduleId = Id<ShadowScheduleTag>;

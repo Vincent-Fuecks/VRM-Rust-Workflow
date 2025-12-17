@@ -34,8 +34,12 @@ impl TryFrom<(RMSSystemDto, Box<dyn SystemSimulator>, String)> for NullBroker {
         let base = RmsBase::try_from((dto.clone(), simulator.clone(), aci_name.clone()))?;
         let network_topology = NetworkTopology::try_from((dto, simulator, aci_name))?;
 
-        if base.grid_nodes.is_empty() {
+        if base.resources.get_node_resource_count() <= 0 {
             log::info!("Empty NullBroker Grid: The newly created NullBroker contains no Gird Nodes.");
+        }
+
+        if base.resources.get_link_resource_count() <= 0 {
+            log::info!("Empty NullBroker Link Network: The newly created NullBroker contains no LinkNetwork. Please use NullRms instead.");
         }
 
         Ok(NullBroker { base, network_topology: network_topology })
