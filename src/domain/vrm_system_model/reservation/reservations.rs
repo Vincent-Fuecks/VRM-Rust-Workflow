@@ -1,72 +1,97 @@
-use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationState};
-use crate::domain::vrm_system_model::reservation::reservation_store::ReservationId;
-use rand::{Rng, seq::IndexedRandom};
-use std::{
-    collections::{HashMap, hash_map},
-    i64,
-};
+use crate::domain::vrm_system_model::reservation::reservation::ReservationState;
+use crate::domain::vrm_system_model::reservation::reservation_store::{ReservationId, ReservationStore};
+use rand::seq::IndexedRandom;
+use std::collections::hash_set;
+use std::{collections::HashSet, i64};
 
 /// TODO Add Comment
 #[derive(Debug, Clone)]
 pub struct Reservations {
-    reservations: HashMap<ReservationId, Box<dyn Reservation>>,
+    reservations: HashSet<ReservationId>,
+    reservation_store: ReservationStore,
 }
 
 impl Reservations {
-    pub fn new(reservation: Box<dyn Reservation>) -> Self {
-        let key = reservation.get_name();
-        let mut map = HashMap::new();
-        map.insert(key, reservation);
-
-        Reservations { reservations: map }
-    }
-
-    pub fn new_empty() -> Self {
-        Reservations { reservations: HashMap::new() }
+    pub fn new_empty(reservation_store: ReservationStore) -> Self {
+        Reservations { reservations: HashSet::new(), reservation_store }
     }
 
     pub fn clear(&mut self) {
-        self.reservations.clear();
+        self.reservations = HashSet::new();
     }
 
-    pub fn box_clone(&self, key: &ReservationId) -> Box<dyn Reservation> {
-        match self.reservations.get(&key) {
-            Some(res) => res.box_clone(),
-            None => panic!("Get reservation (id: {}) was not possible.", key),
+    // TODO maybe insert Real Reservation into store?
+    // TODO Change handler_id?
+    pub fn insert(&mut self, id: ReservationId) {
+        self.reservations.insert(id);
+    }
+
+    // TODO maybe del Real Reservation into store?
+    // TODO Change handler_id?
+    pub fn delete_reservation(&mut self, id: &ReservationId) -> bool {
+        if self.reservations.remove(id) {
+            self.set_state(id, ReservationState::Deleted);
+            return true;
         }
-    }
-    pub fn insert(&mut self, key: ReservationId, reservation: Box<dyn Reservation>) {
-        self.reservations.insert(key, reservation);
+        return false;
     }
 
-    pub fn delete_reservation(&mut self, key: &ReservationId) -> Option<(ReservationId, Box<(dyn Reservation + 'static)>)> {
-        self.reservations.remove_entry(key)
+    pub fn contains_key(&self, id: &ReservationId) -> bool {
+        self.reservations.contains(id)
     }
 
-    pub fn contains_key(&self, key: &ReservationId) -> bool {
-        self.reservations.contains_key(key)
-    }
-
-    pub fn set_state(&mut self, key: &ReservationId, state: ReservationState) {
-        match self.reservations.get_mut(key) {
-            Some(res) => res.set_state(state),
-            None => log::error!("Get mut reservation (id: {}) was not possible.", key),
-        }
-    }
-
-    pub fn set_frag_delta(&mut self, key: &ReservationId, frag_delta: f64) {
-        match self.reservations.get_mut(key) {
-            Some(res) => res.set_frag_delta(frag_delta),
-            None => log::error!("Get mut reservation (id: {}) was not possible.", key),
+    pub fn set_state(&mut self, id: &ReservationId, state: ReservationState) {
+        if let Some(handle) = self.reservation_store.get(*id) {
+            let mut res = handle.write().unwrap();
+            res.set_state(state);
+        } else {
+            log::error!("Get reservation (id: {:?}) was not possible.", id)
         }
     }
 
-    pub fn get(&self, key: &ReservationId) -> Option<&Box<dyn Reservation>> {
-        self.reservations.get(key)
+    pub fn set_frag_delta(&mut self, id: &ReservationId, frag_delta: f64) {
+        if let Some(handle) = self.reservation_store.get(*id) {
+            let mut res = handle.write().unwrap();
+            res.set_frag_delta(frag_delta);
+        } else {
+            log::error!("Get reservation (id: {:?}) was not possible.", id)
+        }
     }
 
-    pub fn get_mut(&mut self, key: &ReservationId) -> Option<&mut Box<dyn Reservation>> {
-        self.reservations.get_mut(key)
+    pub fn set_booking_interval_start(&mut self, id: &ReservationId, booking_interval_start: i64) {
+        if let Some(handle) = self.reservation_store.get(*id) {
+            let mut res = handle.write().unwrap();
+            res.set_booking_interval_start(booking_interval_start);
+        } else {
+            log::error!("Get reservation (id: {:?}) was not possible.", id)
+        }
+    }
+
+    pub fn set_booking_interval_end(&mut self, id: &ReservationId, booking_interval_end: i64) {
+        if let Some(handle) = self.reservation_store.get(*id) {
+            let mut res = handle.write().unwrap();
+            res.set_booking_interval_end(booking_interval_end);
+        } else {
+            log::error!("Get reservation (id: {:?}) was not possible.", id)
+        }
+    }
+
+    pub fn set_assigned_start(&mut self, id: &ReservationId, assigned_start: i64) {
+        if let Some(handle) = self.reservation_store.get(*id) {
+            let mut res = handle.write().unwrap();
+            res.set_assigned_start(assigned_start);
+        } else {
+            log::error!("Get reservation (id: {:?}) was not possible.", id)
+        }
+    }
+
+    pub fn set_assigned_end(&mut self, id: &ReservationId, assigned_end: i64) {
+        if let Some(handle) = self.reservation_store.get(*id) {
+            let mut res = handle.write().unwrap();
+            res.set_assigned_end(assigned_end);
+        } else {
+            log::error!("Get reservation (id: {:?}) was not possible.", id)
+        }
     }
 
     pub fn len(&self) -> usize {
@@ -77,84 +102,85 @@ impl Reservations {
         self.reservations.is_empty()
     }
 
-    pub fn keys(&self) -> hash_map::Keys<'_, ReservationId, Box<dyn Reservation>> {
-        self.reservations.keys()
-    }
-
-    pub fn get_random_key(&self) -> Option<ReservationId> {
-        let keys: Vec<ReservationId> = self.reservations.keys().cloned().collect();
+    pub fn get_random_id(&self) -> Option<ReservationId> {
+        let ids: Vec<ReservationId> = self.reservations.iter().into_iter().cloned().collect();
         let mut rng = rand::rng();
 
-        return keys.choose(&mut rng).cloned();
+        return ids.choose(&mut rng).cloned();
     }
 
-    pub fn get_random_reservation(&self) -> Option<&Box<dyn Reservation>> {
-        self.get_random_key().and_then(|key| self.get(&key))
-    }
-
-    pub fn get_reservation_with_first_start_slot(&self) -> Option<&Box<dyn Reservation>> {
-        let keys: Vec<ReservationId> = self.reservations.keys().cloned().collect();
+    pub fn get_id_with_first_start_slot(&self) -> Option<ReservationId> {
+        let ids: Vec<ReservationId> = self.reservations.iter().into_iter().cloned().collect();
         let earliest_start_time: i64 = i64::MAX;
         let mut reservation_of_earliest_start_time = None;
 
-        for key in keys {
-            if self.get_assigned_start(&key) < earliest_start_time {
-                reservation_of_earliest_start_time = self.get(&key).clone()
+        for id in ids {
+            if self.get_assigned_start(&id) < earliest_start_time {
+                reservation_of_earliest_start_time = Some(id);
             }
         }
         return reservation_of_earliest_start_time;
     }
 
-    pub fn iter(&self) -> hash_map::Iter<'_, ReservationId, Box<dyn Reservation>> {
+    pub fn iter(&self) -> hash_set::Iter<'_, ReservationId> {
         self.reservations.iter()
     }
 
-    pub fn get_assigned_end(&self, key: &ReservationId) -> i64 {
-        match self.reservations.get(key) {
-            Some(res) => res.get_assigned_end(),
-            None => panic!("Get reservation (id: {}) was not possible.", key),
+    pub fn get_assigned_start(&self, id: &ReservationId) -> i64 {
+        match self.reservation_store.get(*id) {
+            Some(res) => res.read().unwrap().get_assigned_start(),
+            None => panic!("Getting reservation (id: {:?}) was not possible.", id),
         }
     }
 
-    pub fn get_assigned_start(&self, key: &ReservationId) -> i64 {
-        match self.reservations.get(key) {
-            Some(res) => res.get_assigned_start(),
-            None => panic!("Get reservation (id: {}) was not possible.", key),
+    pub fn get_assigned_end(&self, id: &ReservationId) -> i64 {
+        match self.reservation_store.get(*id) {
+            Some(res) => res.read().unwrap().get_assigned_end(),
+            None => panic!("Getting reservation (id: {:?}) was not possible.", id),
         }
     }
 
-    pub fn get_booking_interval_start(&self, key: &ReservationId) -> i64 {
-        match self.reservations.get(key) {
-            Some(res) => res.get_booking_interval_start(),
-            None => panic!("Get reservation (id: {}) was not possible.", key),
+    pub fn get_booking_interval_start(&self, id: &ReservationId) -> i64 {
+        match self.reservation_store.get(*id) {
+            Some(res) => res.read().unwrap().get_booking_interval_start(),
+            None => panic!("Getting reservation (id: {:?}) was not possible.", id),
         }
     }
 
-    pub fn get_booking_interval_end(&self, key: &ReservationId) -> i64 {
-        match self.reservations.get(key) {
-            Some(res) => res.get_booking_interval_end(),
-            None => panic!("Get reservation (id: {}) was not possible.", key),
+    pub fn get_booking_interval_end(&self, id: &ReservationId) -> i64 {
+        match self.reservation_store.get(*id) {
+            Some(res) => res.read().unwrap().get_booking_interval_end(),
+            None => panic!("Getting reservation (id: {:?}) was not possible.", id),
         }
     }
 
-    pub fn get_task_duration(&self, key: &ReservationId) -> i64 {
-        match self.reservations.get(key) {
-            Some(res) => res.get_task_duration(),
-            None => panic!("Get reservation (id: {}) was not possible.", key),
+    pub fn get_task_duration(&self, id: &ReservationId) -> i64 {
+        match self.reservation_store.get(*id) {
+            Some(res) => res.read().unwrap().get_task_duration(),
+            None => panic!("Getting reservation (id: {:?}) was not possible.", id),
         }
     }
 
-    pub fn get_is_moldable(&self, key: &ReservationId) -> bool {
-        match self.reservations.get(key) {
-            Some(res) => res.is_moldable(),
-            None => panic!("Get reservation (id: {}) was not possible.", key),
+    pub fn get_is_moldable(&self, id: &ReservationId) -> bool {
+        match self.reservation_store.get(*id) {
+            Some(res) => res.read().unwrap().is_moldable(),
+            None => panic!("Getting reservation (id: {:?}) was not possible.", id),
         }
     }
 
-    pub fn get_reserved_capacity(&self, key: &ReservationId) -> i64 {
-        match self.reservations.get(key) {
-            Some(res) => res.get_reserved_capacity(),
-            None => panic!("Get reservation (id: {}) was not possible.", key),
+    pub fn get_reserved_capacity(&self, id: &ReservationId) -> i64 {
+        match self.reservation_store.get(*id) {
+            Some(res) => res.read().unwrap().get_reserved_capacity(),
+            None => panic!("Getting reservation (id: {:?}) was not possible.", id),
+        }
+    }
+
+    pub fn adjust_capacity(&self, id: &ReservationId, capacity: i64) {
+        if let Some(handle) = self.reservation_store.get(*id) {
+            let mut res = handle.write().unwrap();
+            res.adjust_capacity(capacity);
+        } else {
+            log::error!("Get reservation (id: {:?}) was not possible.", id)
         }
     }
 }

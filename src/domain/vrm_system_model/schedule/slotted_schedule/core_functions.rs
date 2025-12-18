@@ -1,12 +1,8 @@
-use crate::domain::vrm_system_model::reservation::{
-    reservation::{Reservation, ReservationKey, ReservationState},
-    reservations::Reservations,
-};
+use crate::domain::vrm_system_model::reservation::reservation_store::ReservationId;
+use crate::domain::vrm_system_model::reservation::{reservation::ReservationState, reservations::Reservations};
 use crate::domain::vrm_system_model::schedule::slot::Slot;
 use crate::domain::vrm_system_model::utils::load_buffer::{SLOTS_TO_DROP_ON_END, SLOTS_TO_DROP_ON_START};
-
 use std::i64;
-use std::ops::Not;
 
 impl super::SlottedSchedule {
     /// Function is used for testing.
@@ -48,17 +44,17 @@ impl super::SlottedSchedule {
     /// Adjusts the requested resource requirement (**capacity**) to ensure it does not exceed the
     /// **remaining available capacity** in a specific slot.
     /// If the requested capacity is too high, the maximum available capacity for that slot is returned.
-    pub fn adjust_requirement_to_slot_capacity(&self, slot_index: i64, capacity: i64, reservation_key: ReservationKey) -> i64 {
+    pub fn adjust_requirement_to_slot_capacity(&self, slot_index: i64, capacity: i64, id: ReservationId) -> i64 {
         if let Some(slot) = self.get_slot(slot_index) {
             return slot.get_adjust_requirement(capacity);
         } else {
             log::error!(
-                "SlottedSchedule: {}: requested slot outside of scheduling window. Slot index: {}, window start: {}  window width: {} reservation: {}",
+                "SlottedSchedule: {}: requested slot outside of scheduling window. Slot index: {}, window start: {}  window width: {} ReservationId: {:?}",
                 self.id,
                 slot_index,
                 self.start_slot_index,
                 self.slots.len() as i64,
-                reservation_key,
+                id,
             );
 
             return 0;
@@ -104,7 +100,7 @@ impl super::SlottedSchedule {
     }
 
     /// Inserts a new reservation requirement into the specified slot.
-    pub fn insert_reservation_into_slot(&mut self, key: &ReservationKey, requirement: i64, slot_index: i64) {
+    pub fn insert_reservation_into_slot(&mut self, key: &ReservationId, requirement: i64, slot_index: i64) {
         let slot = self.get_mut_slot(slot_index).expect("Slot was not found.");
         slot.insert_reservation(requirement, key.clone());
     }
@@ -179,10 +175,10 @@ impl super::SlottedSchedule {
     /// # Returns
     /// Returns a `Reservations` object containing a map of all feasible reservations (candidates) found.
     /// Each candidate represents a valid assignment time within the schedule's constraints.
-    pub fn calculate_schedule(&self, key: ReservationKey) -> Reservations {
-        let mut request_start_boundary: i64 = self.active_reservations.get_booking_interval_start(&key);
-        let mut request_end_boundary: i64 = self.active_reservations.get_booking_interval_end(&key);
-        let initial_duration: i64 = self.active_reservations.get_task_duration(&key);
+    pub fn calculate_schedule(&mut self, id: ReservationId) -> Reservations {
+        let mut request_start_boundary: i64 = self.active_reservations.get_booking_interval_start(&id);
+        let mut request_end_boundary: i64 = self.active_reservations.get_booking_interval_end(&id);
+        let initial_duration: i64 = self.active_reservations.get_task_duration(&id);
 
         if request_start_boundary == i64::MIN {
             request_start_boundary = 0;
@@ -192,11 +188,11 @@ impl super::SlottedSchedule {
             request_end_boundary = i64::MAX;
         }
 
-        let mut search_results = Reservations::new_empty();
+        // "Create" new Reservations object, where the search results are stored.
+        let mut search_results = self.active_reservations.clone();
+        search_results.clear();
 
-        if self.active_reservations.get_is_moldable(&key).not()
-            && self.capacity > 0
-            && self.capacity < self.active_reservations.get_reserved_capacity(&key)
+        if !self.active_reservations.get_is_moldable(&id) && self.capacity > 0 && self.capacity < self.active_reservations.get_reserved_capacity(&id)
         {
             return search_results;
         }
@@ -208,30 +204,26 @@ impl super::SlottedSchedule {
         latest_start_index = self.get_effective_slot_index(latest_start_index);
 
         for slot_start_index in earliest_start_index..=latest_start_index {
-            let candidate: Box<dyn Reservation + 'static> = self.active_reservations.box_clone(&key);
-
-            if let Some(candidate) = self.try_fit_reservation(candidate, slot_start_index, request_end_boundary) {
-                search_results.insert(candidate.get_id(), candidate);
+            if let Some(candidate_id) = self.try_fit_reservation(id, slot_start_index, request_end_boundary) {
+                search_results.insert(candidate_id);
             }
         }
         return search_results;
     }
 
-    fn try_fit_reservation(
-        &self,
-        mut candidate: Box<dyn Reservation + 'static>,
-        slot_start_index: i64,
-        request_end_boundary: i64,
-    ) -> Option<Box<dyn Reservation + 'static>> {
+    fn try_fit_reservation(&mut self, candidate_id: ReservationId, slot_start_index: i64, request_end_boundary: i64) -> Option<ReservationId> {
         // TODO Should be not need, because res is a clone and unlike in the java implementation not the same object.
         // candidate.adjust_capacity(candidate.get_reserved_capacity());
 
-        let mut current_required_capacity = candidate.get_reserved_capacity();
-        let mut current_duration: i64 = candidate.get_task_duration();
+        let mut current_required_capacity = self.active_reservations.get_reserved_capacity(&candidate_id);
+
+        let mut current_duration: i64 = self.active_reservations.get_task_duration(&candidate_id);
         let mut start_time = self.get_slot_start_time(slot_start_index);
 
-        if start_time < candidate.get_booking_interval_start() {
-            start_time = candidate.get_booking_interval_start();
+        self.active_reservations.get_booking_interval_start(&candidate_id);
+
+        if start_time < self.active_reservations.get_booking_interval_start(&candidate_id) {
+            start_time = self.active_reservations.get_booking_interval_start(&candidate_id);
         }
 
         let mut end_time = start_time + current_duration;
@@ -240,23 +232,22 @@ impl super::SlottedSchedule {
         let mut current_slot_index: i64 = slot_start_index;
 
         while current_slot_index <= current_end_slot_index {
-            let available_capacity: i64 =
-                self.adjust_requirement_to_slot_capacity(current_slot_index, current_required_capacity, candidate.get_id().clone());
+            let available_capacity: i64 = self.adjust_requirement_to_slot_capacity(current_slot_index, current_required_capacity, candidate_id);
 
             if available_capacity == 0 && current_required_capacity != 0 {
                 is_feasible = false;
                 break;
             }
 
-            if candidate.is_moldable().not() && available_capacity != current_required_capacity {
+            if !self.active_reservations.get_is_moldable(&candidate_id) && available_capacity != current_required_capacity {
                 is_feasible = false;
                 break;
             }
 
             if available_capacity < current_required_capacity {
-                candidate.adjust_capacity(available_capacity);
+                self.active_reservations.adjust_capacity(&candidate_id, available_capacity);
                 current_required_capacity = available_capacity;
-                current_duration = candidate.get_task_duration();
+                current_duration = self.active_reservations.get_task_duration(&candidate_id);
 
                 end_time = start_time + current_duration;
 
@@ -272,12 +263,12 @@ impl super::SlottedSchedule {
         }
 
         if is_feasible {
-            candidate.set_booking_interval_start(start_time);
-            candidate.set_booking_interval_end(end_time);
-            candidate.set_assigned_start(start_time);
-            candidate.set_assigned_end(end_time);
-            candidate.set_state(ReservationState::ProbeAnswer);
-            return Some(candidate);
+            self.active_reservations.set_booking_interval_start(&candidate_id, start_time);
+            self.active_reservations.set_booking_interval_end(&candidate_id, end_time);
+            self.active_reservations.set_assigned_start(&candidate_id, start_time);
+            self.active_reservations.set_assigned_end(&candidate_id, end_time);
+            self.active_reservations.set_state(&candidate_id, ReservationState::ProbeAnswer);
+            return Some(candidate_id);
         }
 
         return None;

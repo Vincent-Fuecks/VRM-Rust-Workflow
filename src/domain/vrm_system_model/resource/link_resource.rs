@@ -3,7 +3,10 @@ use std::collections::HashSet;
 
 use crate::domain::vrm_system_model::reservation::link_reservation::LinkReservation;
 use crate::domain::vrm_system_model::reservation::reservation::Reservation;
-use crate::domain::vrm_system_model::resource::{resource_trait::Resource, resources::BaseResource};
+use crate::domain::vrm_system_model::resource::{
+    resource_trait::{Resource, ResourceId},
+    resources::BaseResource,
+};
 use crate::domain::vrm_system_model::schedule::slotted_schedule::SlottedSchedule;
 use crate::domain::vrm_system_model::utils::id::{LinkResourceId, RouterId};
 
@@ -33,6 +36,7 @@ impl LinkResource {
         Self { base, source, target, avg_bandwidth, schedule }
     }
 }
+
 impl Resource for LinkResource {
     fn get_capacity(&self) -> i64 {
         self.base.capacity
@@ -60,5 +64,9 @@ impl Resource for LinkResource {
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn get_id(&self) -> ResourceId {
+        ResourceId::Link(self.base.get_id())
     }
 }

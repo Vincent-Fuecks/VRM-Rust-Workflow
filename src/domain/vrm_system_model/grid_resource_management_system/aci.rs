@@ -58,9 +58,10 @@ impl TryFrom<(AcIDto, Box<dyn SystemSimulator>)> for AcI {
         let aci_name = dto.id.clone();
         let adc_ids: Vec<AdcId> = dto.adc_ids.iter().map(|adc_id| AdcId::new(adc_id)).collect();
 
-        let reservation_store: ReservationStore = ReservationStore::new();
+        // TODO Should be located in VRM
+        let reservation_store: ReservationStore = ReservationStore::new(None);
 
-        let rms_system = RmsType::get_instance(dto.rms_system, simulator, dto.id, &reservation_store)?;
+        let rms_system = RmsType::get_instance(dto.rms_system, simulator, dto.id, reservation_store)?;
 
         Ok(AcI {
             id: AciId::new(aci_name),

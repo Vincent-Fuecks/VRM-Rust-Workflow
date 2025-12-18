@@ -1,6 +1,6 @@
 use crate::domain::simulator::simulator::SystemSimulator;
-use crate::domain::vrm_system_model::reservation::reservation_store::{self, ReservationStore};
-use crate::domain::vrm_system_model::reservation::{reservation::ReservationKey, reservations::Reservations};
+use crate::domain::vrm_system_model::reservation::reservation_store::ReservationStore;
+use crate::domain::vrm_system_model::reservation::reservations::Reservations;
 use crate::domain::vrm_system_model::schedule::slot::Slot;
 use crate::domain::vrm_system_model::scheduler_trait::Schedule;
 use crate::domain::vrm_system_model::utils::id::SlottedScheduleId;
@@ -17,7 +17,7 @@ pub mod core_functions;
 pub mod fragmentation;
 pub mod schedule_trait;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SlottedSchedule {
     /// **Unique identifier** for this SlottedSchedule.
     id: SlottedScheduleId,
@@ -63,8 +63,6 @@ pub struct SlottedSchedule {
     is_frag_needed: bool,
 
     simulator: Box<dyn SystemSimulator>,
-
-    reservation_store: ReservationStore,
 }
 
 impl SlottedSchedule {
@@ -94,14 +92,13 @@ impl SlottedSchedule {
             scheduling_window_start_time: 0,
             scheduling_window_end_time: -1,
             load_buffer: LoadBuffer::new(Arc::new(GlobalLoadContext::new())),
-            active_reservations: Reservations::new_empty(),
+            active_reservations: Reservations::new_empty(reservation_store),
             is_frag_cache_up_to_date: true,
             fragmentation_cache: 0.0,
             use_quadratic_mean_fragmentation: use_quadratic_mean_fragmentation,
             // TODO Always false
             is_frag_needed: false,
             simulator: simulator,
-            reservation_store,
         };
 
         slotted_schedule.update();

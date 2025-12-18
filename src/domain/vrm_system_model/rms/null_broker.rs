@@ -1,5 +1,6 @@
 use crate::api::vrm_system_model_dto::aci_dto::RMSSystemDto;
 use crate::domain::simulator::simulator::SystemSimulator;
+use crate::domain::vrm_system_model::reservation::reservation_store::ReservationStore;
 use crate::domain::vrm_system_model::rms::rms::{Rms, RmsBase};
 use crate::domain::vrm_system_model::schedule::topology::NetworkTopology;
 
@@ -26,12 +27,12 @@ impl Rms for NullBroker {
     }
 }
 
-impl TryFrom<(RMSSystemDto, Box<dyn SystemSimulator>, String)> for NullBroker {
+impl TryFrom<(RMSSystemDto, Box<dyn SystemSimulator>, String, ReservationStore)> for NullBroker {
     type Error = ConversionError;
 
-    fn try_from(args: (RMSSystemDto, Box<dyn SystemSimulator>, String)) -> Result<Self, Self::Error> {
-        let (dto, simulator, aci_name) = args;
-        let base = RmsBase::try_from((dto.clone(), simulator.clone(), aci_name.clone()))?;
+    fn try_from(args: (RMSSystemDto, Box<dyn SystemSimulator>, String, ReservationStore)) -> Result<Self, Self::Error> {
+        let (dto, simulator, aci_name, reservation_store) = args;
+        let base = RmsBase::try_from((dto.clone(), simulator.clone(), aci_name.clone(), reservation_store))?;
         let network_topology = NetworkTopology::try_from((dto, simulator, aci_name))?;
 
         if base.resources.get_node_resource_count() <= 0 {

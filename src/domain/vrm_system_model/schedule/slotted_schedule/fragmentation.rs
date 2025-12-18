@@ -1,4 +1,4 @@
-use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationKey};
+use crate::domain::vrm_system_model::reservation::reservation_store::ReservationId;
 use crate::domain::vrm_system_model::schedule::slotted_schedule::SlottedSchedule;
 use crate::domain::vrm_system_model::scheduler_trait::Schedule;
 
@@ -149,29 +149,26 @@ impl super::SlottedSchedule {
             }
 
             // This loop ensures we select a reservation that AT LEAST PARTLY overlaps the range.
-            let random_reservation: Box<dyn Reservation> = loop {
-                let res =
-                    self.active_reservations.get_random_reservation().expect("No random Reservation was found in test SlottedSchedule.").clone();
+            let random_reservation_id: ReservationId = loop {
+                let id = self.active_reservations.get_random_id().expect("No random ReservationId was found in test SlottedSchedule.");
 
-                let is_non_overlapping = res.get_assigned_start() > self.get_slot_end_time(end_slot_index)
-                    || res.get_assigned_end() < self.get_slot_start_time(start_slot_index);
+                let is_non_overlapping = self.active_reservations.get_assigned_start(&id) > self.get_slot_end_time(end_slot_index)
+                    || self.active_reservations.get_assigned_end(&id) < self.get_slot_start_time(start_slot_index);
 
                 if !is_non_overlapping {
-                    break res;
+                    break id;
                 }
             };
 
-            let random_reservation_key: ReservationKey = random_reservation.get_id().clone();
-
-            match test_schedule.reserve(random_reservation) {
+            match test_schedule.reserve(random_reservation_id) {
                 // Could not book again
-                Some(reservation) => {
-                    remaining_capacity -= reservation.get_reserved_capacity();
-                    rejected_capacity += reservation.get_reserved_capacity() * reservation.get_task_duration();
+                Some(id) => {
+                    remaining_capacity -= self.active_reservations.get_reserved_capacity(&id);
+                    rejected_capacity += self.active_reservations.get_reserved_capacity(&id) * self.active_reservations.get_task_duration(&id);
                 }
                 // Success
                 None => {
-                    remaining_capacity -= self.active_reservations.get_reserved_capacity(&random_reservation_key);
+                    remaining_capacity -= self.active_reservations.get_reserved_capacity(&random_reservation_id);
                 }
             }
         }

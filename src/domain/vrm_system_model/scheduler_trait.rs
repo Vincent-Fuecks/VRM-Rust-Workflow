@@ -2,8 +2,8 @@ use std::any::Any;
 use std::cmp::Ordering;
 use std::fmt::Debug;
 
-use crate::domain::vrm_system_model::reservation::reservation::ReservationKey;
-use crate::domain::vrm_system_model::reservation::{reservation::Reservation, reservations::Reservations};
+use crate::domain::vrm_system_model::reservation::reservation_store::ReservationId;
+use crate::domain::vrm_system_model::reservation::reservations::Reservations;
 use crate::domain::vrm_system_model::utils::load_buffer::LoadMetric;
 
 // TODO Sync is potentially unsafe; if total struct Sync than this should be redundant
@@ -54,12 +54,12 @@ pub trait Schedule: Debug + Send + Sync + Any {
     ///
     /// # Arguments
     ///
-    /// * `key` - The `ReservationKey` identifying the resource requirements and constraints for the probe.
+    /// * `id` - The `ReservationId` identifying the resource requirements and constraints for the probe.
     ///
     /// # Returns
     ///
     /// A `Reservations` collection containing all feasible candidates.
-    fn probe(&mut self, key: ReservationKey) -> Reservations;
+    fn probe(&mut self, id: ReservationId) -> Reservations;
 
     /// Selects the **single best-fitting reservation candidate** from the feasible set,
     /// determined by a custom comparator function.
@@ -69,22 +69,22 @@ pub trait Schedule: Debug + Send + Sync + Any {
     ///
     /// # Type Parameters
     ///
-    /// * `C` - A closure that implements the `FnMut` trait for comparison, taking two boxed reservations
+    /// * `C` - A closure that implements the `FnMut` trait for comparison, taking two reservation ids
     /// and returning an `Ordering`.
     ///
     /// # Arguments
     ///
-    /// * `request_key` - The `ReservationKey` defining the request.
+    /// * `request_id` - The `ReservationId` defining the request.
     /// * `comparator` - The function used to determine which candidate is "best."
     ///
     /// # Returns
     ///
-    /// An `Option` containing the single `Box<dyn Reservation>` that best fits the criteria, or `None` if no feasible candidates were found.
+    /// An `Option` containing the single `ReservationId` that best fits the criteria, or `None` if no feasible candidates were found.
     fn probe_best(
         &mut self,
-        request_key: ReservationKey,
-        comparator: &mut dyn FnMut(Box<dyn Reservation>, Box<dyn Reservation>) -> Ordering,
-    ) -> Option<Box<dyn Reservation>>;
+        request_id: ReservationId,
+        comparator: &mut dyn FnMut(ReservationId, ReservationId) -> Ordering,
+    ) -> Option<ReservationId>;
 
     /// Attempts to execute a **final reservation** using a provided candidate.
     ///
@@ -93,12 +93,12 @@ pub trait Schedule: Debug + Send + Sync + Any {
     ///
     /// # Arguments
     ///
-    /// * `reservation` - The `Box<dyn Reservation>` candidate to finalize.
+    /// * `id` - The `ReservationId` candidate to finalize.
     ///
     /// # Returns
     ///
-    /// `None` on success (reservation is accepted and committed), or `Some(reservation)` if the reservation is rejected.
-    fn reserve(&mut self, reservation: Box<dyn Reservation>) -> Option<Box<dyn Reservation>>;
+    /// `None` on success (reservation is accepted and committed), or `Some(ReservationId)` if the ReservationId is rejected.
+    fn reserve(&mut self, id: ReservationId) -> Option<ReservationId>;
 
     /// **Commits a reservation** to the schedule **without performing a feasibility check**.
     ///
@@ -107,16 +107,16 @@ pub trait Schedule: Debug + Send + Sync + Any {
     ///
     /// # Arguments
     ///
-    /// * `reservation` - The `Box<dyn Reservation>` to be inserted directly into the schedule slots.
-    fn reserve_without_check(&mut self, reservation: Box<dyn Reservation>);
+    /// * `id` - The `ReservationId` to be inserted directly into the schedule slots.
+    fn reserve_without_check(&mut self, id: ReservationId);
 
     /// Removes an **active reservation** from the schedule and frees up the occupied capacity
     /// in all relevant time slots.
     ///
     /// # Arguments
     ///
-    /// * `reservation_key` - The `ReservationKey` of the reservation to be deleted.
-    fn delete_reservation(&mut self, reservation_key: ReservationKey);
+    /// * `Id` - The `ReservationId` of the reservation to be deleted.
+    fn delete_reservation(&mut self, id: ReservationId);
 
     /// **Clears all active reservations** and resets the load of all slots to zero.
     fn clear(&mut self);

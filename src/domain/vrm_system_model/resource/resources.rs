@@ -13,7 +13,7 @@ pub struct BaseResource<ID> {
     pub connected_routers: HashSet<RouterId>,
 }
 
-impl<ID> BaseResource<ID> {
+impl<ID: Clone> BaseResource<ID> {
     pub fn new(id: ID, capacity: i64, connected_routers: HashSet<RouterId>) -> Self {
         Self { id, capacity, connected_routers: connected_routers }
     }
@@ -24,6 +24,10 @@ impl<ID> BaseResource<ID> {
         } else {
             true
         }
+    }
+
+    pub fn get_id(&self) -> ID {
+        self.id.clone()
     }
 }
 

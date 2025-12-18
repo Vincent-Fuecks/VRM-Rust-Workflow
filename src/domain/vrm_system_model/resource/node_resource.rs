@@ -1,5 +1,8 @@
 use crate::domain::vrm_system_model::reservation::reservation::Reservation;
-use crate::domain::vrm_system_model::resource::{resource_trait::Resource, resources::BaseResource};
+use crate::domain::vrm_system_model::resource::{
+    resource_trait::{Resource, ResourceId},
+    resources::BaseResource,
+};
 use crate::domain::vrm_system_model::utils::id::{NodeResourceId, RouterId};
 
 use std::any::Any;
@@ -32,5 +35,9 @@ impl Resource for NodeResource {
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn get_id(&self) -> ResourceId {
+        ResourceId::Node(self.base.get_id())
     }
 }

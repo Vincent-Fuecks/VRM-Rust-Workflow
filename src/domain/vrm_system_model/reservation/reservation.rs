@@ -1,6 +1,6 @@
 use std::{any::Any, ops::Not};
 
-use crate::domain::vrm_system_model::utils::id::ReservationName;
+use crate::domain::vrm_system_model::utils::id::{ClientId, ComponentId, ReservationName};
 
 pub trait Reservation: std::fmt::Debug + Any + Send + Sync {
     fn get_base(&self) -> &ReservationBase;
@@ -49,6 +49,14 @@ pub trait Reservation: std::fmt::Debug + Any + Send + Sync {
 
     fn get_moldable_work(&self) -> i64 {
         self.get_base().moldable_work
+    }
+
+    fn get_client_id(&self) -> ClientId {
+        self.get_base().client_id.clone()
+    }
+
+    fn get_handler_id(&self) -> Option<ComponentId> {
+        self.get_base().handler_id.clone()
     }
 
     fn set_assigned_end(&mut self, time: i64) {
@@ -159,7 +167,7 @@ pub enum ReservationState {
 /// Defines the set of primary actions (proceedings) that can be requested for a reservation.
 ///
 /// This determines the lifecycle stage a reservation is intended to reach.
-/// TODO Rework states transition discription
+/// TODO Rework states transition description
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReservationProceeding {
     /// Executes only the initial resource availability **probe** request to check feasibility.
@@ -196,6 +204,12 @@ pub struct ReservationBase {
     /// A globally unique identifier for this reservation across all distributed components.
     pub name: ReservationName,
 
+    /// Is the Id of the client, how submitted the reservation into the VRM system.
+    pub client_id: ClientId,
+
+    /// Contains the Id of the components, how is handling the reservation currently (Adc or AcI).
+    pub handler_id: Option<ComponentId>,
+
     /// The current **lifecycle state** of the reservation (e.g., `Open`, `Committed`, `Finished`).
     pub state: ReservationState,
 
@@ -225,7 +239,7 @@ pub struct ReservationBase {
     /// The total **amount of resource capacity** requested and reserved of this task
     /// Unit is according to the Task:
     /// NodeReservation: Number of CPUs
-    /// LinkReservation: Bandwidth in Mbps
+    /// LinkReservation: Bandwidth in MB's
     pub reserved_capacity: i64,
 
     // Flag indicating if the task's duration and capacity are **flexible** (moldable/ can be adjusted).

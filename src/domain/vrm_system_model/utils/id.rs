@@ -44,6 +44,10 @@ pub struct AciTag;
 pub struct AdcTag;
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Copy)]
 pub struct ShadowScheduleTag;
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Copy)]
+pub struct ClientTag;
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Copy)]
+pub struct ComponentTag;
 
 pub type ReservationName = Id<ReservationTag>;
 pub type RouterId = Id<RouterTag>;
@@ -54,3 +58,5 @@ pub type SlottedScheduleId = Id<SlottedScheduleTag>;
 pub type AciId = Id<AciTag>;
 pub type AdcId = Id<AdcTag>;
 pub type ShadowScheduleId = Id<ShadowScheduleTag>;
+pub type ClientId = Id<ClientTag>;
+pub type ComponentId = Id<ComponentTag>;

@@ -1,13 +1,13 @@
 use crate::api::vrm_system_model_dto::aci_dto::RMSSystemDto;
 use crate::domain::simulator::simulator::SystemSimulator;
-use crate::domain::vrm_system_model::reservation::reservation::ReservationKey;
-use crate::domain::vrm_system_model::reservation::reservation_store::ReservationStore;
+use crate::domain::vrm_system_model::reservation::reservation::ReservationState;
+use crate::domain::vrm_system_model::reservation::reservation_store::{ReservationId, ReservationStore};
 use crate::domain::vrm_system_model::resource::node_resource::NodeResource;
 use crate::domain::vrm_system_model::resource::resource_trait::Resource;
 use crate::domain::vrm_system_model::resource::resources::Resources;
 use crate::domain::vrm_system_model::scheduler_trait::Schedule;
 use crate::domain::vrm_system_model::scheduler_type::SchedulerType;
-use crate::domain::vrm_system_model::utils::id::{NodeResourceId, RmsId, RouterId, SlottedScheduleId};
+use crate::domain::vrm_system_model::utils::id::{NodeResourceId, RmsId, RouterId, ShadowScheduleId, SlottedScheduleId};
 use crate::error::ConversionError;
 
 use std::any::Any;
@@ -19,15 +19,15 @@ pub trait Rms: std::fmt::Debug + Any {
     fn get_base_mut(&mut self) -> &mut RmsBase;
     fn as_any(&self) -> &dyn Any;
 
-    fn get_shadow_schedule_keys(&self) -> Vec<ReservationKey> {
+    fn get_shadow_schedule_keys(&self) -> Vec<ShadowScheduleId> {
         return self.get_base().shadow_schedules.keys().map(|key| key.clone()).collect();
     }
 
-    fn get_shadow_schedules(&self) -> &HashMap<ReservationKey, Box<dyn Schedule>> {
+    fn get_shadow_schedules(&self) -> &HashMap<ShadowScheduleId, Box<dyn Schedule>> {
         return &self.get_base().shadow_schedules;
     }
 
-    fn get_mut_shadow_schedules(&mut self) -> &HashMap<ReservationKey, Box<dyn Schedule>> {
+    fn get_mut_shadow_schedules(&mut self) -> &HashMap<ShadowScheduleId, Box<dyn Schedule>> {
         return &self.get_base_mut().shadow_schedules;
     }
 
@@ -35,12 +35,21 @@ pub trait Rms: std::fmt::Debug + Any {
         return self.get_base_mut().schedule.clone_box();
     }
 
-    fn get_shadow_schedule(&self, shadow_schedule_id: ReservationKey) -> &Box<dyn Schedule> {
+    fn get_shadow_schedule(&self, shadow_schedule_id: ShadowScheduleId) -> &Box<dyn Schedule> {
         return self.get_base().shadow_schedules.get(&shadow_schedule_id).expect("Shadow schedule id was in shadow schedules not found.");
     }
 
-    fn get_mut_shadow_schedule(&mut self, shadow_schedule_id: ReservationKey) -> &mut Box<dyn Schedule> {
+    fn get_mut_shadow_schedule(&mut self, shadow_schedule_id: ShadowScheduleId) -> &mut Box<dyn Schedule> {
         return self.get_base_mut().shadow_schedules.get_mut(&shadow_schedule_id).expect("Shadow schedule id was in shadow schedules not found.");
+    }
+
+    fn set_reservation_state(&mut self, id: ReservationId, state: ReservationState) {
+        if let Some(handle) = self.get_base().reservation_store.get(id) {
+            let mut res = handle.write().unwrap();
+            res.set_state(state);
+        } else {
+            log::error!("Get reservation (id: {:?}) was not possible.", id)
+        }
     }
 }
 
@@ -48,7 +57,7 @@ pub trait Rms: std::fmt::Debug + Any {
 pub struct RmsBase {
     pub id: RmsId,
     pub schedule: Box<dyn Schedule>,
-    pub shadow_schedules: HashMap<ReservationKey, Box<dyn Schedule>>,
+    pub shadow_schedules: HashMap<ShadowScheduleId, Box<dyn Schedule>>,
     pub slot_width: i64,
     pub num_of_slots: i64,
     pub resources: Resources,
@@ -80,7 +89,8 @@ impl TryFrom<(RMSSystemDto, Box<dyn SystemSimulator>, String, ReservationStore)>
         let resources: Resources = Resources::new(grid_nodes, Vec::new());
 
         let schedule_type = SchedulerType::from_str(&dto.scheduler_type)?;
-        let schedule = schedule_type.get_instance(schedule_id, dto.num_of_slots, dto.slot_width, schedule_capacity, simulator, reservation_store);
+        let schedule =
+            schedule_type.get_instance(schedule_id, dto.num_of_slots, dto.slot_width, schedule_capacity, simulator, reservation_store.clone());
 
         Ok(RmsBase {
             id: rms_id,

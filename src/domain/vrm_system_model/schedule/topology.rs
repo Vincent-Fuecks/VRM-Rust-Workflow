@@ -1,9 +1,11 @@
 use crate::api::vrm_system_model_dto::aci_dto::RMSSystemDto;
 use crate::domain::simulator::simulator::SystemSimulator;
+use crate::domain::vrm_system_model::reservation::reservation_store::{self, ReservationStore};
 use crate::domain::vrm_system_model::resource::link_resource::LinkResource;
+use crate::domain::vrm_system_model::resource::resource_trait::{Resource, ResourceId};
+use crate::domain::vrm_system_model::resource::resources::BaseResource;
 use crate::domain::vrm_system_model::schedule::slotted_schedule::SlottedSchedule;
 use crate::domain::vrm_system_model::utils::id::{LinkResourceId, RouterId, SlottedScheduleId};
-
 use crate::error::ConversionError;
 use std::collections::{HashMap, HashSet, VecDeque};
 
@@ -207,8 +209,8 @@ impl NetworkTopology {
             // Find bottleneck (min capacity) of this path
             for link_id in &solution.network_links {
                 let link = self.network_links.get(link_id).unwrap();
-                if link.bandwidth < bandwidth_bottleneck {
-                    bandwidth_bottleneck = link.bandwidth;
+                if link.get_capacity() < bandwidth_bottleneck {
+                    bandwidth_bottleneck = link.get_capacity();
                 }
             }
 
@@ -275,7 +277,13 @@ impl NetworkTopology {
                 if router_id.eq(&source) {
                     source_found = true;
 
-                    adjacency.entry(source.clone()).or_insert_with(HashSet::new).insert(network_link.id.clone());
+                    let resource_id = network_link.get_id();
+
+                    if let ResourceId::Link(link_id) = resource_id {
+                        adjacency.entry(source.clone()).or_insert_with(HashSet::new).insert(link_id);
+                    } else {
+                        panic!("Expected a LinkResource ID but found {:?}", resource_id);
+                    }
 
                     if target_found {
                         break;
@@ -337,6 +345,7 @@ impl NetworkTopology {
     fn setup_network_links(
         dto: &RMSSystemDto,
         simulator: Box<dyn SystemSimulator>,
+        reservation_store: ReservationStore,
     ) -> (HashMap<LinkResourceId, LinkResource>, HashMap<LinkResourceId, f64>) {
         let mut network_links: HashMap<LinkResourceId, LinkResource> = HashMap::new();
         let mut importance_database: HashMap<LinkResourceId, f64> = HashMap::new();
@@ -350,16 +359,16 @@ impl NetworkTopology {
                 link.capacity,
                 true,
                 simulator.clone_box(),
+                reservation_store,
             );
             let network_link_id: LinkResourceId = LinkResourceId::new(link.id.clone());
-
+            let base = BaseResource { id: network_link_id, capacity: link.capacity, connected_routers: link. }
             network_links.insert(
                 network_link_id.clone(),
                 LinkResource {
-                    id: network_link_id.clone(),
+                    base,
                     source: RouterId::new(link.start_point.clone()),
                     target: RouterId::new(link.end_point.clone()),
-                    bandwidth: link.capacity,
                     avg_bandwidth: link.capacity,
                     schedule: link_schedule,
                 },

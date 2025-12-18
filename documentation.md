@@ -2,3 +2,4 @@
 - In the java program in  ../src/vrm/util/LoadBuffer.java exists a prototype implementation of a hiracical loadbuffer
 - In the java version was the Idea present of marking resources as up or down. However, the system was never utilized
 - Idea: Utilizing a Repository Pattern for clear Resource access 
+- Security problem in reservation.rs is it possible to access all stored reservations of the system, if the SlottedSchedule, AcI or Adc submits the corresponding ReservationId (also if they are not managing this reservation) --> necessary to trust all these components --> Solution: Is submitted ReservationId in reservations HashSet if provide access else reject access

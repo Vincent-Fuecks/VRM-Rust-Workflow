@@ -1,7 +1,4 @@
-use crate::domain::vrm_system_model::reservation::{
-    reservation::{Reservation, ReservationKey, ReservationState},
-    reservations::Reservations,
-};
+use crate::domain::vrm_system_model::reservation::{reservation::ReservationState, reservation_store::ReservationId, reservations::Reservations};
 use crate::domain::vrm_system_model::scheduler_trait::Schedule;
 use crate::domain::vrm_system_model::utils::load_buffer::{LoadMetric, SLOTS_TO_DROP_ON_END, SLOTS_TO_DROP_ON_START};
 
@@ -31,21 +28,21 @@ impl Schedule for super::SlottedSchedule {
         return self.load_buffer.get_effective_overall_load(self.capacity as f64, start_time_of_first_slot, start_time_of_last_slot);
     }
 
-    fn reserve(&mut self, mut reservation: Box<dyn Reservation>) -> Option<Box<dyn Reservation>> {
+    fn reserve(&mut self, reservation_id: ReservationId) -> Option<ReservationId> {
         self.update();
 
-        let search_results = self.calculate_schedule(reservation.get_id());
+        let search_results = self.calculate_schedule(reservation_id);
 
-        match search_results.get_reservation_with_first_start_slot() {
-            Some(random_reservation) => {
+        match search_results.get_id_with_first_start_slot() {
+            Some(reservation_id_with_first_start_slot) => {
                 self.is_frag_cache_up_to_date = false;
-                self.reserve_without_check(random_reservation.box_clone());
+                self.reserve_without_check(reservation_id_with_first_start_slot);
                 return None;
             }
 
             None => {
-                reservation.set_state(ReservationState::Rejected);
-                return Some(reservation);
+                self.active_reservations.set_state(&reservation_id, ReservationState::Rejected);
+                return Some(reservation_id);
             }
         }
     }
@@ -87,23 +84,20 @@ impl Schedule for super::SlottedSchedule {
         }
 
         // key are used to: remove reservation which end earlier than the new start time
-        let mut keys_to_remove: HashSet<ReservationKey> = HashSet::new();
+        let mut ids_to_remove: HashSet<ReservationId> = HashSet::new();
 
         for clean_index in self.start_slot_index..new_start_slot_index {
             if let Some(slot) = self.get_slot(clean_index) {
-                for key in &slot.reservation_keys {
-                    if let Some(reservation) = self.active_reservations.get(key) {
-                        let last_slot_of_reservation = self.get_slot_index(reservation.get_assigned_end());
-
-                        if last_slot_of_reservation == clean_index {
-                            keys_to_remove.insert(key.clone());
-                        }
+                for id in &slot.reservation_ids {
+                    let last_slot_of_reservation = self.get_slot_index(self.active_reservations.get_assigned_end(id));
+                    if last_slot_of_reservation == clean_index {
+                        ids_to_remove.insert(id.clone());
                     }
                 }
             }
         }
 
-        for key in keys_to_remove {
+        for key in ids_to_remove {
             self.active_reservations.delete_reservation(&key);
         }
 
@@ -131,12 +125,12 @@ impl Schedule for super::SlottedSchedule {
         self.scheduling_window_end_time = self.get_slot_end_time(self.end_slot_index);
     }
 
-    fn delete_reservation(&mut self, key: ReservationKey) {
+    fn delete_reservation(&mut self, id: ReservationId) {
         // Can not Del unreserved reservation
-        if !self.active_reservations.contains_key(&key) {
-            log::error!("DEL Reservation form Schedule: {}, However Schedule does not contain reservation with id: {}", self.id, key);
+        if !self.active_reservations.contains_key(&id) {
+            log::error!("DEL Reservation form Schedule: {}, However Schedule does not contain reservation with id: {:?}", self.id, id);
 
-            self.active_reservations.set_state(&key, ReservationState::Rejected);
+            self.active_reservations.set_state(&id, ReservationState::Rejected);
             return;
         }
 
@@ -144,24 +138,26 @@ impl Schedule for super::SlottedSchedule {
         self.update();
 
         // Can not delete already finished reservations
-        let task_finished: bool = self.active_reservations.get_assigned_end(&key) <= self.simulator.get_current_time_in_s();
+        let task_finished: bool = self.active_reservations.get_assigned_end(&id) <= self.simulator.get_current_time_in_s();
 
         if task_finished {
-            log::error!("Can't deleted reservation {} form Schedule: {}, because reservation is already finished.", key, self.id,);
+            log::error!("Can't deleted reservation {:?} form Schedule: {}, because reservation is already finished.", id, self.id,);
             return;
         }
 
+        let del_res_assigned_start = self.active_reservations.get_assigned_start(&id);
+        let del_res_assigned_end = self.active_reservations.get_assigned_end(&id);
+        let del_res_reserved_capacity = self.active_reservations.get_reserved_capacity(&id);
+
         // Delete reservation from schedule
-        let mut reservation = if let Some((_, value)) = self.active_reservations.delete_reservation(&key) {
-            value
-        } else {
-            log::error!("Del reservation (id: {}) was not possible.", key);
+        if !self.active_reservations.delete_reservation(&id) {
+            log::error!("Del reservation (id: {:?}) was not possible.", id);
             return;
-        };
+        }
 
         // Delete reservation from all occupied slots
-        let mut reservation_start_slot_index: i64 = self.get_slot_index(reservation.get_assigned_start());
-        let reservation_end_slot_index: i64 = self.get_slot_index(reservation.get_assigned_end());
+        let mut reservation_start_slot_index: i64 = self.get_slot_index(del_res_assigned_start);
+        let reservation_end_slot_index: i64 = self.get_slot_index(del_res_assigned_end);
 
         // Delete only parts that are in the scheduling window
         if reservation_start_slot_index < self.start_slot_index {
@@ -174,10 +170,9 @@ impl Schedule for super::SlottedSchedule {
                 .get_mut_slot(slot_index)
                 .expect(&format!("In the SlottedSchedule id: {} was the slot with index: {} not found.", slotted_schedule_id, slot_index));
 
-            slot.delete_reservation(key.clone(), reservation.get_reserved_capacity());
+            slot.delete_reservation(id.clone(), del_res_reserved_capacity);
         }
 
-        reservation.set_state(ReservationState::Deleted);
         self.is_frag_cache_up_to_date = false;
         return;
     }
@@ -234,22 +229,23 @@ impl Schedule for super::SlottedSchedule {
     }
 
     // TODO Function probe is self.update() in worst case 2N + 1 called --> bottleneck.
-    fn probe(&mut self, key: ReservationKey) -> Reservations {
+    fn probe(&mut self, id: ReservationId) -> Reservations {
         self.update();
 
-        let mut candidates = self.calculate_schedule(key);
+        let mut candidates = self.calculate_schedule(id);
         let frag_before: f64 = self.get_system_fragmentation();
 
         if self.is_frag_needed {
-            for (key, candidate) in candidates.clone().iter() {
-                let reserve_answer: Option<Box<dyn Reservation>> = self.reserve(candidate.box_clone());
+            for candidate_id in candidates.clone().iter() {
+                let reserve_answer: Option<ReservationId> = self.reserve(candidate_id.clone());
                 let frag_delta: f64 = self.get_system_fragmentation() - frag_before;
-                candidates.set_frag_delta(key, frag_delta);
+
+                candidates.set_frag_delta(candidate_id, frag_delta);
 
                 match reserve_answer {
                     Some(_) => {}
                     None => {
-                        self.delete_reservation(candidate.get_id());
+                        self.delete_reservation(candidate_id.clone());
                     }
                 }
             }
@@ -260,35 +256,35 @@ impl Schedule for super::SlottedSchedule {
 
     fn probe_best(
         &mut self,
-        request_key: ReservationKey,
-        comparator: &mut dyn FnMut(Box<dyn Reservation>, Box<dyn Reservation>) -> Ordering,
-    ) -> Option<Box<dyn Reservation>> {
+        request_key: ReservationId,
+        comparator: &mut dyn FnMut(ReservationId, ReservationId) -> Ordering,
+    ) -> Option<ReservationId> {
         let possible_reservations: Reservations = self.probe(request_key);
         if possible_reservations.is_empty() {
             return None;
         }
 
-        let mut best_candidate: Box<dyn Reservation> =
-            possible_reservations.get_reservation_with_first_start_slot().expect("Error getting random reservation.").clone();
+        let mut best_candidate: ReservationId =
+            possible_reservations.get_id_with_first_start_slot().expect("Error getting random reservation.").clone();
 
-        for (_, candidate) in possible_reservations.iter() {
-            if comparator(best_candidate.clone(), candidate.clone()) == Ordering::Greater {
-                best_candidate = candidate.clone();
+        for candidate_id in possible_reservations.iter() {
+            if comparator(best_candidate.clone(), *candidate_id) == Ordering::Greater {
+                best_candidate = candidate_id.clone();
             }
         }
 
         return Some(best_candidate);
     }
 
-    fn reserve_without_check(&mut self, reservation: Box<dyn Reservation>) {
-        let new_reservation_key = reservation.get_id();
-
-        for slot_index in self.get_slot_index(reservation.get_assigned_start())..=self.get_slot_index(reservation.get_assigned_end()) {
-            self.insert_reservation_into_slot(&new_reservation_key, reservation.get_reserved_capacity(), slot_index);
+    fn reserve_without_check(&mut self, new_id: ReservationId) {
+        for slot_index in self.get_slot_index(self.active_reservations.get_assigned_start(&new_id))
+            ..=self.get_slot_index(self.active_reservations.get_assigned_end(&new_id))
+        {
+            self.insert_reservation_into_slot(&new_id, self.active_reservations.get_reserved_capacity(&new_id), slot_index);
         }
 
-        self.active_reservations.insert(new_reservation_key.clone(), reservation);
-        self.active_reservations.set_state(&new_reservation_key, ReservationState::ReserveAnswer);
+        self.active_reservations.insert(new_id);
+        self.active_reservations.set_state(&new_id, ReservationState::ReserveAnswer);
     }
 
     fn clone_box(&self) -> Box<dyn Schedule> {

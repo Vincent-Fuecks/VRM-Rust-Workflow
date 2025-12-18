@@ -1,7 +1,8 @@
-use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationKey, ReservationState};
+use crate::domain::vrm_system_model::reservation::reservation::ReservationState;
+use crate::domain::vrm_system_model::reservation::reservation_store::ReservationId;
 use crate::domain::vrm_system_model::reservation::reservations::Reservations;
 use crate::domain::vrm_system_model::rms::rms::Rms;
-use crate::domain::vrm_system_model::schedule;
+use crate::domain::vrm_system_model::utils::id::ShadowScheduleId;
 use crate::domain::vrm_system_model::utils::load_buffer::LoadMetric;
 
 use std::cmp::Ordering;
@@ -39,8 +40,10 @@ use std::cmp::Ordering;
  *
  *
  */
+// TODO Add Comment
+// TODO Also handle Master SlottedSchedule
 pub trait AdvanceReservationRms: Rms {
-    fn create_shadow_schedule(&mut self, shadow_schedule_id: &ReservationKey) {
+    fn create_shadow_schedule(&mut self, shadow_schedule_id: &ShadowScheduleId) {
         if self.get_shadow_schedule_keys().contains(shadow_schedule_id) {
             log::error!("Creating new shadow schedule is not possible because shadow schedule id ({}) does already exist", shadow_schedule_id);
             return;
@@ -50,7 +53,7 @@ pub trait AdvanceReservationRms: Rms {
         self.get_base_mut().shadow_schedules.insert(shadow_schedule_id.clone(), new_shadow_schedule);
     }
 
-    fn commit_shadow_schedule(&mut self, shadow_schedule_id: &ReservationKey) -> bool {
+    fn commit_shadow_schedule(&mut self, shadow_schedule_id: &ShadowScheduleId) -> bool {
         let new_schedule = self.get_base_mut().shadow_schedules.remove(shadow_schedule_id);
 
         if new_schedule.is_some() {
@@ -62,15 +65,15 @@ pub trait AdvanceReservationRms: Rms {
         return false;
     }
 
-    fn get_fragmentation(&mut self, start: i64, end: i64, shadow_schedule_id: ReservationKey) -> f64 {
+    fn get_fragmentation(&mut self, start: i64, end: i64, shadow_schedule_id: ShadowScheduleId) -> f64 {
         return self.get_mut_shadow_schedule(shadow_schedule_id).get_fragmentation(start, end);
     }
 
-    fn get_system_fragmentation(&mut self, shadow_schedule_id: ReservationKey) -> f64 {
+    fn get_system_fragmentation(&mut self, shadow_schedule_id: ShadowScheduleId) -> f64 {
         return self.get_mut_shadow_schedule(shadow_schedule_id).get_system_fragmentation();
     }
 
-    fn get_load_metric(&mut self, start: i64, end: i64, shadow_schedule_id: ReservationKey) -> LoadMetric {
+    fn get_load_metric(&mut self, start: i64, end: i64, shadow_schedule_id: ShadowScheduleId) -> LoadMetric {
         return self.get_mut_shadow_schedule(shadow_schedule_id).get_load_metric(start, end);
     }
 
@@ -78,45 +81,45 @@ pub trait AdvanceReservationRms: Rms {
         return self.get_base_mut().schedule.get_simulation_load_metric();
     }
 
-    fn probe(&mut self, reservation_key: ReservationKey, shadow_schedule_id: ReservationKey) -> Reservations {
+    fn probe(&mut self, reservation_key: ReservationId, shadow_schedule_id: ShadowScheduleId) -> Reservations {
         return self.get_mut_shadow_schedule(shadow_schedule_id).probe(reservation_key);
     }
 
-    fn reserve(&mut self, mut reservation: Box<dyn Reservation>, shadow_schedule_id: ReservationKey) -> Option<Box<dyn Reservation>> {
+    fn reserve(&mut self, reservation_id: ReservationId, shadow_schedule_id: ShadowScheduleId) -> Option<ReservationId> {
         let shadow_schedule = self.get_base_mut().shadow_schedules.get_mut(&shadow_schedule_id);
 
         match shadow_schedule {
-            Some(shadow_schedule) => shadow_schedule.reserve(reservation),
+            Some(shadow_schedule) => shadow_schedule.reserve(reservation_id),
             None => {
-                reservation.set_state(ReservationState::Rejected);
-                return Some(reservation);
+                self.set_reservation_state(reservation_id, ReservationState::Rejected);
+                return Some(reservation_id);
             }
         }
     }
 
     // TODO is this right?
-    fn commit(&mut self, mut reservation: Box<dyn Reservation>) -> Box<dyn Reservation> {
-        log::info!("RmsNull committed reservation with id: {}. Please look at the implementation maybe it is wrong", reservation.get_name());
+    fn commit(&mut self, reservation_id: ReservationId) -> ReservationId {
+        log::info!("RmsNull committed reservation with id: {:?}. Please look at the implementation maybe it is wrong", reservation_id);
 
-        reservation.set_state(ReservationState::Committed);
-        return reservation;
+        self.set_reservation_state(reservation_id, ReservationState::Committed);
+        return reservation_id;
     }
 
-    fn delete_shadow_schedule(&mut self, shadow_schedule_id: ReservationKey) {
+    fn delete_shadow_schedule(&mut self, shadow_schedule_id: ShadowScheduleId) {
         if self.get_base_mut().shadow_schedules.remove(&shadow_schedule_id).is_none() {
             log::error!("Removing shadow schedule was not possible. Shadow schedule id ({}) was not found", shadow_schedule_id);
         }
     }
     fn probe_best(
         &mut self,
-        request_key: ReservationKey,
-        comparator: &mut dyn FnMut(Box<dyn Reservation>, Box<dyn Reservation>) -> Ordering,
-    ) -> Option<Box<dyn Reservation>> {
+        request_key: ReservationId,
+        comparator: &mut dyn FnMut(ReservationId, ReservationId) -> Ordering,
+    ) -> Option<ReservationId> {
         return self.get_base_mut().schedule.probe_best(request_key, comparator);
     }
 
-    fn delete_task(&mut self, reservation_key: ReservationKey, shadow_schedule_id: &ReservationKey) -> Option<Box<dyn Reservation>> {
-        self.get_mut_shadow_schedule(shadow_schedule_id.clone()).delete_reservation(reservation_key);
+    fn delete_task(&mut self, reservation_id: ReservationId, shadow_schedule_id: ShadowScheduleId) -> Option<ReservationId> {
+        self.get_mut_shadow_schedule(shadow_schedule_id.clone()).delete_reservation(reservation_id);
         return None;
     }
 }

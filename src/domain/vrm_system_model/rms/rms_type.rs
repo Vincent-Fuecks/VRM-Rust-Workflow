@@ -18,7 +18,7 @@ impl RmsType {
         dto: RMSSystemDto,
         simulator: Box<dyn SystemSimulator>,
         aci_name: String,
-        reservation_store: &ReservationStore,
+        reservation_store: ReservationStore,
     ) -> Result<Box<dyn AdvanceReservationRms>, ConversionError> {
         let rms_type: RmsType = RmsType::from_str(&dto.typ)?;
 
