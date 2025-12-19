@@ -20,9 +20,9 @@ pub struct LinkReservation {
 
     // Link specific fields
     /// Unique identifier of the start router for the link.
-    pub start_point: RouterId,
+    pub start_point: Option<RouterId>,
     /// Unique identifier of the end router for the link.
-    pub end_point: RouterId,
+    pub end_point: Option<RouterId>,
 }
 
 impl Reservation for LinkReservation {

@@ -43,6 +43,14 @@ pub trait Rms: std::fmt::Debug + Any {
         return self.get_base_mut().shadow_schedules.get_mut(&shadow_schedule_id).expect("Shadow schedule id was in shadow schedules not found.");
     }
 
+    fn get_master_schedule(&self) -> &Box<dyn Schedule> {
+        return &self.get_base().schedule;
+    }
+
+    fn get_mut_master_schedule(&mut self) -> &mut Box<dyn Schedule> {
+        return &mut self.get_base_mut().schedule;
+    }
+
     fn set_reservation_state(&mut self, id: ReservationId, state: ReservationState) {
         if let Some(handle) = self.get_base().reservation_store.get(id) {
             let mut res = handle.write().unwrap();
@@ -50,6 +58,10 @@ pub trait Rms: std::fmt::Debug + Any {
         } else {
             log::error!("Get reservation (id: {:?}) was not possible.", id)
         }
+    }
+
+    fn can_handle(&self, reservation_id: ReservationId) -> bool {
+        self.get_base().resources.can_handle(reservation_id)
     }
 }
 

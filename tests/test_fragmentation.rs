@@ -1,6 +1,6 @@
 use vrm_rust_workflow::domain::{
-    simulator::simulator::{Simulator, SystemSimulator},
-    vrm_system_model::{reservation::reservation::ReservationKey, schedule::slotted_schedule::SlottedSchedule, utils::id::SlottedScheduleId},
+    simulator::simulator::SystemSimulator,
+    vrm_system_model::{reservation::reservation_store::ReservationStore, schedule::slotted_schedule::SlottedSchedule, utils::id::SlottedScheduleId},
 };
 
 #[derive(Debug, Clone)]
@@ -36,8 +36,9 @@ fn test_complex_fragmentation_scenario() {
     // Create schedule with enough slots (indices 0 to 3 require 4 slots)
 
     let simulator: Box<dyn SystemSimulator> = Box::new(MockSystemSimulator::new(true));
+    let reservation_store: ReservationStore = ReservationStore::new(None);
 
-    let mut schedule = SlottedSchedule::new(SlottedScheduleId::new("Test-SlottedSchedule"), 4, 2, capacity, true, simulator);
+    let mut schedule = SlottedSchedule::new(SlottedScheduleId::new("Test-SlottedSchedule"), 4, 2, capacity, true, simulator, reservation_store);
 
     // Define loads
     schedule.set_slot_load(0, 0); // Free 3
@@ -67,8 +68,10 @@ fn test_complex_fragmentation_scenario() {
 fn test_zero_fragmentation_all_free() {
     let capacity = 5;
     let simulator: Box<dyn SystemSimulator> = Box::new(MockSystemSimulator::new(true));
+    let reservation_store: ReservationStore = ReservationStore::new(None);
+
     // 10 slots
-    let schedule = SlottedSchedule::new(SlottedScheduleId::new("Test-SlottedSchedule-02"), 10, 2, capacity, true, simulator);
+    let schedule = SlottedSchedule::new(SlottedScheduleId::new("Test-SlottedSchedule-02"), 10, 2, capacity, true, simulator, reservation_store);
 
     let result = schedule.get_fragmentation_quadratic_mean(0, 9);
 
@@ -80,8 +83,9 @@ fn test_zero_fragmentation_all_free() {
 fn test_zero_fragmentation_full_load() {
     let capacity = 4;
     let simulator: Box<dyn SystemSimulator> = Box::new(MockSystemSimulator::new(true));
+    let reservation_store: ReservationStore = ReservationStore::new(None);
 
-    let mut schedule = SlottedSchedule::new(SlottedScheduleId::new("Test-SlottedSchedule-02"), 5, 2, capacity, true, simulator);
+    let mut schedule = SlottedSchedule::new(SlottedScheduleId::new("Test-SlottedSchedule-02"), 5, 2, capacity, true, simulator, reservation_store);
 
     // Set load equal to capacity for all slots
     for i in 0..5 {

@@ -1,5 +1,4 @@
 use crate::domain::simulator::simulator::SystemSimulator;
-use crate::domain::vrm_system_model::reservation::reservation::ReservationKey;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationStore;
 use crate::domain::vrm_system_model::schedule::slotted_schedule::SlottedSchedule;
 use crate::domain::vrm_system_model::scheduler_trait::Schedule;

@@ -32,8 +32,8 @@ impl TryFrom<(RMSSystemDto, Box<dyn SystemSimulator>, String, ReservationStore)>
 
     fn try_from(args: (RMSSystemDto, Box<dyn SystemSimulator>, String, ReservationStore)) -> Result<Self, Self::Error> {
         let (dto, simulator, aci_name, reservation_store) = args;
-        let base = RmsBase::try_from((dto.clone(), simulator.clone(), aci_name.clone(), reservation_store))?;
-        let network_topology = NetworkTopology::try_from((dto, simulator, aci_name))?;
+        let base = RmsBase::try_from((dto.clone(), simulator.clone(), aci_name.clone(), reservation_store.clone()))?;
+        let network_topology = NetworkTopology::try_from((dto, simulator, aci_name, reservation_store.clone()))?;
 
         if base.resources.get_node_resource_count() <= 0 {
             log::info!("Empty NullBroker Grid: The newly created NullBroker contains no Gird Nodes.");

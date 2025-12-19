@@ -1,5 +1,7 @@
-use crate::domain::vrm_system_model::reservation::reservation::ReservationKey;
-use crate::domain::vrm_system_model::schedule::topology::{NetworkTopology, Path};
+use crate::domain::vrm_system_model::{
+    reservation::reservation_store::ReservationId,
+    schedule::topology::{NetworkTopology, Path},
+};
 
 use std::collections::HashMap;
 
@@ -13,7 +15,7 @@ pub struct NetworkSchedule {
     ///
     /// This map is essential for resolving which specific route a reservation utilizes,
     /// enabling conflict detection and bandwidth verification.
-    reserved_paths: HashMap<ReservationKey, Path>,
+    reserved_paths: HashMap<ReservationId, Path>,
 }
 
 impl NetworkSchedule {

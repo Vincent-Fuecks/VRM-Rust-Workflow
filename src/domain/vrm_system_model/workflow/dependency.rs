@@ -1,20 +1,7 @@
-use crate::domain::vrm_system_model::reservation::{
-    link_reservation::LinkReservation, reservation::ReservationKey,
+use crate::domain::vrm_system_model::{
+    reservation::link_reservation::LinkReservation,
+    utils::id::{CoAllocationDependencyId, CoAllocationId, DataDependencyId, WorkflowNodeId},
 };
-
-// TODO Should be used as Keys in workflows.rs
-// #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-// pub enum DependencyType {
-//     Data,
-//     Sync,
-// }
-
-// #[derive(Debug, Clone, Eq, PartialEq, Hash)]
-// struct DependencyKey {
-//     task_id: String,
-//     port_name: String,
-//     typ: DependencyType, // The string field
-// }
 
 /// Represents an edge for data transfer (file).
 #[derive(Debug, Clone)]
@@ -23,10 +10,10 @@ pub struct DataDependency {
     pub reservation: LinkReservation,
 
     /// Key to Workflow.nodes, which is the sender.
-    pub source_node: ReservationKey,
+    pub source_node: Option<WorkflowNodeId>,
 
     /// Key to Workflow.nodes, which is the receiver.
-    pub target_node: ReservationKey,
+    pub target_node: Option<WorkflowNodeId>,
 
     /// TODO
     pub port_name: String,
@@ -42,15 +29,15 @@ pub struct SyncDependency {
     pub reservation: LinkReservation,
 
     /// Key to Workflow.nodes, which is the sender.
-    pub source_node: ReservationKey,
+    pub source_node: Option<WorkflowNodeId>,
 
     /// Key to Workflow.nodes, which is the receiver.
-    pub target_node: ReservationKey,
+    pub target_node: Option<WorkflowNodeId>,
 
     /// TODO
     pub port_name: String,
 
-    /// Bandwidth in Mbps
+    /// Bandwidth in MB's
     pub bandwidth: i64,
 }
 
@@ -58,14 +45,14 @@ pub struct SyncDependency {
 #[derive(Debug, Clone)]
 pub struct CoAllocationDependency {
     // Underlying DataDependency ID
-    pub id: ReservationKey,
+    pub id: CoAllocationDependencyId,
 
     /// Key to Workflow.co_allocations, which is the sender.
-    pub source_group: ReservationKey,
+    pub source_group: CoAllocationId,
 
     /// Key to Workflow.co_allocations, which is the receiver.
-    pub target_group: ReservationKey,
+    pub target_group: CoAllocationId,
 
     /// Key to the DataDependency that this CoAllocation edge represents.
-    pub data_dependency: ReservationKey,
+    pub data_dependency: DataDependencyId,
 }

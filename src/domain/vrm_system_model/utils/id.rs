@@ -49,6 +49,20 @@ pub struct ClientTag;
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Copy)]
 pub struct ComponentTag;
 
+// Workflow Domain Tags
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Copy)]
+pub struct WorkflowTag;
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Copy)]
+pub struct WorkflowNodeTag;
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Copy)]
+pub struct DataDependencyTag;
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Copy)]
+pub struct SyncDependencyTag;
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Copy)]
+pub struct CoAllocationTag;
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Copy)]
+pub struct CoAllocationDependencyTag;
+
 pub type ReservationName = Id<ReservationTag>;
 pub type RouterId = Id<RouterTag>;
 pub type NodeResourceId = Id<NodeResourceTag>;
@@ -60,3 +74,11 @@ pub type AdcId = Id<AdcTag>;
 pub type ShadowScheduleId = Id<ShadowScheduleTag>;
 pub type ClientId = Id<ClientTag>;
 pub type ComponentId = Id<ComponentTag>;
+
+// Workflow Domain Aliases
+pub type WorkflowId = Id<WorkflowTag>;
+pub type WorkflowNodeId = Id<WorkflowNodeTag>;
+pub type DataDependencyId = Id<DataDependencyTag>;
+pub type SyncDependencyId = Id<SyncDependencyTag>;
+pub type CoAllocationId = Id<CoAllocationTag>;
+pub type CoAllocationDependencyId = Id<CoAllocationDependencyTag>;

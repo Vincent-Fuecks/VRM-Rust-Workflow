@@ -123,6 +123,16 @@ impl ReservationStore {
         guard.handler_index.get(component_id).map(|set| set.iter().cloned().collect()).unwrap_or_default()
     }
 
+    pub fn get_reserved_capacity(&self, reservation_id: ReservationId) -> i64 {
+        if let Some(handle) = self.get(reservation_id) {
+            let res = handle.read().unwrap();
+            return res.get_reserved_capacity();
+        } else {
+            log::error!("Get reservation (id: {:?}) was not possible.", reservation_id);
+            return 0;
+        }
+    }
+
     /// Update the state of a reservation.
     /// Triggers the notification listener.
     pub fn update_state(&self, id: ReservationId, new_state: ReservationState) {

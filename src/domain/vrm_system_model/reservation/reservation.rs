@@ -117,22 +117,6 @@ impl Clone for Box<dyn Reservation> {
         self.box_clone()
     }
 }
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash)]
-pub struct ReservationKey {
-    pub id: String,
-}
-
-impl ReservationKey {
-    pub fn new(id: impl Into<String>) -> Self {
-        ReservationKey { id: id.into() }
-    }
-}
-
-impl std::fmt::Display for ReservationKey {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.id)
-    }
-}
 
 /// Defines the lifecycle state of a job reservation within the system.
 ///

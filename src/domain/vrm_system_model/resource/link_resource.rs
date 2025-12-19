@@ -50,7 +50,17 @@ impl Resource for LinkResource {
         // 1. Check Type (Java: instanceof LinkReservation)
         if let Some(link_res) = reservation.as_any().downcast_ref::<LinkReservation>() {
             // 2. Check Logic specific to Links
-            if self.source != link_res.start_point || self.target != link_res.end_point {
+            if self.source
+                != link_res
+                    .start_point
+                    .clone()
+                    .expect("Start Point in LinkReservation was never set --> Workflow construction process contains an error!")
+                || self.target
+                    != link_res
+                        .end_point
+                        .clone()
+                        .expect("Start Point in LinkReservation was never set --> Workflow construction process contains an error!")
+            {
                 return false;
             }
         } else {

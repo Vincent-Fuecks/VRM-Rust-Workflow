@@ -1,5 +1,5 @@
 use crate::domain::vrm_system_model::grid_resource_management_system::reservation_submitter_trait::ReservationSubmitter;
-use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationKey};
+use crate::domain::vrm_system_model::reservation::reservation::Reservation;
 
 /// A specialized interface for a fully-featured **Distributed Resource Management System**.
 ///

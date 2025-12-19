@@ -2,12 +2,13 @@ use crate::api::vrm_system_model_dto::aci_dto::AcIDto;
 use crate::domain::simulator::simulator::SystemSimulator;
 use crate::domain::vrm_system_model::grid_resource_management_system::grid_resource_management_system_trait::ExtendedReservationProcessor;
 use crate::domain::vrm_system_model::grid_resource_management_system::reservation_submitter_trait::ReservationSubmitter;
-use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationKey};
+use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationState};
 use crate::domain::vrm_system_model::reservation::reservation_store::{ReservationId, ReservationStore};
 use crate::domain::vrm_system_model::rms::advance_reservation_trait::AdvanceReservationRms;
 use crate::domain::vrm_system_model::rms::rms::Rms;
 use crate::domain::vrm_system_model::rms::rms_type::RmsType;
 use crate::domain::vrm_system_model::utils::id::{AciId, AdcId, RouterId, ShadowScheduleId};
+use crate::domain::vrm_system_model::utils::load_buffer::LoadMetric;
 use crate::error::ConversionError;
 use std::collections::{BTreeMap, HashMap};
 
@@ -22,9 +23,7 @@ pub enum ScheduleID {
 }
 
 #[derive(Debug)]
-pub struct ReservationContainer {
-    // The ReservationSubmitter, which submitted the reservation.
-    //owner: ReservationSubmitter,
+pub struct ReservationDeadlines {
     ///  Until which time the reservation has to be committed, if only reserved. VRM time in s.
     commit_deadline: i64,
     /// until which time the reservation has to finish execution. VRM time in s.
@@ -33,7 +32,7 @@ pub struct ReservationContainer {
 
 #[derive(Debug)]
 struct ShadowScheduleReservations {
-    inner_map: BTreeMap<ShadowScheduleId, ReservationContainer>,
+    inner_map: BTreeMap<ShadowScheduleId, ReservationDeadlines>,
 }
 
 #[derive(Debug)]
@@ -43,7 +42,7 @@ pub struct AcI {
     commit_timeout: i64,
     rms_system: Box<dyn AdvanceReservationRms>,
     shadow_schedule_reservations: ShadowScheduleReservations,
-    not_committed_reservations: HashMap<ReservationKey, ReservationContainer>,
+    not_committed_reservations: HashMap<ReservationId, ReservationDeadlines>,
 
     simulator: Box<dyn SystemSimulator>,
     reservation_store: ReservationStore,
@@ -80,26 +79,34 @@ impl TryFrom<(AcIDto, Box<dyn SystemSimulator>)> for AcI {
 }
 
 impl ExtendedReservationProcessor for AcI {
-    fn commit(&self, requester: Box<dyn ReservationSubmitter>, reservation: Box<dyn Reservation>) -> Box<dyn Reservation> {
-        log::debug!("AcI: {} is committing the reservation: {}, of the requester: ", self.id, reservation.get_name());
+    fn commit(&mut self, reservation_id: ReservationId) -> bool {
+        log::debug!("AcI: {} is committing the reservation: {:?}, of the requester: ", self.id, reservation_id);
 
         let arrival_time: i64 = self.simulator.get_current_time_in_ms();
-        let reservation_id = reservation.get_name();
 
-        // let reservation_container: Option<ReservationContainer> = self.not_committed_reservations.remove(&reservation_id);
+        match self.not_committed_reservations.remove(&reservation_id) {
+            Some(reservation_deadlines) => {}
+            None => {
+                log::info!("There was no reservation before the commit of the reservation (id: {:?}), please allocate it.", reservation_id);
 
-        // match reservation_container {
-        //     Some(reservation_container) => {}
-        //     None => {
-        //         Log::info("There was no reserve before the commit of reservation: {} was tried to allocate.", reservation.get_id());
-
-        //         if
-        //     }
-        // }
+                if todo!() {
+                    self.reservation_store.update_state(reservation_id, ReservationState::Rejected);
+                    AcI::log_stat("Commit".to_string(), reservation_id, arrival_time);
+                    log::debug!(
+                        "There was no reservation ({:?}) before the commit and the AcI ({}) can't handle the request.",
+                        reservation_id,
+                        self.id
+                    );
+                    return reservation_id;
+                } else {
+                    possible_reservation = self.rms_system.reserve(reservation_id, None)
+                }
+            }
+        };
         todo!()
     }
 
-    fn commit_shadow_schedule(&self, shadow_schedule_id: String) -> bool {
+    fn commit_shadow_schedule(&self, shadow_schedule_id: ShadowScheduleId) -> bool {
         todo!()
     }
 
@@ -110,17 +117,17 @@ impl ExtendedReservationProcessor for AcI {
     fn delete(
         &self,
         requester: Box<dyn ReservationSubmitter>,
-        reservation: Box<dyn Reservation>,
+        reservation_id: ReservationId,
         shadow_schedule_id: Option<ShadowScheduleId>,
-    ) -> Box<dyn Reservation> {
+    ) -> ReservationId {
         todo!()
     }
 
-    fn get_load_metric(&mut self, start_time: i64, end_time: i64) -> crate::domain::vrm_system_model::utils::load_buffer::LoadMetric {
+    fn delete_shadow_schedule(&self, shadow_schedule_id: ShadowScheduleId) {
         todo!()
     }
 
-    fn get_resources(&self) -> Vec<String> {
+    fn get_load_metric(&mut self, start_time: i64, end_time: i64) -> LoadMetric {
         todo!()
     }
 
@@ -128,7 +135,7 @@ impl ExtendedReservationProcessor for AcI {
         todo!()
     }
 
-    fn get_simulation_load_metric(&mut self) -> crate::domain::vrm_system_model::utils::load_buffer::LoadMetric {
+    fn get_simulation_load_metric(&mut self) -> LoadMetric {
         todo!()
     }
 
@@ -139,15 +146,15 @@ impl ExtendedReservationProcessor for AcI {
     fn probe(
         &self,
         requester: Box<dyn ReservationSubmitter>,
-        reservation: Box<dyn Reservation>,
+        reservation_id: ReservationId,
         shadow_schedule_id: Option<ShadowScheduleId>,
-    ) -> Vec<Box<dyn Reservation>> {
+    ) -> crate::domain::vrm_system_model::reservation::reservations::Reservations {
         todo!()
     }
 
-    fn probe_best<F>(&self, reservation: Box<dyn Reservation>, comparator: F) -> Option<Box<dyn Reservation>>
+    fn probe_best<F>(&self, reservation_id: ReservationId, comparator: F) -> Option<ReservationId>
     where
-        F: Fn(Box<dyn Reservation>, Box<dyn Reservation>) -> std::cmp::Ordering,
+        F: Fn(ReservationId, ReservationId) -> std::cmp::Ordering,
     {
         todo!()
     }
@@ -155,13 +162,29 @@ impl ExtendedReservationProcessor for AcI {
     fn reserve(
         &self,
         requester: Box<dyn ReservationSubmitter>,
-        reservation: Box<dyn Reservation>,
+        reservation_id: ReservationId,
         shadow_schedule_id: Option<ShadowScheduleId>,
-    ) -> Box<dyn Reservation> {
+    ) -> ReservationId {
         todo!()
     }
+}
 
-    fn rollback_shadow_schedule(&self, shadow_schedule_id: ShadowScheduleId) {
+impl AcI {
+    /**
+     * Creates a {@link StatisticEvent} with the result of the given command
+     * and adds it to the {@link Statistics}.
+     *
+     * @param command
+     *            The executed command, mainly "reserve", "commit", or "delete"
+     * @param answer
+     *            The result of the operation
+     * @param arrivalTimeAtAI
+     * 			  The time the processing of this reservation started as get by
+     * 			  {@link Simulator#getCurrentTimeMillis()} i.e. ms since 1.1.1970
+     * @see AI#logStatProbe(Reservation, int, String)
+     * @see Statistics
+     */
+    pub fn log_stat(command: String, reservation_id: ReservationId, arrival_time_at_aci: i64) {
         todo!()
     }
 }

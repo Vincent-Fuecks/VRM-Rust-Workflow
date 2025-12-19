@@ -1,5 +1,6 @@
 use crate::api::vrm_system_model_dto::aci_dto::RMSSystemDto;
 use crate::domain::simulator::simulator::SystemSimulator;
+use crate::domain::vrm_system_model::reservation;
 use crate::domain::vrm_system_model::reservation::reservation_store::{self, ReservationStore};
 use crate::domain::vrm_system_model::resource::link_resource::LinkResource;
 use crate::domain::vrm_system_model::resource::resource_trait::{Resource, ResourceId};
@@ -94,14 +95,14 @@ pub struct NetworkTopology {
     pub max_bandwidth_all_paths: i64,
 }
 
-impl TryFrom<(RMSSystemDto, Box<dyn SystemSimulator>, String)> for NetworkTopology {
+impl TryFrom<(RMSSystemDto, Box<dyn SystemSimulator>, String, ReservationStore)> for NetworkTopology {
     type Error = ConversionError;
 
-    fn try_from(args: (RMSSystemDto, Box<dyn SystemSimulator>, String)) -> Result<Self, Self::Error> {
-        let (dto, simulator, _) = args;
+    fn try_from(args: (RMSSystemDto, Box<dyn SystemSimulator>, String, ReservationStore)) -> Result<Self, Self::Error> {
+        let (dto, simulator, _, reservation_store) = args;
 
         // 1.  Init physical links.
-        let (network_links, importance_database) = NetworkTopology::setup_network_links(&dto, simulator.clone());
+        let (network_links, importance_database) = NetworkTopology::setup_network_links(&dto, simulator.clone(), reservation_store);
 
         // 2.  Init router instances based on grid nodes and network link endpoints.
         let routers: HashMap<RouterId, Router> = NetworkTopology::setup_routers(&dto);
@@ -359,19 +360,20 @@ impl NetworkTopology {
                 link.capacity,
                 true,
                 simulator.clone_box(),
-                reservation_store,
+                reservation_store.clone(),
             );
             let network_link_id: LinkResourceId = LinkResourceId::new(link.id.clone());
-            let base = BaseResource { id: network_link_id, capacity: link.capacity, connected_routers: link. }
             network_links.insert(
                 network_link_id.clone(),
-                LinkResource {
-                    base,
-                    source: RouterId::new(link.start_point.clone()),
-                    target: RouterId::new(link.end_point.clone()),
-                    avg_bandwidth: link.capacity,
-                    schedule: link_schedule,
-                },
+                LinkResource::new(
+                    network_link_id.clone(),
+                    HashSet::new(),
+                    RouterId::new(link.start_point.clone()),
+                    RouterId::new(link.end_point.clone()),
+                    link.capacity,
+                    link.capacity,
+                    link_schedule,
+                ),
             );
 
             importance_database.insert(network_link_id, 1.0);
