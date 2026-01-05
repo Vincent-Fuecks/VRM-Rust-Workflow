@@ -1,4 +1,4 @@
-use crate::domain::vrm_system_model::reservation::reservation::Reservation;
+use crate::domain::vrm_system_model::reservation::reservation_store::{ReservationId, ReservationStore};
 use crate::domain::vrm_system_model::utils::id::{LinkResourceId, NodeResourceId, RouterId};
 
 use std::any::Any;
@@ -12,7 +12,7 @@ pub enum ResourceId {
 
 pub trait Resource: std::fmt::Debug {
     /// Returns true if this specific resource can handle the reservation
-    fn can_handle(&self, reservation: &Box<dyn Reservation>) -> bool;
+    fn can_handle(&self, reservation_store: ReservationStore, reservation_id: ReservationId) -> bool;
 
     /// Returns the capacity
     fn get_capacity(&self) -> i64;

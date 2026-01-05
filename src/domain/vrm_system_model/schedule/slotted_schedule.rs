@@ -6,7 +6,6 @@ use crate::domain::vrm_system_model::scheduler_trait::Schedule;
 use crate::domain::vrm_system_model::utils::id::SlottedScheduleId;
 use crate::domain::vrm_system_model::utils::{
     load_buffer::{GlobalLoadContext, LoadBuffer},
-    statistics::{StatParameter, StatisticEvent},
     vrm_component_trait::VRMComponent,
 };
 
@@ -108,17 +107,18 @@ impl SlottedSchedule {
 }
 
 impl VRMComponent for SlottedSchedule {
-    fn generate_statistics(&mut self) -> StatisticEvent {
-        let load_metrics =
-            self.load_buffer.get_effective_overall_load(self.capacity as f64, self.get_effective_start_time(), self.get_effective_end_time());
+    fn generate_statistics(&mut self) {
+        todo!()
+        // let load_metrics =
+        //     self.load_buffer.get_effective_overall_load(self.capacity as f64, self.get_effective_start_time(), self.get_effective_end_time());
 
-        let mut event = StatisticEvent::new();
-        event.set(StatParameter::ComponentUtilization, load_metrics.utilization);
-        event
-            .set(StatParameter::ReservationWorkload, load_metrics.avg_reserved_capacity * ((load_metrics.start_time - load_metrics.end_time) as f64));
+        // let mut event = StatisticEvent::new();
+        // event.set(StatParameter::ComponentUtilization, load_metrics.utilization);
+        // event
+        //     .set(StatParameter::ReservationWorkload, load_metrics.avg_reserved_capacity * ((load_metrics.start_time - load_metrics.end_time) as f64));
 
-        event.set(StatParameter::ComponentCapacity, self.capacity);
+        // event.set(StatParameter::ComponentCapacity, self.capacity);
 
-        return event;
+        // return event;
     }
 }

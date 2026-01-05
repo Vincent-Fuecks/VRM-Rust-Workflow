@@ -1,3 +1,4 @@
+use serde::Serialize;
 use std::{any::Any, ops::Not};
 
 use crate::domain::vrm_system_model::utils::id::{ClientId, ComponentId, ReservationName};
@@ -57,6 +58,10 @@ pub trait Reservation: std::fmt::Debug + Any + Send + Sync {
 
     fn get_handler_id(&self) -> Option<ComponentId> {
         self.get_base().handler_id.clone()
+    }
+
+    fn get_reservation_proceeding(&self) -> ReservationProceeding {
+        self.get_base().request_proceeding
     }
 
     fn set_assigned_end(&mut self, time: i64) {
@@ -124,7 +129,8 @@ impl Clone for Box<dyn Reservation> {
 /// through processing, commitment, and eventual completion or failure.
 ///
 /// The order, from lowest commitment (0) to highest (6).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[serde(untagged)]
 pub enum ReservationState {
     /// The last request of the reservation was explicitly denied or failed.
     Rejected,
@@ -152,7 +158,7 @@ pub enum ReservationState {
 ///
 /// This determines the lifecycle stage a reservation is intended to reach.
 /// TODO Rework states transition description
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum ReservationProceeding {
     /// Executes only the initial resource availability **probe** request to check feasibility.
     /// No resources are formally reserved.

@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use crate::domain::vrm_system_model::reservation::reservation::Reservation;
+use crate::domain::vrm_system_model::reservation::reservation_store::{ReservationId, ReservationStore};
 use crate::domain::vrm_system_model::resource::link_resource::LinkResource;
 use crate::domain::vrm_system_model::resource::node_resource::NodeResource;
 use crate::domain::vrm_system_model::resource::resource_trait::Resource;
@@ -18,9 +19,9 @@ impl<ID: Clone> BaseResource<ID> {
         Self { id, capacity, connected_routers: connected_routers }
     }
 
-    pub fn can_handle_capacity(&self, reservation: &Box<dyn Reservation>) -> bool {
-        if !reservation.is_moldable() && reservation.get_reserved_capacity() > 0 {
-            reservation.get_reserved_capacity() <= self.capacity
+    pub fn can_handle_capacity(&self, reservation_store: ReservationStore, reservation_id: ReservationId) -> bool {
+        if reservation_store.is_moldable(reservation_id) && reservation_store.get_reserved_capacity(reservation_id) > 0 {
+            reservation_store.get_reserved_capacity(reservation_id) <= self.capacity
         } else {
             true
         }
@@ -54,10 +55,9 @@ impl Resources {
         self.inner.iter().map(|r| r.get_capacity()).sum()
     }
 
-    pub fn can_handle(&self, reservation: &Box<dyn Reservation>) -> bool {
-        // TODO value clone --> problem
+    pub fn can_handle(&self, reservation_store: ReservationStore, reservation_id: ReservationId) -> bool {
         for resource in &self.inner {
-            if resource.can_handle(reservation) {
+            if resource.can_handle(reservation_store.clone(), reservation_id) {
                 return true;
             }
         }

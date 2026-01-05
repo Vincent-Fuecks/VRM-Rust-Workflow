@@ -1,5 +1,5 @@
 use crate::domain::vrm_system_model::reservation::reservation::ReservationState;
-use crate::domain::vrm_system_model::reservation::reservation_store::ReservationId;
+use crate::domain::vrm_system_model::reservation::reservation_store::{ReservationId, ReservationStore};
 use crate::domain::vrm_system_model::reservation::reservations::Reservations;
 use crate::domain::vrm_system_model::rms::rms::Rms;
 use crate::domain::vrm_system_model::utils::id::ShadowScheduleId;
@@ -41,14 +41,18 @@ pub trait AdvanceReservationRms: Rms {
     /// # Errors
     ///
     /// Logs an error if a shadow schedule with the given ID already exists.
-    fn create_shadow_schedule(&mut self, shadow_schedule_id: &ShadowScheduleId) {
+    fn create_shadow_schedule(&mut self, shadow_schedule_id: &ShadowScheduleId) -> bool {
         if self.get_shadow_schedule_keys().contains(shadow_schedule_id) {
-            log::error!("Creating new shadow schedule is not possible because shadow schedule id ({}) does already exist", shadow_schedule_id);
-            return;
+            log::error!(
+                "Creating new shadow schedule is not possible because shadow schedule id ({}) does already exist. Please first delete the old shadow schedule.",
+                shadow_schedule_id
+            );
+            return false;
         }
 
         let new_shadow_schedule = self.get_base_mut().schedule.clone_box();
         self.get_base_mut().shadow_schedules.insert(shadow_schedule_id.clone(), new_shadow_schedule);
+        return true;
     }
 
     /// Commits a specific **Shadow Schedule**, replacing the master schedule.
@@ -233,10 +237,12 @@ pub trait AdvanceReservationRms: Rms {
     /// # Arguments
     ///
     /// * `shadow_schedule_id` - The unique identifier of the shadow schedule to remove.
-    fn delete_shadow_schedule(&mut self, shadow_schedule_id: ShadowScheduleId) {
+    fn delete_shadow_schedule(&mut self, shadow_schedule_id: ShadowScheduleId) -> bool {
         if self.get_base_mut().shadow_schedules.remove(&shadow_schedule_id).is_none() {
             log::error!("Removing shadow schedule was not possible. Shadow schedule id ({}) was not found", shadow_schedule_id);
+            return false;
         }
+        return true;
     }
 
     /// Probes for the single best reservation candidate based on a comparator.
@@ -281,8 +287,8 @@ pub trait AdvanceReservationRms: Rms {
         }
     }
 
-    fn can_handle(&self, reservation_id: ReservationId) -> bool {
-        self.
+    fn can_handle(&self, reservation_store: ReservationStore, reservation_id: ReservationId) -> bool {
+        self.get_base().resources.can_handle(reservation_store, reservation_id)
     }
 }
 

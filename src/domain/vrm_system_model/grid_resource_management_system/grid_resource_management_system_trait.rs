@@ -39,7 +39,6 @@ pub trait ExtendedReservationProcessor {
     /// call will succeed, though it is highly likely.
     ///
     /// # Arguments
-    /// * `requester` - The component initiating the request, used for partner-based strategies.
     /// * `reservation_id` - The reservation id. Fields like `assigned_start` are ignored
     ///   in favor of `booking_interval`, `is_moldable` and `task_duration`.
     /// * `shadow_schedule_id` - If `Some`, utilize specified shadow schedule.
@@ -48,18 +47,13 @@ pub trait ExtendedReservationProcessor {
     /// # Returns
     /// A `Reservations` object, of which all contained reservation are set to the state
     /// `ReservationState::ProbeAnswer`.
-    fn probe(
-        &self,
-        requester: Box<dyn ReservationSubmitter>,
-        reservation_id: ReservationId,
-        shadow_schedule_id: Option<ShadowScheduleId>,
-    ) -> Reservations;
+    fn probe(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> Reservations;
 
     /// Finds the optimal reservation configuration based on a custom comparison logic.
     ///
     /// This utility method probes the system and automatically selects the "best"
     /// option (e.g., earliest start time or lowest cost) as defined by the `comparator`.
-    fn probe_best<F>(&self, reservation_id: ReservationId, comparator: F) -> Option<ReservationId>
+    fn probe_best<F>(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>, comparator: F) -> Option<ReservationId>
     where
         F: Fn(ReservationId, ReservationId) -> Ordering;
 
@@ -70,8 +64,6 @@ pub trait ExtendedReservationProcessor {
     /// either `commit` or `delete` the reservation before this timeout expires.
     ///
     /// # Arguments
-    /// * `requester` - The component initiating the request; also used for push-notifications
-    ///   regarding reservation status changes.
     /// * `reservation_id` - The reservation_id to reserve.
     /// * `shadow_schedule_id` - If `Some`, utilize specified shadow schedule.
     ///                          If `None`, utilize the master schedule.
@@ -79,12 +71,7 @@ pub trait ExtendedReservationProcessor {
     /// # Returns
     /// A `Reservation` object. Success is indicated by `ReservationState::ReserveAnswer`.
     /// If resources cannot be held, returns `ReservationState::Rejected`.
-    fn reserve(
-        &self,
-        requester: Box<dyn ReservationSubmitter>,
-        reservation_id: ReservationId,
-        shadow_schedule_id: Option<ShadowScheduleId>,
-    ) -> ReservationId;
+    fn reserve(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> ReservationId;
 
     /// Sends a **Commit Request** to finalize a reservation.
     ///
@@ -108,7 +95,6 @@ pub trait ExtendedReservationProcessor {
     /// This removes a formerly submitted or reserved task from the local RMS.
     ///
     /// # Arguments
-    /// * `requester` - The requesting component, used for partner-based strategies.
     /// * `reservation_id` - The task id to be removed.
     /// * `shadow_schedule_id` - If `Some`, utilize specified shadow schedule.
     ///                          If `None`, utilize the master schedule.
@@ -116,12 +102,7 @@ pub trait ExtendedReservationProcessor {
     /// # Returns
     /// A `ReservationId` indicating the final status. Success is confirmed if
     /// the state of the corresponding reservation is `ReservationState::Deleted`.
-    fn delete(
-        &self,
-        requester: Box<dyn ReservationSubmitter>,
-        reservation_id: ReservationId,
-        shadow_schedule_id: Option<ShadowScheduleId>,
-    ) -> ReservationId;
+    fn delete_task(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> ReservationId;
 
     /// Calculates the **Satisfaction Index** for a specific time window.
     ///
@@ -135,7 +116,7 @@ pub trait ExtendedReservationProcessor {
     /// * `end` - Unix timestamp for the end of the analysis window.
     /// * `shadow_schedule_id` - If `Some`, utilize specified shadow schedule.
     ///                          If `None`, utilize the master schedule.
-    fn get_satisfaction(&self, start: u64, end: u64, shadow_schedule_id: Option<ShadowScheduleId>) -> f64;
+    fn get_satisfaction(&mut self, start: i64, end: i64, shadow_schedule_id: Option<ShadowScheduleId>) -> f64;
 
     /// Calculates the **System-Wide Satisfaction Index** across the full schedule range.
     ///
@@ -147,7 +128,7 @@ pub trait ExtendedReservationProcessor {
     ///  # Arguments
     /// * `shadow_schedule_id` - If `Some`, utilize specified shadow schedule.
     ///                          If `None`, utilize the master schedule.
-    fn get_system_satisfaction(&self, shadow_schedule_id: Option<ShadowScheduleId>) -> f64;
+    fn get_system_satisfaction(&mut self, shadow_schedule_id: Option<ShadowScheduleId>) -> f64;
 
     /// Creates a **Secondary Shadow Schedule**.
     ///
@@ -156,7 +137,7 @@ pub trait ExtendedReservationProcessor {
     ///
     /// # Arguments
     /// * `shadow_schedule_id` - A unique identifier for the new sandbox environment.
-    fn create_shadow_schedule(&self, shadow_schedule_id: ShadowScheduleId);
+    fn create_shadow_schedule(&mut self, shadow_schedule_id: ShadowScheduleId) -> bool;
 
     /// Destroys a shadow schedule and discards all pending changes (**Rollback**).
     ///
@@ -167,7 +148,7 @@ pub trait ExtendedReservationProcessor {
     /// TODO Panic is handled?
     /// Implementing types should handle cases where the ID is `None` (representing
     /// the live schedule), as the live schedule cannot be rolled back here.
-    fn delete_shadow_schedule(&self, shadow_schedule_id: ShadowScheduleId);
+    fn delete_shadow_schedule(&mut self, shadow_schedule_id: ShadowScheduleId) -> bool;
 
     /// Performs an **Atomic Switch** from a shadow schedule to the live schedule.
     ///
@@ -179,11 +160,11 @@ pub trait ExtendedReservationProcessor {
     /// `true` if the switch was successful and the live schedule has been updated.
     /// Returns `false` if the switch failed, in which case the original live
     /// schedule remains active.
-    fn commit_shadow_schedule(&self, shadow_schedule_id: ShadowScheduleId) -> bool;
+    fn commit_shadow_schedule(&mut self, shadow_schedule_id: ShadowScheduleId) -> bool;
 
     /// Returns the current **Resource Load Metric** for a given time window.
-    fn get_load_metric(&mut self, start_time: i64, end_time: i64) -> LoadMetric;
+    fn get_load_metric(&mut self, start: i64, end: i64, shadow_schedule_id: Option<ShadowScheduleId>) -> LoadMetric;
 
     /// Retrieves **Simulation Load Metric** for the **overall simulation period**.
-    fn get_simulation_load_metric(&mut self) -> LoadMetric;
+    fn get_simulation_load_metric(&mut self, shadow_schedule_id: Option<ShadowScheduleId>) -> LoadMetric;
 }

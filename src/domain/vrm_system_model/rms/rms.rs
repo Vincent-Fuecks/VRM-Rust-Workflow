@@ -59,10 +59,6 @@ pub trait Rms: std::fmt::Debug + Any {
             log::error!("Get reservation (id: {:?}) was not possible.", id)
         }
     }
-
-    fn can_handle(&self, reservation_id: ReservationId) -> bool {
-        self.get_base().resources.can_handle(reservation_id)
-    }
 }
 
 #[derive(Debug)]
@@ -81,7 +77,7 @@ impl TryFrom<(RMSSystemDto, Box<dyn SystemSimulator>, String, ReservationStore)>
     fn try_from(args: (RMSSystemDto, Box<dyn SystemSimulator>, String, ReservationStore)) -> Result<Self, Self::Error> {
         let (dto, simulator, aci_name, reservation_store) = args;
         let rms_id: RmsId = RmsId::new(format!("AcI: {}, RmsType: {}", aci_name.clone(), &dto.typ));
-        let schedule_id: SlottedScheduleId = SlottedScheduleId::new(format!("AcI: {}, RmsType: {}", aci_name, &dto.scheduler_type));
+        let schedule_id: SlottedScheduleId = SlottedScheduleId::new(format!("AcI: {}, RmsType: {}", aci_name, &dto.scheduler_typ));
 
         let mut grid_nodes: Vec<Box<dyn Resource>> = Vec::new();
 
@@ -100,7 +96,7 @@ impl TryFrom<(RMSSystemDto, Box<dyn SystemSimulator>, String, ReservationStore)>
 
         let resources: Resources = Resources::new(grid_nodes, Vec::new());
 
-        let schedule_type = SchedulerType::from_str(&dto.scheduler_type)?;
+        let schedule_type = SchedulerType::from_str(&dto.scheduler_typ)?;
         let schedule =
             schedule_type.get_instance(schedule_id, dto.num_of_slots, dto.slot_width, schedule_capacity, simulator, reservation_store.clone());
 

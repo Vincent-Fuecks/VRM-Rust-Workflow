@@ -1,7 +1,8 @@
+use serde::Serialize;
 use std::fmt;
 use std::marker::PhantomData;
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Serialize)]
 pub struct Id<T> {
     pub id: String,
     _marker: PhantomData<T>,

@@ -1,4 +1,5 @@
 use crate::api::workflow_dto::client_dto::SystemModelDto;
+use crate::domain::vrm_system_model::utils::statistics::init_tracing;
 use crate::domain::vrm_system_model::workflow::client::SystemModel;
 use crate::error::Result;
 use crate::loader::parser::parse_json_file;
@@ -26,6 +27,9 @@ fn main() {
     let file_path: &str = "/home/vincent/Desktop/Repository/VRM-Rust-Workflow/src/data/test/test_workflow_loading_01.json";
 
     let _model: Result<SystemModel> = generate_system_model(file_path);
+
+    // init statistics logging
+    let _guard = init_tracing("statistics", "system_statistics");
 }
 
 // log::info!("Logger initialized. Starting SystemModel construction.");

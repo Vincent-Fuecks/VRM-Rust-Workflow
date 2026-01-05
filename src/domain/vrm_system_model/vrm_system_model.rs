@@ -5,7 +5,7 @@ use crate::domain::simulator::simulator::{Simulator, SystemSimulator};
 use crate::domain::vrm_system_model::adc::ADC;
 use crate::domain::vrm_system_model::grid_resource_management_system::aci::AcI;
 use crate::domain::vrm_system_model::utils::id::{AciId, AdcId};
-use crate::error::ConversionError;
+use crate::error::Result;
 use std::sync::LazyLock;
 
 const SIMULATOR: LazyLock<Box<dyn SystemSimulator>> = LazyLock::new(|| {
@@ -15,24 +15,26 @@ const SIMULATOR: LazyLock<Box<dyn SystemSimulator>> = LazyLock::new(|| {
 
 #[derive(Debug)]
 pub struct VrmSystemModel {
-    adcs: HashMap<AdcId, ADC>,
-    acis: HashMap<AciId, AcI>,
+    pub adcs: HashMap<AdcId, ADC>,
+    pub acis: HashMap<AciId, AcI>,
 }
 
 impl VrmSystemModel {
-    pub fn from_dto(&mut self, root_dto: VrmSystemModelDto) -> Result<(), ConversionError> {
-        for adc_dto in root_dto.adcs {
+    pub fn from_dto(root_dto: VrmSystemModelDto) -> Result<Self> {
+        let mut vrm_system_model = VrmSystemModel { adcs: HashMap::new(), acis: HashMap::new() };
+
+        for adc_dto in root_dto.adc {
             let adc_id = AdcId::new(adc_dto.id.clone());
             let adc = ADC::try_from(adc_dto)?;
-            self.adcs.insert(adc_id, adc);
+            vrm_system_model.adcs.insert(adc_id, adc);
         }
 
-        for aci_dto in root_dto.acis {
+        for aci_dto in root_dto.aci {
             let aci_id = AciId::new(aci_dto.id.clone());
             let aci = AcI::try_from((aci_dto, SIMULATOR.clone()))?;
-            self.acis.insert(aci_id, aci);
+            vrm_system_model.acis.insert(aci_id, aci);
         }
 
-        Ok(())
+        Ok(vrm_system_model)
     }
 }

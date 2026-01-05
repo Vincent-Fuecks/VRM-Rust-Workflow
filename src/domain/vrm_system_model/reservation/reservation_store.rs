@@ -1,10 +1,12 @@
 use slotmap::{SlotMap, new_key_type};
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
+
 use std::sync::{Arc, RwLock};
 
-use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationState};
-use crate::domain::vrm_system_model::utils::id::{ClientId, ComponentId, ReservationName};
+use crate::domain::vrm_system_model::reservation::link_reservation::LinkReservation;
+use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationProceeding, ReservationState};
+use crate::domain::vrm_system_model::utils::id::{ClientId, ComponentId, ReservationName, RouterId};
 
 // TODO Move in separate file
 pub trait NotificationListener: Send + Sync + Debug {
@@ -123,6 +125,7 @@ impl ReservationStore {
         guard.handler_index.get(component_id).map(|set| set.iter().cloned().collect()).unwrap_or_default()
     }
 
+    /// Retrieves form the provided reservation id the reserved_capacity
     pub fn get_reserved_capacity(&self, reservation_id: ReservationId) -> i64 {
         if let Some(handle) = self.get(reservation_id) {
             let res = handle.read().unwrap();
@@ -130,6 +133,124 @@ impl ReservationStore {
         } else {
             log::error!("Get reservation (id: {:?}) was not possible.", reservation_id);
             return 0;
+        }
+    }
+
+    /// Retrieves form the provided reservation id the start_point, if it is a LinkReservation
+    pub fn get_start_point(&self, reservation_id: ReservationId) -> Option<RouterId> {
+        if let Some(handle) = self.get(reservation_id) {
+            let res = handle.read().unwrap();
+            let res = res.as_any().downcast_ref::<LinkReservation>();
+            return res.unwrap().start_point.clone();
+        } else {
+            log::error!("Get reservation (id: {:?}) was not possible.", reservation_id);
+            return None;
+        }
+    }
+
+    /// Retrieves form the provided reservation id the end_point, if it is a LinkReservation.
+    pub fn get_end_point(&self, reservation_id: ReservationId) -> Option<RouterId> {
+        if let Some(handle) = self.get(reservation_id) {
+            let res = handle.read().unwrap();
+            let res = res.as_any().downcast_ref::<LinkReservation>();
+            return res.unwrap().end_point.clone();
+        } else {
+            log::error!("Get reservation (id: {:?}) was not possible.", reservation_id);
+            return None;
+        }
+    }
+
+    /// Returns the client_id of the provided reservation_id. Panics if no client id was found.
+    pub fn get_client_id(&self, reservation_id: ReservationId) -> ClientId {
+        if let Some(handle) = self.get(reservation_id) {
+            let res = handle.read().unwrap();
+            return res.get_client_id();
+        } else {
+            panic!("Reservation (id: {:?}) does not contain a client id.", reservation_id);
+        }
+    }
+
+    /// Returns the assigned_start of the provided reservation_id. Panics if no client id was found.
+    pub fn get_assigned_start(&self, reservation_id: ReservationId) -> i64 {
+        if let Some(handle) = self.get(reservation_id) {
+            let res = handle.read().unwrap();
+            return res.get_assigned_start();
+        } else {
+            panic!("Reservation (id: {:?}) does not contain a assigned end time.", reservation_id);
+        }
+    }
+
+    /// Returns the assigned_end of the provided reservation_id. Panics if no client id was found.
+    pub fn get_assigned_end(&self, reservation_id: ReservationId) -> i64 {
+        if let Some(handle) = self.get(reservation_id) {
+            let res = handle.read().unwrap();
+            return res.get_assigned_end();
+        } else {
+            panic!("Reservation (id: {:?}) does not contain a assigned end time.", reservation_id);
+        }
+    }
+
+    /// Returns the state of the provided reservation_id. Panics if no state was found.
+    pub fn get_state(&self, reservation_id: ReservationId) -> ReservationState {
+        if let Some(handle) = self.get(reservation_id) {
+            let res = handle.read().unwrap();
+            return res.get_state();
+        } else {
+            panic!("Reservation (id: {:?}) does not contain a assigned end time.", reservation_id);
+        }
+    }
+
+    /// Returns the task_duration of the provided reservation_id. Panics if no state was found.
+    pub fn get_task_duration(&self, reservation_id: ReservationId) -> i64 {
+        if let Some(handle) = self.get(reservation_id) {
+            let res = handle.read().unwrap();
+            return res.get_task_duration();
+        } else {
+            panic!("Reservation (id: {:?}) does not contain a assigned end time.", reservation_id);
+        }
+    }
+    /// Returns the ReservationProceeding state of the provided reservation_id. Panics if no state was found.
+    pub fn get_reservation_proceeding(&self, reservation_id: ReservationId) -> ReservationProceeding {
+        if let Some(handle) = self.get(reservation_id) {
+            let res = handle.read().unwrap();
+            return res.get_reservation_proceeding();
+        } else {
+            panic!("Reservation (id: {:?}) does not contain a assigned end time.", reservation_id);
+        }
+    }
+
+    /// Retrieves form the provided reservation id the is_moldable.
+    pub fn is_moldable(&self, reservation_id: ReservationId) -> bool {
+        if let Some(handle) = self.get(reservation_id) {
+            let res = handle.read().unwrap();
+            return res.is_moldable();
+        } else {
+            log::error!("Get reservation (id: {:?}) was not possible.", reservation_id);
+            return false;
+        }
+    }
+
+    /// Evaluates if a specific reservation has reached or exceeded a target
+    /// level of commitment in the distributed lifecycle.
+    ///
+    /// The progression hierarchy is defined as:
+    /// **Finished** > **Committed** > **ReserveAnswer** > **ProbeAnswer** >
+    /// **Open** > **Deleted** > **Rejected**.
+    ///
+    /// # Parameters
+    /// * `reservation_id` - The unique identifier of the reservation to check.
+    /// * `state` - The minimum required `ReservationState` to compare against.
+    ///
+    /// # Returns
+    /// Returns `true` if the current state of the reservation is equal to or
+    /// higher than the provided `state`. Returns `false` if the ID is not found.
+    pub fn is_reservation_state_at_least(&self, reservation_id: ReservationId, state: ReservationState) -> bool {
+        if let Some(handle) = self.get(reservation_id) {
+            let res = handle.read().unwrap();
+            if res.get_state() >= state { true } else { false }
+        } else {
+            log::error!("Get reservation (id: {:?}) was not possible.", reservation_id);
+            return false;
         }
     }
 

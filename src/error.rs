@@ -13,6 +13,9 @@ pub enum Error {
 
     #[error("Failed to build VRM system model:")]
     VrmSystemModelConstructionError,
+
+    #[error("Conversion error: {0}")]
+    Conversion(#[from] ConversionError),
 }
 
 #[derive(Debug, Error)]
@@ -30,7 +33,7 @@ pub enum ConversionError {
     AdcConstructionError(String),
 
     #[error("A system error occurred during conversion: {0}")]
-    SystemError(#[from] Error),
+    SystemError(#[from] Box<Error>),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

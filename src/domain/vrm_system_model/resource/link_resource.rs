@@ -3,6 +3,7 @@ use std::collections::HashSet;
 
 use crate::domain::vrm_system_model::reservation::link_reservation::LinkReservation;
 use crate::domain::vrm_system_model::reservation::reservation::Reservation;
+use crate::domain::vrm_system_model::reservation::reservation_store::{self, ReservationId, ReservationStore};
 use crate::domain::vrm_system_model::resource::{
     resource_trait::{Resource, ResourceId},
     resources::BaseResource,
@@ -46,30 +47,17 @@ impl Resource for LinkResource {
         &self.base.connected_routers
     }
 
-    fn can_handle(&self, reservation: &Box<dyn Reservation>) -> bool {
-        // 1. Check Type (Java: instanceof LinkReservation)
-        if let Some(link_res) = reservation.as_any().downcast_ref::<LinkReservation>() {
-            // 2. Check Logic specific to Links
-            if self.source
-                != link_res
-                    .start_point
-                    .clone()
-                    .expect("Start Point in LinkReservation was never set --> Workflow construction process contains an error!")
-                || self.target
-                    != link_res
-                        .end_point
-                        .clone()
-                        .expect("Start Point in LinkReservation was never set --> Workflow construction process contains an error!")
-            {
-                return false;
-            }
-        } else {
-            // Not a LinkReservation
-            return false;
-        }
+    fn can_handle(&self, reservation_store: ReservationStore, reservation_id: ReservationId) -> bool {
+        let link_source = reservation_store.get_start_point(reservation_id);
+        let link_target = reservation_store.get_end_point(reservation_id);
 
-        // 3. Check Capacity (Java: super.canHandle)
-        self.base.can_handle_capacity(reservation)
+        if link_source.is_none() || link_target.is_none() {
+            return false;
+        } else if self.source != link_source.unwrap() || self.target != link_target.unwrap() {
+            return false;
+        } else {
+            return self.base.can_handle_capacity(reservation_store, reservation_id);
+        }
     }
 
     fn as_any(&self) -> &dyn Any {

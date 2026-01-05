@@ -1,7 +1,11 @@
+use crate::api::vrm_system_model_dto::vrm_dto::VrmSystemModelDto;
 use crate::api::workflow_dto::client_dto::SystemModelDto;
+use crate::domain::vrm_system_model::vrm_system_model::VrmSystemModel;
 use crate::domain::vrm_system_model::workflow::client::SystemModel;
 use crate::error::Result;
 use crate::loader::parser::parse_json_file;
+
+use std::collections::HashMap;
 
 pub mod api;
 pub mod domain;
@@ -20,4 +24,17 @@ pub fn generate_system_model(file_path: &str) -> Result<SystemModel> {
     log::info!("Internal SystemModel constructed successfully.");
 
     Ok(system_model)
+}
+
+pub fn generate_vrm_model(file_path: &str) -> Result<VrmSystemModel> {
+    logger::init();
+    log::info!("Logger initialized. Starting VrmSystemModel construction.");
+
+    let root_dto: VrmSystemModelDto = parse_json_file::<VrmSystemModelDto>(file_path)?;
+    log::info!("JSON file parsed successfully.");
+
+    let vrm_system_model = VrmSystemModel::from_dto(root_dto)?;
+    log::info!("Internal SystemModel constructed successfully.");
+
+    Ok(vrm_system_model)
 }

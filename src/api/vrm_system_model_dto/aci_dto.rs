@@ -4,7 +4,7 @@ use serde::Deserialize;
 #[serde(rename_all = "camelCase")]
 pub struct AcIDto {
     pub id: String,
-    pub adc_ids: Vec<String>,
+    pub adc_id: String,
     pub commit_timeout: i64,
     pub rms_system: RMSSystemDto,
 }
@@ -13,7 +13,7 @@ pub struct AcIDto {
 #[serde(rename_all = "camelCase")]
 pub struct RMSSystemDto {
     pub typ: String,
-    pub scheduler_type: String,
+    pub scheduler_typ: String,
     pub slot_width: i64,
     pub num_of_slots: i64,
     pub grid_nodes: Vec<GridNodeDto>,

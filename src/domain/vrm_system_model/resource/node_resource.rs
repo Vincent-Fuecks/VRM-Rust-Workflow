@@ -1,4 +1,5 @@
 use crate::domain::vrm_system_model::reservation::reservation::Reservation;
+use crate::domain::vrm_system_model::reservation::reservation_store::{ReservationId, ReservationStore};
 use crate::domain::vrm_system_model::resource::{
     resource_trait::{Resource, ResourceId},
     resources::BaseResource,
@@ -29,8 +30,8 @@ impl Resource for NodeResource {
         &self.base.connected_routers
     }
 
-    fn can_handle(&self, reservation: &Box<dyn Reservation>) -> bool {
-        self.base.can_handle_capacity(reservation)
+    fn can_handle(&self, reservation_store: ReservationStore, reservation_id: ReservationId) -> bool {
+        self.base.can_handle_capacity(reservation_store, reservation_id)
     }
 
     fn as_any(&self) -> &dyn Any {
