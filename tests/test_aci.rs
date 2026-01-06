@@ -1,6 +1,7 @@
 use vrm_rust_workflow::api::vrm_system_model_dto::aci_dto::{AcIDto, RMSSystemDto};
 use vrm_rust_workflow::api::vrm_system_model_dto::vrm_dto::VrmSystemModelDto;
 
+use vrm_rust_workflow::domain::vrm_system_model::utils::id::AciId;
 use vrm_rust_workflow::domain::{
     simulator::simulator::SystemSimulator,
     vrm_system_model::{
@@ -8,7 +9,7 @@ use vrm_rust_workflow::domain::{
         reservation::reservation_store::{ReservationId, ReservationStore},
     },
 };
-use vrm_rust_workflow::generate_vrm_model;
+use vrm_rust_workflow::{generate_system_model, generate_vrm_model};
 
 #[derive(Debug, Clone)]
 struct MockSimulator {
@@ -63,9 +64,12 @@ impl SystemSimulator for MockSimulator {
 
 //     (aci, id)
 // }
-
+//     println!("{:#?}", vrm_system_model);
 #[test]
 fn test_aci_commit() {
     let vrm_system_model = generate_vrm_model("/home/vincent/Desktop/Repository/VRM-Rust-Workflow/src/data/vrm.json");
-    println!("{:#?}", vrm_system_model);
+    let aci_01 = vrm_system_model.unwrap().acis.get(&AciId::new("AcI-001")).unwrap();
+    let file_path: &str = "src/data/test/test_workflow_with_simple_co_allocation_graph.json";
+    let vrm = generate_system_model(file_path);
+    println!("{:#?}", vrm);
 }

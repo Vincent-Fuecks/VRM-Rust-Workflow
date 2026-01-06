@@ -500,4 +500,12 @@ impl AcI {
             ProcessingTime = processing_time,
         );
     }
+
+    pub fn get_average_network_speed(&self) -> f64 {
+        self.rms_system.get_average_link_capacity()
+    }
+
+    pub fn get_total_capacity(&self) -> i64 {
+        self.rms_system.get_total_capacity()
+    }
 }

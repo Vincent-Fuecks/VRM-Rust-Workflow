@@ -290,6 +290,14 @@ pub trait AdvanceReservationRms: Rms {
     fn can_handle(&self, reservation_store: ReservationStore, reservation_id: ReservationId) -> bool {
         self.get_base().resources.can_handle(reservation_store, reservation_id)
     }
+
+    fn get_average_link_capacity(&self) -> f64 {
+        self.get_base().resources.get_average_link_resource_capacity()
+    }
+
+    fn get_total_capacity(&self) -> i64 {
+        self.get_base().resources.get_total_capacity()
+    }
 }
 
 impl<T: Rms> AdvanceReservationRms for T {}

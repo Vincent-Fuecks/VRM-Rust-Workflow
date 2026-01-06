@@ -44,7 +44,7 @@ impl FromStr for RmsType {
 
     fn from_str(rms_type_dto: &str) -> Result<RmsType, Self::Err> {
         match rms_type_dto {
-            "nullRms" => Ok(RmsType::NullRms),
+            "NullRms" => Ok(RmsType::NullRms),
             "NullBroker" => Ok(RmsType::NullBroker),
             "Slurm" => Ok(RmsType::Slurm),
             _ => Err(ConversionError::UnknownRmsType(rms_type_dto.to_string())),

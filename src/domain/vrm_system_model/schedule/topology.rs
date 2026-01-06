@@ -1,10 +1,9 @@
 use crate::api::vrm_system_model_dto::aci_dto::RMSSystemDto;
 use crate::domain::simulator::simulator::SystemSimulator;
 use crate::domain::vrm_system_model::reservation;
-use crate::domain::vrm_system_model::reservation::reservation_store::{self, ReservationStore};
+use crate::domain::vrm_system_model::reservation::reservation_store::ReservationStore;
 use crate::domain::vrm_system_model::resource::link_resource::LinkResource;
 use crate::domain::vrm_system_model::resource::resource_trait::{Resource, ResourceId};
-use crate::domain::vrm_system_model::resource::resources::BaseResource;
 use crate::domain::vrm_system_model::schedule::slotted_schedule::SlottedSchedule;
 use crate::domain::vrm_system_model::utils::id::{LinkResourceId, RouterId, SlottedScheduleId};
 use crate::error::ConversionError;
@@ -86,7 +85,7 @@ pub struct NetworkTopology {
     importance_database: HashMap<LinkResourceId, f64>,
 
     /// A cache storing the calculated K-shortest paths between pairs of routers.
-    path_cache: HashMap<(RouterId, RouterId), Vec<Path>>,
+    pub path_cache: HashMap<(RouterId, RouterId), Vec<Path>>,
 
     /// Stores the "virtual" resources created for endpoint pairs
     pub virtual_link_resources: Vec<VirtualLinkResource>,
@@ -171,7 +170,7 @@ impl NetworkTopology {
                 if found_solutions.len() >= K_NUMBER_OF_PATHS {
                     break;
                 }
-            } else {
+            } else if self.adjacency.contains_key(&current_target_router_id) {
                 for outgoing_link_id in self.adjacency.get(&current_target_router_id).unwrap().clone().iter() {
                     let outgoing_link_target_id = self.network_links.get(&outgoing_link_id).unwrap().target.clone();
 
@@ -261,7 +260,7 @@ impl NetworkTopology {
     }
 
     /// Constructs the adjacency matrix for the network graph.
-    fn setup_adjacency_matrix(
+    pub fn setup_adjacency_matrix(
         network_links: &HashMap<LinkResourceId, LinkResource>,
         routers: &HashMap<RouterId, Router>,
     ) -> HashMap<RouterId, HashSet<LinkResourceId>> {
@@ -313,7 +312,7 @@ impl NetworkTopology {
     }
 
     /// Derives the set of all Routers from the DTO configurations (GirdNodes, LinkResources).
-    fn setup_routers(dto: &RMSSystemDto) -> HashMap<RouterId, Router> {
+    pub fn setup_routers(dto: &RMSSystemDto) -> HashMap<RouterId, Router> {
         let mut routers: HashMap<RouterId, Router> = HashMap::new();
 
         for grid_node in dto.grid_nodes.iter() {
@@ -343,7 +342,7 @@ impl NetworkTopology {
     }
 
     /// Initializes all `LinkResource` structs and the importance database.
-    fn setup_network_links(
+    pub fn setup_network_links(
         dto: &RMSSystemDto,
         simulator: Box<dyn SystemSimulator>,
         reservation_store: ReservationStore,

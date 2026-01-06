@@ -1,15 +1,39 @@
 use std::collections::HashMap;
 
 use crate::api::workflow_dto::client_dto::{ClientDto, SystemModelDto};
-use crate::domain::vrm_system_model::utils::id::{ClientId, WorkflowId};
+use crate::domain::vrm_system_model::reservation::reservations::Reservations;
+use crate::domain::vrm_system_model::utils::id::{AdcId, ClientId, WorkflowId};
 use crate::domain::vrm_system_model::workflow::workflow::Workflow;
 use crate::error::Result;
 
+/**
+ * Client for the user to submit one or more jobs to the VRM
+ * infrastructure. The client can be connected to an {@link ADC}
+ * or directly to an {@link AI}.
+ *
+ * The client reads a config file containing one or more jobs.
+ * These jobs are send to the {@link ADC} and automatically
+ * committed, if not specified otherwise. Each job may have a
+ * "arrival time" associated, the Client will wait then until
+ * this time is reached before submitting it. This feature is
+ * mainly for use in the simulation mode (see {@link Simulator}).
+ *
+ * All parameter are set in the {@link Reservation} object, also
+ * how the client should handle (see {@link ReservationProceeding})
+ * the reservation.
+ *
+ * @see ADC
+ * @see AI
+ */
 /// Represents a client, which can have multiple workflows.
 #[derive(Debug, Clone)]
 pub struct Client {
     pub id: ClientId,
     pub workflows: HashMap<WorkflowId, Workflow>,
+
+    unprocessed_reservations: Reservations,
+    open_reservations: Reservations,
+    adc_name: AdcId,
 }
 
 /// The root of the internal model, which can have multiple clients.
