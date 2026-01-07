@@ -2,7 +2,7 @@ use serde::Serialize;
 use std::fmt;
 use std::marker::PhantomData;
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Serialize)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Serialize)]
 pub struct Id<T> {
     pub id: String,
     _marker: PhantomData<T>,
@@ -24,6 +24,16 @@ impl<T> From<Id<T>> for String {
     fn from(id_wrapper: Id<T>) -> Self {
         // We can consume the Id<T> and extract the inner String
         id_wrapper.id
+    }
+}
+
+impl<T> fmt::Debug for Id<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let full_name = std::any::type_name::<T>();
+        let clean_name = full_name.split("::").last().unwrap_or(full_name);
+        let display_name = clean_name.replace("Tag", "Id");
+
+        write!(f, "{}: {:?}", display_name, self.id)
     }
 }
 

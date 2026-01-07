@@ -177,9 +177,7 @@ impl Schedule for super::SlottedSchedule {
         return;
     }
 
-    fn get_load_metric(&mut self, start_time: i64, mut end_time: i64) -> LoadMetric {
-        self.update();
-
+    fn get_load_metric(&self, start_time: i64, mut end_time: i64) -> LoadMetric {
         if end_time == i64::MIN {
             end_time = i64::MAX;
         }
@@ -218,6 +216,11 @@ impl Schedule for super::SlottedSchedule {
             possible_capacity: self.capacity as f64,
             utilization: avg_reserved_capacity / (self.capacity as f64),
         }
+    }
+
+    fn get_load_metric_up_to_date(&mut self, start_time: i64, end_time: i64) -> LoadMetric {
+        self.update();
+        self.get_load_metric(start_time, end_time)
     }
 
     fn get_system_fragmentation(&mut self) -> f64 {

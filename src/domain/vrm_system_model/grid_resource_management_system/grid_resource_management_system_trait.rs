@@ -163,7 +163,11 @@ pub trait ExtendedReservationProcessor {
     fn commit_shadow_schedule(&mut self, shadow_schedule_id: ShadowScheduleId) -> bool;
 
     /// Returns the current **Resource Load Metric** for a given time window.
-    fn get_load_metric(&mut self, start: i64, end: i64, shadow_schedule_id: Option<ShadowScheduleId>) -> LoadMetric;
+    fn get_load_metric_up_to_date(&mut self, start: i64, end: i64, shadow_schedule_id: Option<ShadowScheduleId>) -> LoadMetric;
+
+    /// Returns the **Resource Load Metric** without an update for a given time window.
+    /// Note: This **Resource Load Metric** could be outed.
+    fn get_load_metric(&self, start: i64, end: i64, shadow_schedule_id: Option<ShadowScheduleId>) -> LoadMetric;
 
     /// Retrieves **Simulation Load Metric** for the **overall simulation period**.
     fn get_simulation_load_metric(&mut self, shadow_schedule_id: Option<ShadowScheduleId>) -> LoadMetric;

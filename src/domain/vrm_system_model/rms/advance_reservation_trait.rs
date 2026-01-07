@@ -132,10 +132,29 @@ pub trait AdvanceReservationRms: Rms {
     /// # Returns
     ///
     /// A [`LoadMetric`] containing the calculated utilization metrics.
-    fn get_load_metric(&mut self, start: i64, end: i64, shadow_schedule_id: Option<ShadowScheduleId>) -> LoadMetric {
+    fn get_load_metric_up_to_date(&mut self, start: i64, end: i64, shadow_schedule_id: Option<ShadowScheduleId>) -> LoadMetric {
         match shadow_schedule_id {
-            Some(id) => self.get_mut_shadow_schedule(id).get_load_metric(start, end),
-            None => self.get_mut_master_schedule().get_load_metric(start, end),
+            Some(id) => self.get_mut_shadow_schedule(id).get_load_metric_up_to_date(start, end),
+            None => self.get_mut_master_schedule().get_load_metric_up_to_date(start, end),
+        }
+    }
+
+    /// Retrieves load metrics for a specific time range.
+    ///
+    /// # Arguments
+    ///
+    /// * `start` - The start of the time window in VRM time (seconds).
+    /// * `end` - The end of the time window in VRM time (seconds).
+    /// * `shadow_schedule_id` - If `Some`, queries the specified shadow schedule.
+    ///                          If `None`, queries the master schedule.
+    ///
+    /// # Returns
+    ///
+    /// A [`LoadMetric`] containing the calculated utilization metrics.
+    fn get_load_metric(&self, start: i64, end: i64, shadow_schedule_id: Option<ShadowScheduleId>) -> LoadMetric {
+        match shadow_schedule_id {
+            Some(id) => self.get_shadow_schedule(id).get_load_metric(start, end),
+            None => self.get_master_schedule().get_load_metric(start, end),
         }
     }
 
@@ -291,12 +310,20 @@ pub trait AdvanceReservationRms: Rms {
         self.get_base().resources.can_handle(reservation_store, reservation_id)
     }
 
-    fn get_average_link_capacity(&self) -> f64 {
-        self.get_base().resources.get_average_link_resource_capacity()
+    fn get_total_link_capacity(&self) -> i64 {
+        self.get_base().resources.get_total_link_capacity()
+    }
+
+    fn get_total_node_capacity(&self) -> i64 {
+        self.get_base().resources.get_total_node_capacity()
     }
 
     fn get_total_capacity(&self) -> i64 {
         self.get_base().resources.get_total_capacity()
+    }
+
+    fn get_link_resource_count(&self) -> usize {
+        self.get_base().resources.get_link_resource_count()
     }
 }
 

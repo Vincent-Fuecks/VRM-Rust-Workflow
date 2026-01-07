@@ -32,7 +32,7 @@ pub enum AcIOrder {
 
 impl AcIOrder {
     /// Generates a comparator for this order of AcIs.
-    pub fn get_comparator(&self) -> Box<dyn Fn(&mut AcIContainer, &mut AcIContainer) -> Ordering> {
+    pub fn get_comparator(&self) -> Box<dyn Fn(&AcIContainer, &AcIContainer) -> Ordering> {
         match *self {
             AcIOrder::OrderStartFirst => {
                 let position = PositionCompare::new(0);

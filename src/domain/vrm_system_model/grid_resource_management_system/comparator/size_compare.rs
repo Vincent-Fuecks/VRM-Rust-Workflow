@@ -17,7 +17,7 @@ impl SizeCompare {
     ///
     /// Note: if resource capacity of aci1 and aci2 are equal, is the registration_index of both acis compared.
     ///       In case both acis are the same `Ordering::Equal` is returned.
-    pub fn compare(&self, aci1: &mut AcIContainer, aci2: &mut AcIContainer) -> Ordering {
+    pub fn compare(&self, aci1: &AcIContainer, aci2: &AcIContainer) -> Ordering {
         if aci1.registration_index == aci2.registration_index {
             return Ordering::Equal;
         }

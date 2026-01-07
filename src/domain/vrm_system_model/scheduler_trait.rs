@@ -37,7 +37,21 @@ pub trait Schedule: Debug + Send + Sync + Any {
     /// # Returns
     ///
     /// A `LoadMetrics` structure detailing the average capacity utilization and reserved capacity.
-    fn get_load_metric(&mut self, start_time: i64, end_time: i64) -> LoadMetric;
+    fn get_load_metric_up_to_date(&mut self, start_time: i64, end_time: i64) -> LoadMetric;
+
+    /// Retrieves resource **load metrics** (e.g., average reserved capacity, utilization)
+    /// for a specified absolute time interval, which out an update.
+    ///
+    /// # Arguments
+    ///
+    /// * `start_time` - The absolute start time of the query interval (in seconds).
+    /// * `end_time` - The absolute end time of the query interval (in seconds).
+    ///
+    /// # Returns
+    ///
+    /// A `LoadMetrics` structure detailing the average capacity utilization and reserved capacity.
+    /// Note: The returned **Resource Load Metric** could be outed.
+    fn get_load_metric(&self, start_time: i64, end_time: i64) -> LoadMetric;
 
     /// Retrieves load metrics for the **effective overall simulation period**.
     ///

@@ -302,7 +302,11 @@ impl ExtendedReservationProcessor for AcI {
         return false;
     }
 
-    fn get_load_metric(&mut self, start: i64, end: i64, shadow_schedule_id: Option<ShadowScheduleId>) -> LoadMetric {
+    fn get_load_metric_up_to_date(&mut self, start: i64, end: i64, shadow_schedule_id: Option<ShadowScheduleId>) -> LoadMetric {
+        self.rms_system.get_load_metric_up_to_date(start, end, shadow_schedule_id)
+    }
+
+    fn get_load_metric(&self, start: i64, end: i64, shadow_schedule_id: Option<ShadowScheduleId>) -> LoadMetric {
         self.rms_system.get_load_metric(start, end, shadow_schedule_id)
     }
 
@@ -455,7 +459,7 @@ impl AcI {
                 (start, end, name, cap, workload, state, proceeding, tasks)
             };
 
-            let load_metric = self.rms_system.get_load_metric(start, end, None);
+            let load_metric = self.rms_system.get_load_metric_up_to_date(start, end, None);
 
             tracing::info!(
                 target: ANALYTICS_TARGET,
@@ -501,11 +505,19 @@ impl AcI {
         );
     }
 
-    pub fn get_average_network_speed(&self) -> f64 {
-        self.rms_system.get_average_link_capacity()
+    pub fn get_total_link_capacity(&self) -> i64 {
+        self.rms_system.get_total_link_capacity()
+    }
+
+    pub fn get_total_node_capacity(&self) -> i64 {
+        self.rms_system.get_total_node_capacity()
     }
 
     pub fn get_total_capacity(&self) -> i64 {
         self.rms_system.get_total_capacity()
+    }
+
+    pub fn get_link_resource_count(&self) -> usize {
+        self.rms_system.get_link_resource_count()
     }
 }

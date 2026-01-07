@@ -68,6 +68,12 @@ pub struct LoadMetric {
     pub utilization: f64,
 }
 
+impl LoadMetric {
+    pub fn new(start_time: i64, end_time: i64, avg_reserved_capacity: f64, possible_capacity: f64, utilization: f64) -> Self {
+        LoadMetric { start_time, end_time, avg_reserved_capacity, possible_capacity, utilization }
+    }
+}
+
 /// A circular buffer implementation used to track resource capacity usage.
 ///
 /// The `LoadBuffer` records load events over time and calculates utilization metrics.

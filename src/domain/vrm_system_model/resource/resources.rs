@@ -74,15 +74,17 @@ impl Resources {
         self.inner.iter().filter(|r| r.as_any().is::<LinkResource>()).count()
     }
 
-    /// Returns overall average link resource capacity of all link resources
-    pub fn get_average_link_resource_capacity(&self) -> f64 {
-        let total_avg_link_capacity: i64 =
-            self.inner.iter().filter_map(|r| r.as_any().downcast_ref::<LinkResource>()).map(|link| link.avg_bandwidth).sum();
-
-        return total_avg_link_capacity as f64 / self.get_link_resource_count() as f64;
+    /// Returns the aggregated sum of the link resource capacities
+    pub fn get_total_link_capacity(&self) -> i64 {
+        self.inner.iter().filter_map(|r| r.as_any().downcast_ref::<LinkResource>()).map(|link| link.avg_bandwidth).sum()
     }
 
-    /// Returns
+    /// Returns the aggregated sum of the node resource capacities
+    pub fn get_total_node_capacity(&self) -> i64 {
+        self.inner.iter().filter_map(|r| r.as_any().downcast_ref::<NodeResource>()).map(|node: &NodeResource| node.get_capacity()).sum()
+    }
+
+    /// Returns true, if provided RouterId exists in Router-List of RMS
     pub fn contains_router(&self, router_id: RouterId) -> bool {
         return self.router_list.contains(&router_id);
     }

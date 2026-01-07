@@ -25,7 +25,7 @@ impl LoadCompare {
     ///
     /// Note: if load of aci1 and aci2 are equal, is the registration_index of both acis compared.
     ///       In case both acis are the same `Ordering::Equal` is returned.
-    pub fn compare(&self, aci1: &mut AcIContainer, aci2: &mut AcIContainer) -> Ordering {
+    pub fn compare(&self, aci1: &AcIContainer, aci2: &AcIContainer) -> Ordering {
         let load1 = aci1.aci.get_load_metric(self.start as i64, self.end as i64, None).utilization;
         let load2 = aci2.aci.get_load_metric(self.start as i64, self.end as i64, None).utilization;
 

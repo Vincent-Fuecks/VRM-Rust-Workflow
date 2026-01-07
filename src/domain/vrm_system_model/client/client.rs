@@ -65,6 +65,9 @@ impl Client {
             workflows.insert(workflow_id, workflow);
         }
 
-        Ok(Client { id: client_id, workflows })
+        let adc_name = todo!();
+        let open_reservations = todo!();
+        let unprocessed_reservations = todo!();
+        Ok(Client { id: client_id, workflows, adc_name, open_reservations, unprocessed_reservations })
     }
 }

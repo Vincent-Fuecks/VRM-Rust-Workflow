@@ -15,7 +15,7 @@ impl PositionCompare {
     /// * `start_value`: all AcIs registered earlier (with a lower internal number) are assumed
     ///                  to be appended at the end of the list. But still in the order of the registration.
     ///
-    ///  Note: In case both acis are the same an error is logged and `Ordering::Equal` is returned.
+    ///  Note: In case both acis are the same `Ordering::Equal` is returned.
     pub fn new(start_value: usize) -> Self {
         Self { start: start_value }
     }
