@@ -22,8 +22,8 @@ impl SizeCompare {
             return Ordering::Equal;
         }
 
-        let capacity1 = aci1.aci.get_total_capacity();
-        let capacity2 = aci2.aci.get_total_capacity();
+        let capacity1 = aci1.grid_component.get_total_capacity();
+        let capacity2 = aci2.grid_component.get_total_capacity();
 
         match capacity1.cmp(&capacity2) {
             Ordering::Equal => aci1.registration_index.cmp(&aci2.registration_index),

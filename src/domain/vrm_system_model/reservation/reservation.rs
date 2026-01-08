@@ -3,6 +3,11 @@ use std::{any::Any, ops::Not};
 
 use crate::domain::vrm_system_model::utils::id::{ClientId, ComponentId, ReservationName};
 
+pub enum ReservationTyp {
+    Reservation,
+    Workflow,
+}
+
 pub trait Reservation: std::fmt::Debug + Any + Send + Sync {
     fn get_base(&self) -> &ReservationBase;
 
@@ -11,6 +16,10 @@ pub trait Reservation: std::fmt::Debug + Any + Send + Sync {
     fn box_clone(&self) -> Box<dyn Reservation>;
 
     fn as_any(&self) -> &dyn Any;
+
+    fn get_typ(&self) -> ReservationTyp {
+        ReservationTyp::Reservation
+    }
 
     fn get_name(&self) -> ReservationName {
         self.get_base().name.clone()

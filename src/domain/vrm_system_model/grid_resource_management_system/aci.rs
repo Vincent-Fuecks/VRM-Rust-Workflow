@@ -6,7 +6,7 @@ use crate::domain::vrm_system_model::reservation::reservation_store::{Reservatio
 use crate::domain::vrm_system_model::reservation::reservations::Reservations;
 use crate::domain::vrm_system_model::rms::advance_reservation_trait::AdvanceReservationRms;
 use crate::domain::vrm_system_model::rms::rms_type::RmsType;
-use crate::domain::vrm_system_model::utils::id::{AciId, AdcId, ClientId, ShadowScheduleId};
+use crate::domain::vrm_system_model::utils::id::{AciId, AdcId, ClientId, ComponentId, ShadowScheduleId};
 use crate::domain::vrm_system_model::utils::load_buffer::LoadMetric;
 use crate::domain::vrm_system_model::utils::statistics::ANALYTICS_TARGET;
 use crate::error::ConversionError;
@@ -145,7 +145,27 @@ impl TryFrom<(AcIDto, Box<dyn SystemSimulator>)> for AcI {
 }
 
 impl ExtendedReservationProcessor for AcI {
-    fn commit(&mut self, reservation_id: ReservationId) -> ReservationId {
+    fn get_id(&self) -> ComponentId {
+        ComponentId::new(self.id.to_string())
+    }
+
+    fn get_total_capacity(&self) -> i64 {
+        self.rms_system.get_total_capacity()
+    }
+
+    fn get_total_link_capacity(&self) -> i64 {
+        self.rms_system.get_total_link_capacity()
+    }
+
+    fn get_total_node_capacity(&self) -> i64 {
+        self.rms_system.get_total_node_capacity()
+    }
+
+    fn get_link_resource_count(&self) -> usize {
+        self.rms_system.get_link_resource_count()
+    }
+
+    fn commit(&mut self, reservation_id: ReservationId) -> bool {
         log::debug!("AcI {}: is committing reservation {:?}", self.id, reservation_id);
 
         let arrival_time: i64 = self.simulator.get_current_time_in_ms();
@@ -165,7 +185,7 @@ impl ExtendedReservationProcessor for AcI {
                         reservation_id,
                         self.id
                     );
-                    return reservation_id;
+                    return false;
                 } else {
                     // Implicit Reserve
                     let possible_reservation_id = self.rms_system.reserve(reservation_id, None).unwrap_or(reservation_id);
@@ -177,7 +197,7 @@ impl ExtendedReservationProcessor for AcI {
                             possible_reservation_id
                         );
                         self.log_stat("Commit".to_string(), possible_reservation_id, arrival_time);
-                        return possible_reservation_id;
+                        return false;
                     }
 
                     // Success: Create container and return new ID
@@ -203,7 +223,7 @@ impl ExtendedReservationProcessor for AcI {
 
         log::debug!("Committed reservation {:?} in AcI {}.", reservation_id, self.id);
         self.log_stat("Commit".to_string(), id_to_commit, arrival_time);
-        return id_to_commit;
+        return true;
     }
 
     fn commit_shadow_schedule(&mut self, shadow_schedule_id: ShadowScheduleId) -> bool {
@@ -350,15 +370,12 @@ impl ExtendedReservationProcessor for AcI {
         return prob_request_answer;
     }
 
-    fn probe_best<F>(
+    fn probe_best(
         &mut self,
         reservation_id: ReservationId,
         shadow_schedule_id: Option<ShadowScheduleId>,
-        mut comparator: F,
-    ) -> Option<ReservationId>
-    where
-        F: Fn(ReservationId, ReservationId) -> std::cmp::Ordering,
-    {
+        comparator: &mut dyn Fn(ReservationId, ReservationId) -> std::cmp::Ordering,
+    ) -> Option<ReservationId> {
         log::debug!("In AcI {} a probeBest request based on reservation {:?} is requested.", self.id, reservation_id);
 
         let arrival_time = self.simulator.get_current_time_in_ms();
@@ -372,7 +389,7 @@ impl ExtendedReservationProcessor for AcI {
             return None;
         }
 
-        let probe_best_answer = self.rms_system.probe_best(reservation_id, &mut comparator, shadow_schedule_id);
+        let probe_best_answer = self.rms_system.probe_best(reservation_id, comparator, shadow_schedule_id);
         return probe_best_answer;
     }
 
@@ -503,21 +520,5 @@ impl AcI {
             ProbeAnswers = num_of_answers,
             ProcessingTime = processing_time,
         );
-    }
-
-    pub fn get_total_link_capacity(&self) -> i64 {
-        self.rms_system.get_total_link_capacity()
-    }
-
-    pub fn get_total_node_capacity(&self) -> i64 {
-        self.rms_system.get_total_node_capacity()
-    }
-
-    pub fn get_total_capacity(&self) -> i64 {
-        self.rms_system.get_total_capacity()
-    }
-
-    pub fn get_link_resource_count(&self) -> usize {
-        self.rms_system.get_link_resource_count()
     }
 }

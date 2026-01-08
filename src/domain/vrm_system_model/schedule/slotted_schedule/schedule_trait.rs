@@ -199,8 +199,11 @@ impl Schedule for super::SlottedSchedule {
             let real_slot_index = self.get_real_slot_index(real_slot_index);
             reserved_capacity_sum += self.get_slot_load(real_slot_index);
         }
+        let mut number_of_slots = 0;
 
-        let number_of_slots: i64 = end_slot_nr - start_slot_nr;
+        if self.slots.len() > 0 {
+            number_of_slots = end_slot_nr - start_slot_nr + 1;
+        }
 
         if number_of_slots < 0 {
             log::error!("The number of slots should never be negative.")

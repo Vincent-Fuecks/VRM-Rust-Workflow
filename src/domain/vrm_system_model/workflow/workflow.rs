@@ -1,9 +1,12 @@
 use core::f64;
+use std::any::Any;
 use std::collections::HashMap;
 
 use crate::api::workflow_dto::reservation_dto::{ReservationProceedingDto, ReservationStateDto};
 use crate::api::workflow_dto::workflow_dto::{TaskDto, WorkflowDto};
-use crate::domain::vrm_system_model::reservation::reservation::{ReservationBase, ReservationProceeding, ReservationState};
+use crate::domain::vrm_system_model::reservation::reservation::{
+    Reservation, ReservationBase, ReservationProceeding, ReservationState, ReservationTyp,
+};
 use crate::domain::vrm_system_model::reservation::{link_reservation::LinkReservation, node_reservation::NodeReservation};
 use crate::domain::vrm_system_model::utils::id::{
     ClientId, CoAllocationDependencyId, CoAllocationId, DataDependencyId, ReservationName, SyncDependencyId, WorkflowNodeId,
@@ -660,7 +663,7 @@ impl Workflow {
     /// A `Vec<Option<WorkflowNode>>` containing the `representative` node for
     /// every `CoAllocation` in the workflow, ordered by `rank_upward` in descending
     /// order (largest ranks are first).
-    fn calculate_upward_rank(mut self, avg_net_speed: i64) -> Vec<Option<WorkflowNode>> {
+    pub fn calculate_upward_rank(mut self, avg_net_speed: i64) -> Vec<WorkflowNode> {
         let mut finished_node_keys: Vec<CoAllocationId> = Vec::with_capacity(self.co_allocations.len());
         let mut queue: Vec<CoAllocationId> = Vec::new();
 
@@ -744,7 +747,7 @@ impl Workflow {
         });
 
         // 7. Map keys to the representative nodes
-        return finished_node_keys.into_iter().map(|key| self.co_allocations.get(&key).unwrap().representative.clone()).collect();
+        return finished_node_keys.into_iter().map(|key| self.co_allocations.get(&key).unwrap().representative.clone().unwrap()).collect();
     }
 
     /// Computes the downward rank for all `CoAllocation`s in the Workflow.
@@ -840,5 +843,27 @@ impl Workflow {
         });
 
         return finished_node_keys.into_iter().map(|key| self.co_allocations.get(&key).unwrap().representative.clone()).collect();
+    }
+}
+
+impl Reservation for Workflow {
+    fn get_base(&self) -> &ReservationBase {
+        &self.base
+    }
+
+    fn get_base_mut(&mut self) -> &mut ReservationBase {
+        &mut self.base
+    }
+
+    fn box_clone(&self) -> Box<dyn Reservation> {
+        Box::new(self.clone())
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn get_typ(&self) -> ReservationTyp {
+        ReservationTyp::Workflow
     }
 }

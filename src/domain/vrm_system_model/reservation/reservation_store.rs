@@ -5,8 +5,10 @@ use std::fmt::Debug;
 use std::sync::{Arc, RwLock};
 
 use crate::domain::vrm_system_model::reservation::link_reservation::LinkReservation;
-use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationProceeding, ReservationState};
+use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationProceeding, ReservationState, ReservationTyp};
 use crate::domain::vrm_system_model::utils::id::{ClientId, ComponentId, ReservationName, RouterId};
+use crate::domain::vrm_system_model::workflow::workflow::Workflow;
+use crate::domain::vrm_system_model::workflow::workflow_node::WorkflowNode;
 
 // TODO Move in separate file
 pub trait NotificationListener: Send + Sync + Debug {
@@ -170,6 +172,16 @@ impl ReservationStore {
         }
     }
 
+    /// Returns the handler_id of the provided reservation_id. Panics if no handler_id was found.
+    pub fn get_handler_id(&self, reservation_id: ReservationId) -> Option<ComponentId> {
+        if let Some(handle) = self.get(reservation_id) {
+            let res = handle.read().unwrap();
+            return res.get_handler_id();
+        } else {
+            panic!("Reservation (id: {:?}) does not contain a handler id.", reservation_id);
+        }
+    }
+
     /// Returns the assigned_start of the provided reservation_id. Panics if no client id was found.
     pub fn get_assigned_start(&self, reservation_id: ReservationId) -> i64 {
         if let Some(handle) = self.get(reservation_id) {
@@ -209,13 +221,24 @@ impl ReservationStore {
             panic!("Reservation (id: {:?}) does not contain a assigned end time.", reservation_id);
         }
     }
+
     /// Returns the ReservationProceeding state of the provided reservation_id. Panics if no state was found.
     pub fn get_reservation_proceeding(&self, reservation_id: ReservationId) -> ReservationProceeding {
         if let Some(handle) = self.get(reservation_id) {
             let res = handle.read().unwrap();
             return res.get_reservation_proceeding();
         } else {
-            panic!("Reservation (id: {:?}) does not contain a assigned end time.", reservation_id);
+            panic!("Reservation (id: {:?}) does not contain the ReservationProceeding value.", reservation_id);
+        }
+    }
+
+    /// Returns the booking_interval_start of the provided reservation_id. Panics if no value was found.
+    pub fn get_booking_interval_start(&self, reservation_id: ReservationId) -> i64 {
+        if let Some(handle) = self.get(reservation_id) {
+            let res = handle.read().unwrap();
+            return res.get_booking_interval_start();
+        } else {
+            panic!("Reservation (id: {:?}) does not contain a booking interval start time.", reservation_id);
         }
     }
 
@@ -228,6 +251,29 @@ impl ReservationStore {
             log::error!("Get reservation (id: {:?}) was not possible.", reservation_id);
             return false;
         }
+    }
+
+    pub fn is_workflow(&self, reservation_id: ReservationId) -> bool {
+        if let Some(handle) = self.get(reservation_id) {
+            let res = handle.read().unwrap();
+            return matches!(res.get_typ(), ReservationTyp::Workflow);
+        } else {
+            log::error!("Get reservation (id: {:?}) was not possible.", reservation_id);
+            return false;
+        }
+    }
+
+    pub fn get_upward_rank(&self, reservation_id: ReservationId, average_link_speed: i64) -> Option<Vec<WorkflowNode>> {
+        if let Some(handle) = self.get(reservation_id) {
+            let res = handle.read().unwrap();
+            if let Some(workflow) = res.as_any().downcast_ref::<Workflow>() {
+                return Some(workflow.clone().calculate_upward_rank(average_link_speed));
+            } else {
+                log::error!("Reservation {:?} is not a Workflow", reservation_id);
+            }
+        }
+
+        return None;
     }
 
     /// Evaluates if a specific reservation has reached or exceeded a target

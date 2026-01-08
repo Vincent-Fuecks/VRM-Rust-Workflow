@@ -1,12 +1,22 @@
+use crate::domain::simulator;
+use crate::domain::simulator::simulator::Simulator;
+use crate::domain::simulator::simulator::SystemSimulator;
+use crate::domain::vrm_system_model::grid_resource_management_system::aci::{AcI, ScheduleID};
+use crate::domain::vrm_system_model::grid_resource_management_system::aci_order::AcIOrder;
+use crate::domain::vrm_system_model::grid_resource_management_system::grid_resource_management_system_trait::ExtendedReservationProcessor;
+use crate::domain::vrm_system_model::reservation::reservation_store::ReservationStore;
+use crate::domain::vrm_system_model::schedule::slotted_schedule::SlottedSchedule;
+use crate::domain::vrm_system_model::scheduler_trait::Schedule;
+use crate::domain::vrm_system_model::utils::id::{AciId, AdcId, ComponentId, ShadowScheduleId, SlottedScheduleId};
+use crate::domain::vrm_system_model::utils::load_buffer::LoadMetric;
+use lazy_static::lazy_static;
 use rand::rng;
 use rand::seq::SliceRandom;
 use std::collections::{HashMap, HashSet};
 
-use crate::domain::vrm_system_model::grid_resource_management_system::aci::AcI;
-use crate::domain::vrm_system_model::grid_resource_management_system::aci_order::AcIOrder;
-use crate::domain::vrm_system_model::grid_resource_management_system::grid_resource_management_system_trait::ExtendedReservationProcessor;
-use crate::domain::vrm_system_model::utils::id::{AciId, AdcId, ShadowScheduleId};
-use crate::domain::vrm_system_model::utils::load_buffer::LoadMetric;
+lazy_static! {
+    pub static ref DUMMY_COMPONENT_ID: ComponentId = ComponentId::new("ADC INTERNAL JOB");
+}
 
 // TODO Functions must be synchronized with the AcIs
 // TODO Old Java Version contained all resources and enabled access to them looks like this is now not necessary
@@ -17,7 +27,11 @@ use crate::domain::vrm_system_model::utils::load_buffer::LoadMetric;
 /// reliability (failures), capacity, and registration order.
 #[derive(Debug)]
 pub struct AcIContainer {
-    pub aci: AcI,
+    // Contains a AcI or ADC
+    pub grid_component: Box<dyn ExtendedReservationProcessor>,
+
+    // AKA SlottedSchedule
+    pub schedule: Box<dyn Schedule>,
 
     /// The sequence number assigned at registration time, used for stable sorting.
     pub registration_index: usize,
@@ -33,8 +47,26 @@ pub struct AcIContainer {
 }
 
 impl AcIContainer {
-    pub fn new(aci: AcI, registration_index: usize, total_link_capacity: i64, link_resource_count: usize) -> Self {
-        Self { aci, registration_index, total_link_capacity, link_resource_count, failures: 0 }
+    pub fn new(
+        grid_component: Box<dyn ExtendedReservationProcessor>,
+        simulator: Box<dyn SystemSimulator>,
+        reservation_store: ReservationStore,
+        registration_index: usize,
+        number_of_real_slots: i64,
+        slot_width: i64,
+        total_link_capacity: i64,
+        link_resource_count: usize,
+    ) -> Self {
+        let component_id = grid_component.get_id();
+        // TODO Add Option for different schedule
+        let scheduler_id = SlottedScheduleId::new(format!("ADC View for AcI: {:?}", component_id));
+
+        let total_capacity = grid_component.get_total_capacity();
+
+        let schedule =
+            Box::new(SlottedSchedule::new(scheduler_id, number_of_real_slots, slot_width, total_capacity, false, simulator, reservation_store));
+
+        Self { grid_component, schedule, registration_index, total_link_capacity, link_resource_count, failures: 0 }
     }
 }
 
@@ -57,7 +89,7 @@ pub struct AcIManager {
     adc_id: AdcId,
 
     /// Map of `AciId` to their container wrappers.
-    acis: HashMap<AciId, AcIContainer>,
+    grid_components: HashMap<ComponentId, AcIContainer>,
 
     /// The aggregated sum of link capacities of all registered AcIs (does not mean free capacity).
     total_link_capacity: i64,
@@ -70,33 +102,53 @@ pub struct AcIManager {
 }
 
 impl AcIManager {
-    pub fn new(adc_id: AdcId, aci_set: HashSet<AcI>) -> Self {
-        let mut acis = HashMap::with_capacity(aci_set.len());
+    pub fn new(
+        adc_id: AdcId,
+        grid_component_set: HashSet<Box<dyn ExtendedReservationProcessor>>,
+        simulator: Box<dyn SystemSimulator>,
+        reservation_store: ReservationStore,
+        number_of_real_slots: i64,
+        slot_width: i64,
+    ) -> Self {
+        let mut grid_components = HashMap::with_capacity(grid_component_set.len());
         let mut registration_counter = 0;
         let mut aci_manager_total_link_capacity = 0;
         let mut aci_manager_link_resource_count = 0;
 
-        for aci in aci_set {
-            let aci_id = aci.id.clone();
-            let total_link_capacity = aci.get_total_link_capacity();
-            let link_resource_count = aci.get_link_resource_count();
+        for grid_component in grid_component_set {
+            let aci_id = grid_component.get_id().clone();
+            let total_link_capacity = grid_component.get_total_link_capacity();
+            let link_resource_count = grid_component.get_link_resource_count();
 
             aci_manager_total_link_capacity += total_link_capacity;
             aci_manager_link_resource_count += link_resource_count;
 
-            let container = AcIContainer::new(aci, registration_counter, total_link_capacity, link_resource_count);
-            registration_counter += 1;
+            let container = AcIContainer::new(
+                grid_component,
+                simulator.clone_box(),
+                reservation_store.clone(),
+                registration_counter,
+                number_of_real_slots,
+                slot_width,
+                total_link_capacity,
+                link_resource_count,
+            );
 
-            acis.insert(aci_id, container);
+            registration_counter += 1;
+            grid_components.insert(aci_id, container);
         }
 
         AcIManager {
             adc_id,
-            acis,
+            grid_components,
             total_link_capacity: aci_manager_total_link_capacity,
             link_resource_count: aci_manager_link_resource_count,
             registration_counter,
         }
+    }
+
+    pub fn get_component_mut(&mut self, component_id: ComponentId) -> Option<&mut AcIContainer> {
+        self.grid_components.get_mut(&component_id)
     }
 
     /// Increments and returns the next available registration counter.
@@ -123,28 +175,44 @@ impl AcIManager {
     /// # Returns
     /// * `true` - If the AcI was successfully added.
     /// * `false` - If the AcI ID already exists or if an insertion error occurred (integrity compromised).
-    pub fn add_aci(&mut self, aci: AcI) -> bool {
-        if self.acis.contains_key(&aci.id) {
+    pub fn add_aci(
+        &mut self,
+        grid_component: Box<dyn ExtendedReservationProcessor>,
+        simulator: Box<dyn SystemSimulator>,
+        reservation_store: ReservationStore,
+        number_of_real_slots: i64,
+        slot_width: i64,
+    ) -> bool {
+        if self.grid_components.contains_key(&grid_component.get_id()) {
             log::error!(
                 "Process of adding a new AcI to the AciManger failed. It is not allowed to add the same aci multiple times. Please first delete the AcI: {}.",
-                aci.id
+                grid_component.get_id()
             );
             return false;
         }
 
-        let aci_id = aci.id.clone();
-        let total_link_capacity = aci.get_total_link_capacity();
-        let link_resource_count = aci.get_link_resource_count();
+        let grid_component_id = grid_component.get_id();
+        let total_link_capacity = grid_component.get_total_link_capacity();
+        let link_resource_count = grid_component.get_link_resource_count();
         let registration_index = self.get_new_registration_counter();
 
-        let container = AcIContainer::new(aci, registration_index, total_link_capacity, link_resource_count);
+        let container = AcIContainer::new(
+            grid_component,
+            simulator,
+            reservation_store,
+            registration_index,
+            number_of_real_slots,
+            slot_width,
+            total_link_capacity,
+            link_resource_count,
+        );
 
-        if self.acis.insert(aci_id.clone(), container).is_none() {
+        if self.grid_components.insert(grid_component_id.clone(), container).is_none() {
             return true;
         } else {
             log::error!(
                 "Error happened in the process of adding a new AcI: {} to the AciManager (Adc: {}). The AciManger is now compromised.",
-                aci_id,
+                grid_component_id,
                 self.adc_id
             );
             return false;
@@ -161,8 +229,8 @@ impl AcIManager {
     /// # Returns
     /// * `true` - If the AcI was found and removed.
     /// * `false` - If the AcI ID was not found.
-    pub fn delete_aci(&mut self, aci_id: AciId) -> bool {
-        let container = self.acis.remove(&aci_id);
+    pub fn delete_aci(&mut self, component_id: ComponentId) -> bool {
+        let container = self.grid_components.remove(&component_id);
         match container {
             Some(container) => {
                 self.total_link_capacity -= container.total_link_capacity;
@@ -172,7 +240,7 @@ impl AcIManager {
             None => {
                 log::error!(
                     "The process of deleting the AcI: {} form AciManager (Adc: {}). Failed, because the AciId was not present in the AciManager.",
-                    aci_id,
+                    component_id,
                     self.adc_id
                 );
                 return false;
@@ -184,8 +252,8 @@ impl AcIManager {
     ///
     /// # Returns
     /// A `Vec<AciId>` where the AciIds are in random order.
-    pub fn get_random_ordered_acis(&self) -> Vec<AciId> {
-        let mut keys: Vec<AciId> = self.acis.keys().cloned().into_iter().collect();
+    pub fn get_random_ordered_acis(&self) -> Vec<ComponentId> {
+        let mut keys: Vec<ComponentId> = self.grid_components.keys().cloned().into_iter().collect();
         keys.shuffle(&mut rng());
         return keys;
     }
@@ -195,13 +263,13 @@ impl AcIManager {
     ///
     /// # Returns
     /// A `Vec<AciId>` sorted based on the comparator provided by `AcIOrder`.
-    pub fn get_ordered_acis(&self, request_order: AcIOrder) -> Vec<AciId> {
+    pub fn get_ordered_acis(&self, request_order: AcIOrder) -> Vec<ComponentId> {
         let comparator = request_order.get_comparator();
-        let mut acis_vec: Vec<&AcIContainer> = self.acis.values().collect();
+        let mut acis_vec: Vec<&AcIContainer> = self.grid_components.values().collect();
 
         acis_vec.sort_unstable_by(|a, b| comparator(a, b));
 
-        let sorted_keys: Vec<AciId> = acis_vec.into_iter().map(|container| container.aci.id.clone()).collect();
+        let sorted_keys: Vec<ComponentId> = acis_vec.into_iter().map(|container| container.grid_component.get_id()).collect();
         return sorted_keys;
     }
 
@@ -227,8 +295,8 @@ impl AcIManager {
         let mut satisfaction_sum = 0.0;
         let mut total_capacity = 0.0;
 
-        for (id, container) in self.acis.iter_mut() {
-            let satisfaction = container.aci.get_satisfaction(start, end, shadow_schedule_id.clone());
+        for (id, container) in self.grid_components.iter_mut() {
+            let satisfaction = container.grid_component.get_satisfaction(start, end, shadow_schedule_id.clone());
 
             if satisfaction < 0.0 {
                 log::debug!(
@@ -238,7 +306,7 @@ impl AcIManager {
                     shadow_schedule_id
                 );
             } else {
-                let cap = container.aci.get_total_node_capacity() as f64;
+                let cap = container.grid_component.get_total_node_capacity() as f64;
                 satisfaction_sum += satisfaction * cap;
                 total_capacity += cap;
             }
@@ -266,8 +334,8 @@ impl AcIManager {
         let mut satisfaction_sum = 0.0;
         let mut total_capacity = 0.0;
 
-        for (id, container) in self.acis.iter_mut() {
-            let satisfaction = container.aci.get_system_satisfaction(shadow_schedule_id.clone());
+        for (id, container) in self.grid_components.iter_mut() {
+            let satisfaction = container.grid_component.get_system_satisfaction(shadow_schedule_id.clone());
             if satisfaction < 0.0 {
                 log::debug!(
                     "System satisfaction of AcI is not allowed to be negative. ADC: {}, AcIs:  {} with ShadowScheduleId: {:?}",
@@ -276,7 +344,7 @@ impl AcIManager {
                     shadow_schedule_id
                 );
             } else {
-                let cap = container.aci.get_total_node_capacity() as f64;
+                let cap = container.grid_component.get_total_node_capacity() as f64;
                 satisfaction_sum += satisfaction * cap;
                 total_capacity += cap;
             }
@@ -304,8 +372,8 @@ impl AcIManager {
         let mut latest_end = i64::MIN;
         let mut num_of_valid_acis = 0;
 
-        for (id, container) in self.acis.iter_mut() {
-            let load_matic = container.aci.get_load_metric_up_to_date(start, end, shadow_schedule_id.clone());
+        for (id, container) in self.grid_components.iter_mut() {
+            let load_matic = container.grid_component.get_load_metric_up_to_date(start, end, shadow_schedule_id.clone());
 
             if load_matic.start_time < 0 {
                 log::debug!(
@@ -362,8 +430,8 @@ impl AcIManager {
         let mut latest_end = i64::MIN;
         let mut num_of_valid_acis = 0;
 
-        for (id, container) in self.acis.iter_mut() {
-            let load_matic = container.aci.get_simulation_load_metric(shadow_schedule_id.clone());
+        for (id, container) in self.grid_components.iter_mut() {
+            let load_matic = container.grid_component.get_simulation_load_metric(shadow_schedule_id.clone());
 
             if load_matic.start_time < 0 {
                 log::debug!(

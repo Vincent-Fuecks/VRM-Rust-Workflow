@@ -2,7 +2,7 @@ use crate::domain::vrm_system_model::grid_resource_management_system::reservatio
 use crate::domain::vrm_system_model::reservation::reservation::Reservation;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationId;
 use crate::domain::vrm_system_model::reservation::reservations::Reservations;
-use crate::domain::vrm_system_model::utils::id::ShadowScheduleId;
+use crate::domain::vrm_system_model::utils::id::{ComponentId, ShadowScheduleId};
 use crate::domain::vrm_system_model::utils::load_buffer::LoadMetric;
 
 use std::cmp::Ordering;
@@ -29,7 +29,22 @@ use std::cmp::Ordering;
 /// This interface allows operations to be performed against a "Shadow Schedule" a sandbox
 /// environment used to simulate scheduling changes without affecting the live production
 /// resource flow.
-pub trait ExtendedReservationProcessor {
+pub trait ExtendedReservationProcessor: std::fmt::Debug {
+    /// Returns the unique identifier of the component (AcI or ADC).
+    fn get_id(&self) -> ComponentId;
+
+    /// Returns the total capacity of the component.
+    fn get_total_capacity(&self) -> i64;
+
+    /// Returns the total link capacity of the component.
+    fn get_total_link_capacity(&self) -> i64;
+
+    /// Returns the number of distinct link resources.
+    fn get_link_resource_count(&self) -> usize;
+
+    /// Returns the total node capacity (often same as total capacity depending on model).
+    fn get_total_node_capacity(&self) -> i64;
+
     /// Sends a **Probe Request** to the resource management system.
     ///
     /// This is a read-only operation used to gather potential configurations for a
@@ -53,9 +68,12 @@ pub trait ExtendedReservationProcessor {
     ///
     /// This utility method probes the system and automatically selects the "best"
     /// option (e.g., earliest start time or lowest cost) as defined by the `comparator`.
-    fn probe_best<F>(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>, comparator: F) -> Option<ReservationId>
-    where
-        F: Fn(ReservationId, ReservationId) -> Ordering;
+    fn probe_best(
+        &mut self,
+        reservation_id: ReservationId,
+        shadow_schedule_id: Option<ShadowScheduleId>,
+        comparator: &mut dyn Fn(ReservationId, ReservationId) -> Ordering,
+    ) -> Option<ReservationId>;
 
     /// Sends a **Reserve Request** to initiate a preliminary commitment.
     ///
@@ -86,9 +104,11 @@ pub trait ExtendedReservationProcessor {
     /// * `reservation_id` - The task to commit.
     ///
     /// # Returns
-    /// A `ReservationId` indicating the final status. Success is confirmed if the
-    /// state of the reservation is `ReservationState::Committed`.
-    fn commit(&mut self, reservation_id: ReservationId) -> ReservationId;
+    ///  `true`     if the reservation of the provided `ReservationId` was committed and the
+    ///             state of the reservation is now `ReservationState::Committed`.
+    ///  `false`    if during the reservation process an error was encountered or the reservation state is not
+    ///             `ReservationState::Committed`.
+    fn commit(&mut self, reservation_id: ReservationId) -> bool;
 
     /// Sends a **Delete Request** to remove a task from the schedule.
     ///
