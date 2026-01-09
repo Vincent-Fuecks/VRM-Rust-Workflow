@@ -6,6 +6,7 @@ use crate::domain::vrm_system_model::utils::id::SlottedScheduleId;
 
 use crate::error::ConversionError;
 use std::str::FromStr;
+use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SchedulerType {
@@ -50,7 +51,7 @@ impl SchedulerType {
         number_of_slots: i64,
         slot_width: i64,
         capacity: i64,
-        simulator: Box<dyn SystemSimulator>,
+        simulator: Arc<dyn SystemSimulator>,
         reservation_store: ReservationStore,
     ) -> Box<dyn Schedule> {
         let use_quadratic_mean_fragmentation = true;

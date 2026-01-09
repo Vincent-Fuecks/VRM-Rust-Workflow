@@ -40,58 +40,29 @@ impl Reservations {
         self.reservations.contains(id)
     }
 
-    pub fn set_state(&mut self, id: &ReservationId, state: ReservationState) {
-        if let Some(handle) = self.reservation_store.get(*id) {
-            let mut res = handle.write().unwrap();
-            res.set_state(state);
-        } else {
-            log::error!("Get reservation (id: {:?}) was not possible.", id)
-        }
+    // TODO Should we send an update to each Component with interest?! Update_state is doing this.
+    pub fn set_state(&mut self, id: &ReservationId, new_state: ReservationState) {
+        self.reservation_store.update_state(id.clone(), new_state);
     }
 
     pub fn set_frag_delta(&mut self, id: &ReservationId, frag_delta: f64) {
-        if let Some(handle) = self.reservation_store.get(*id) {
-            let mut res = handle.write().unwrap();
-            res.set_frag_delta(frag_delta);
-        } else {
-            log::error!("Get reservation (id: {:?}) was not possible.", id)
-        }
+        self.reservation_store.set_frag_delta(id.clone(), frag_delta);
     }
 
     pub fn set_booking_interval_start(&mut self, id: &ReservationId, booking_interval_start: i64) {
-        if let Some(handle) = self.reservation_store.get(*id) {
-            let mut res = handle.write().unwrap();
-            res.set_booking_interval_start(booking_interval_start);
-        } else {
-            log::error!("Get reservation (id: {:?}) was not possible.", id)
-        }
+        self.reservation_store.set_booking_interval_start(id.clone(), booking_interval_start);
     }
 
     pub fn set_booking_interval_end(&mut self, id: &ReservationId, booking_interval_end: i64) {
-        if let Some(handle) = self.reservation_store.get(*id) {
-            let mut res = handle.write().unwrap();
-            res.set_booking_interval_end(booking_interval_end);
-        } else {
-            log::error!("Get reservation (id: {:?}) was not possible.", id)
-        }
+        self.reservation_store.set_booking_interval_end(id.clone(), booking_interval_end);
     }
 
     pub fn set_assigned_start(&mut self, id: &ReservationId, assigned_start: i64) {
-        if let Some(handle) = self.reservation_store.get(*id) {
-            let mut res = handle.write().unwrap();
-            res.set_assigned_start(assigned_start);
-        } else {
-            log::error!("Get reservation (id: {:?}) was not possible.", id)
-        }
+        self.reservation_store.set_assigned_start(id.clone(), assigned_start);
     }
 
     pub fn set_assigned_end(&mut self, id: &ReservationId, assigned_end: i64) {
-        if let Some(handle) = self.reservation_store.get(*id) {
-            let mut res = handle.write().unwrap();
-            res.set_assigned_end(assigned_end);
-        } else {
-            log::error!("Get reservation (id: {:?}) was not possible.", id)
-        }
+        self.reservation_store.set_assigned_end(id.clone(), assigned_end);
     }
 
     pub fn len(&self) -> usize {
@@ -127,60 +98,34 @@ impl Reservations {
     }
 
     pub fn get_assigned_start(&self, id: &ReservationId) -> i64 {
-        match self.reservation_store.get(*id) {
-            Some(res) => res.read().unwrap().get_assigned_start(),
-            None => panic!("Getting reservation (id: {:?}) was not possible.", id),
-        }
+        self.reservation_store.get_assigned_start(id.clone())
     }
 
     pub fn get_assigned_end(&self, id: &ReservationId) -> i64 {
-        match self.reservation_store.get(*id) {
-            Some(res) => res.read().unwrap().get_assigned_end(),
-            None => panic!("Getting reservation (id: {:?}) was not possible.", id),
-        }
+        self.reservation_store.get_assigned_end(id.clone())
     }
 
     pub fn get_booking_interval_start(&self, id: &ReservationId) -> i64 {
-        match self.reservation_store.get(*id) {
-            Some(res) => res.read().unwrap().get_booking_interval_start(),
-            None => panic!("Getting reservation (id: {:?}) was not possible.", id),
-        }
+        self.reservation_store.get_booking_interval_start(id.clone())
     }
 
     pub fn get_booking_interval_end(&self, id: &ReservationId) -> i64 {
-        match self.reservation_store.get(*id) {
-            Some(res) => res.read().unwrap().get_booking_interval_end(),
-            None => panic!("Getting reservation (id: {:?}) was not possible.", id),
-        }
+        self.reservation_store.get_booking_interval_end(id.clone())
     }
 
     pub fn get_task_duration(&self, id: &ReservationId) -> i64 {
-        match self.reservation_store.get(*id) {
-            Some(res) => res.read().unwrap().get_task_duration(),
-            None => panic!("Getting reservation (id: {:?}) was not possible.", id),
-        }
+        self.reservation_store.get_task_duration(id.clone())
     }
 
     pub fn get_is_moldable(&self, id: &ReservationId) -> bool {
-        match self.reservation_store.get(*id) {
-            Some(res) => res.read().unwrap().is_moldable(),
-            None => panic!("Getting reservation (id: {:?}) was not possible.", id),
-        }
+        self.reservation_store.is_moldable(id.clone())
     }
 
     pub fn get_reserved_capacity(&self, id: &ReservationId) -> i64 {
-        match self.reservation_store.get(*id) {
-            Some(res) => res.read().unwrap().get_reserved_capacity(),
-            None => panic!("Getting reservation (id: {:?}) was not possible.", id),
-        }
+        self.reservation_store.get_reserved_capacity(id.clone())
     }
 
     pub fn adjust_capacity(&self, id: &ReservationId, capacity: i64) {
-        if let Some(handle) = self.reservation_store.get(*id) {
-            let mut res = handle.write().unwrap();
-            res.adjust_capacity(capacity);
-        } else {
-            log::error!("Get reservation (id: {:?}) was not possible.", id)
-        }
+        self.reservation_store.adjust_capacity(id.clone(), capacity);
     }
 }

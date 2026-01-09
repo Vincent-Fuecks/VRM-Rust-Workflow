@@ -9,6 +9,7 @@ use crate::domain::vrm_system_model::utils::id::{AciId, AdcId, ComponentId, Rese
 use crate::domain::vrm_system_model::utils::load_buffer::LoadMetric;
 use std::collections::{HashMap, HashSet};
 use std::i64;
+use std::sync::Arc;
 
 /**
  * The main component of the VRM: Administrative domain controller (ADC), the Grid broker.
@@ -54,7 +55,7 @@ pub struct ADC {
 
     /// Strategy for selecting AIs for atomic jobs
     //pub selection_strategy: AiSelectionStrategy,
-    simulator: Box<dyn SystemSimulator>,
+    simulator: Arc<dyn SystemSimulator>,
 }
 
 impl ADC {
@@ -63,11 +64,11 @@ impl ADC {
         acis: HashSet<Box<dyn ExtendedReservationProcessor>>,
         reservation_store: ReservationStore,
         commit_timeout: i64,
-        simulator: Box<dyn SystemSimulator>,
+        simulator: Arc<dyn SystemSimulator>,
         num_of_slots: i64,
         slot_width: i64,
     ) -> Self {
-        let aci_manager = AcIManager::new(adc_id.clone(), acis, simulator.clone_box(), reservation_store.clone(), num_of_slots, slot_width);
+        let aci_manager = AcIManager::new(adc_id.clone(), acis, simulator.clone_box().into(), reservation_store.clone(), num_of_slots, slot_width);
 
         ADC {
             id: adc_id,
@@ -89,7 +90,7 @@ impl ADC {
         log::debug!("ADC: {} adds AcI: {}", self.id, grid_component.get_id());
         return self.aci_manager.add_aci(
             grid_component,
-            self.simulator.clone_box(),
+            self.simulator.clone_box().into(),
             self.reservation_store.clone(),
             self.num_of_slots,
             self.slot_width,

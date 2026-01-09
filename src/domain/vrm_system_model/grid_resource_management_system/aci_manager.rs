@@ -13,6 +13,7 @@ use lazy_static::lazy_static;
 use rand::rng;
 use rand::seq::SliceRandom;
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 lazy_static! {
     pub static ref DUMMY_COMPONENT_ID: ComponentId = ComponentId::new("ADC INTERNAL JOB");
@@ -49,7 +50,7 @@ pub struct AcIContainer {
 impl AcIContainer {
     pub fn new(
         grid_component: Box<dyn ExtendedReservationProcessor>,
-        simulator: Box<dyn SystemSimulator>,
+        simulator: Arc<dyn SystemSimulator>,
         reservation_store: ReservationStore,
         registration_index: usize,
         number_of_real_slots: i64,
@@ -105,7 +106,7 @@ impl AcIManager {
     pub fn new(
         adc_id: AdcId,
         grid_component_set: HashSet<Box<dyn ExtendedReservationProcessor>>,
-        simulator: Box<dyn SystemSimulator>,
+        simulator: Arc<dyn SystemSimulator>,
         reservation_store: ReservationStore,
         number_of_real_slots: i64,
         slot_width: i64,
@@ -125,7 +126,7 @@ impl AcIManager {
 
             let container = AcIContainer::new(
                 grid_component,
-                simulator.clone_box(),
+                simulator.clone_box().into(),
                 reservation_store.clone(),
                 registration_counter,
                 number_of_real_slots,
@@ -178,7 +179,7 @@ impl AcIManager {
     pub fn add_aci(
         &mut self,
         grid_component: Box<dyn ExtendedReservationProcessor>,
-        simulator: Box<dyn SystemSimulator>,
+        simulator: Arc<dyn SystemSimulator>,
         reservation_store: ReservationStore,
         number_of_real_slots: i64,
         slot_width: i64,

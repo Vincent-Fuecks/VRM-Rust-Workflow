@@ -61,7 +61,7 @@ pub struct SlottedSchedule {
     /// A flag indicating whether fragmentation calculation is required for the **prob requests**.
     is_frag_needed: bool,
 
-    simulator: Box<dyn SystemSimulator>,
+    simulator: Arc<dyn SystemSimulator>,
 }
 
 impl SlottedSchedule {
@@ -71,7 +71,7 @@ impl SlottedSchedule {
         slot_width: i64,
         capacity: i64,
         use_quadratic_mean_fragmentation: bool,
-        simulator: Box<dyn SystemSimulator>,
+        simulator: Arc<dyn SystemSimulator>,
         reservation_store: ReservationStore,
     ) -> Self {
         let mut slots: Vec<Slot> = Vec::new();

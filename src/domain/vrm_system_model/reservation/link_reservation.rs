@@ -1,6 +1,6 @@
 use std::any::Any;
 
-use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationBase};
+use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationBase, ReservationTrait, ReservationTyp};
 use crate::domain::vrm_system_model::utils::id::RouterId;
 /// This structure extends [`ReservationBase`] to include fields specific to
 /// network connectivity.
@@ -25,7 +25,7 @@ pub struct LinkReservation {
     pub end_point: Option<RouterId>,
 }
 
-impl Reservation for LinkReservation {
+impl ReservationTrait for LinkReservation {
     fn get_base(&self) -> &ReservationBase {
         &self.base
     }
@@ -34,11 +34,15 @@ impl Reservation for LinkReservation {
         &mut self.base
     }
 
-    fn box_clone(&self) -> Box<dyn Reservation> {
+    fn box_clone(&self) -> Box<dyn ReservationTrait> {
         Box::new(self.clone())
     }
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn get_typ(&self) -> ReservationTyp {
+        ReservationTyp::Link
     }
 }

@@ -1,6 +1,9 @@
 use vrm_rust_workflow::api::vrm_system_model_dto::aci_dto::{GridNodeDto, NetworkLinkDto, RMSSystemDto};
 use vrm_rust_workflow::domain::{
-    simulator::simulator::SystemSimulator,
+    simulator::{
+        simulator::SystemSimulator,
+        simulator_mock::{MockSimulator, SharedMockSimulator},
+    },
     vrm_system_model::{
         grid_resource_management_system::aci::AcI,
         reservation::reservation_store::{ReservationId, ReservationStore},
@@ -10,22 +13,7 @@ use vrm_rust_workflow::domain::{
     },
 };
 
-#[derive(Debug, Clone)]
-struct MockSimulator;
-
-impl SystemSimulator for MockSimulator {
-    fn clone_box(&self) -> Box<dyn SystemSimulator> {
-        Box::new(self.clone())
-    }
-
-    fn get_current_time_in_ms(&self) -> i64 {
-        42
-    }
-
-    fn get_current_time_in_s(&self) -> i64 {
-        42
-    }
-}
+use std::sync::Arc;
 
 fn create_vrm_test_dto() -> RMSSystemDto {
     RMSSystemDto {
@@ -101,7 +89,7 @@ fn test_setup_routers() {
 #[test]
 fn test_setup_network_links() {
     let dto = create_vrm_test_dto();
-    let simulator: Box<dyn SystemSimulator> = Box::new(MockSimulator);
+    let simulator: Arc<dyn SystemSimulator> = Arc::new(MockSimulator::new(0));
     let reservation_store = ReservationStore::new(None);
 
     let (links, importance_db) = NetworkTopology::setup_network_links(&dto, simulator, reservation_store);
@@ -126,7 +114,7 @@ fn test_setup_network_links() {
 #[test]
 fn test_setup_adjacency_matrix() {
     let dto = create_vrm_test_dto();
-    let simulator: Box<dyn SystemSimulator> = Box::new(MockSimulator);
+    let simulator: Arc<dyn SystemSimulator> = Arc::new(MockSimulator::new(0));
     let reservation_store = ReservationStore::new(None);
 
     let (links, _) = NetworkTopology::setup_network_links(&dto, simulator, reservation_store);
@@ -160,7 +148,7 @@ fn test_setup_adjacency_matrix() {
 #[test]
 fn test_full_topology_creation_integration() {
     let dto = create_vrm_test_dto();
-    let simulator: Box<dyn SystemSimulator> = Box::new(MockSimulator);
+    let simulator: Arc<dyn SystemSimulator> = Arc::new(MockSimulator::new(0));
     let reservation_store = ReservationStore::new(None);
     let rms_id = "test_rms".to_string();
     let result = NetworkTopology::try_from((dto, simulator, rms_id, reservation_store));

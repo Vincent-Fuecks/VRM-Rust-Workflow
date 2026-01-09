@@ -1,33 +1,8 @@
+use std::sync::Arc;
 use vrm_rust_workflow::domain::{
-    simulator::simulator::SystemSimulator,
+    simulator::{simulator::SystemSimulator, simulator_mock::MockSimulator},
     vrm_system_model::{reservation::reservation_store::ReservationStore, schedule::slotted_schedule::SlottedSchedule, utils::id::SlottedScheduleId},
 };
-
-#[derive(Debug, Clone)]
-pub struct MockSystemSimulator {
-    is_simulation: bool,
-}
-
-impl SystemSimulator for MockSystemSimulator {
-    fn get_current_time_in_s(&self) -> i64 {
-        0
-    }
-
-    fn get_current_time_in_ms(&self) -> i64 {
-        0
-    }
-
-    // Required method to enable cloning of the trait object
-    fn clone_box(&self) -> Box<dyn SystemSimulator> {
-        Box::new(self.clone())
-    }
-}
-
-impl MockSystemSimulator {
-    pub fn new(is_simulation: bool) -> MockSystemSimulator {
-        MockSystemSimulator { is_simulation: is_simulation }
-    }
-}
 
 #[test]
 fn test_complex_fragmentation_scenario() {
@@ -35,7 +10,7 @@ fn test_complex_fragmentation_scenario() {
     let capacity = 3;
     // Create schedule with enough slots (indices 0 to 3 require 4 slots)
 
-    let simulator: Box<dyn SystemSimulator> = Box::new(MockSystemSimulator::new(true));
+    let simulator: Arc<dyn SystemSimulator> = Arc::new(MockSimulator::new(0));
     let reservation_store: ReservationStore = ReservationStore::new(None);
 
     let mut schedule = SlottedSchedule::new(SlottedScheduleId::new("Test-SlottedSchedule"), 4, 2, capacity, true, simulator, reservation_store);
@@ -67,7 +42,7 @@ fn test_complex_fragmentation_scenario() {
 #[test]
 fn test_zero_fragmentation_all_free() {
     let capacity = 5;
-    let simulator: Box<dyn SystemSimulator> = Box::new(MockSystemSimulator::new(true));
+    let simulator: Arc<dyn SystemSimulator> = Arc::new(MockSimulator::new(0));
     let reservation_store: ReservationStore = ReservationStore::new(None);
 
     // 10 slots
@@ -82,7 +57,7 @@ fn test_zero_fragmentation_all_free() {
 #[test]
 fn test_zero_fragmentation_full_load() {
     let capacity = 4;
-    let simulator: Box<dyn SystemSimulator> = Box::new(MockSystemSimulator::new(true));
+    let simulator: Arc<dyn SystemSimulator> = Arc::new(MockSimulator::new(0));
     let reservation_store: ReservationStore = ReservationStore::new(None);
 
     let mut schedule = SlottedSchedule::new(SlottedScheduleId::new("Test-SlottedSchedule-02"), 5, 2, capacity, true, simulator, reservation_store);

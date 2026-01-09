@@ -1,5 +1,5 @@
 use crate::api::vrm_system_model_dto::aci_dto::AcIDto;
-use crate::domain::simulator::simulator::SystemSimulator;
+use crate::domain::simulator::simulator::{Simulator, SystemSimulator};
 use crate::domain::vrm_system_model::grid_resource_management_system::grid_resource_management_system_trait::ExtendedReservationProcessor;
 use crate::domain::vrm_system_model::reservation::reservation::ReservationState;
 use crate::domain::vrm_system_model::reservation::reservation_store::{ReservationId, ReservationStore};
@@ -13,6 +13,7 @@ use crate::error::ConversionError;
 
 use std::collections::{BTreeMap, HashMap};
 use std::i64;
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Clone)]
@@ -108,14 +109,14 @@ pub struct AcI {
     committed_reservations: HashMap<ReservationId, ReservationContainer>,
     not_committed_reservations: HashMap<ReservationId, ReservationContainer>,
 
-    simulator: Box<dyn SystemSimulator>,
+    simulator: Arc<dyn SystemSimulator>,
     reservation_store: ReservationStore,
 }
 
-impl TryFrom<(AcIDto, Box<dyn SystemSimulator>)> for AcI {
+impl TryFrom<(AcIDto, Arc<dyn SystemSimulator>)> for AcI {
     type Error = ConversionError;
 
-    fn try_from(args: (AcIDto, Box<dyn SystemSimulator>)) -> Result<Self, ConversionError> {
+    fn try_from(args: (AcIDto, Arc<dyn SystemSimulator>)) -> Result<Self, ConversionError> {
         let (dto, simulator) = args;
 
         let aci_name = dto.id.clone();
@@ -134,7 +135,7 @@ impl TryFrom<(AcIDto, Box<dyn SystemSimulator>)> for AcI {
             shadow_schedule_reservations: ShadowScheduleReservations::new(),
             not_committed_reservations: HashMap::new(),
             committed_reservations: HashMap::new(),
-            simulator: simulator.clone_box(),
+            simulator: simulator.clone_box().into(),
             reservation_store: reservation_store.clone(),
         })
 
@@ -460,7 +461,7 @@ impl AcI {
 
         if let Some(res_handle) = self.reservation_store.get(reservation_id) {
             let (start, end, res_name, capacity, workload, state, proceeding, num_tasks) = {
-                let res = res_handle.read().unwrap();
+                let res = res_handle.read().unwrap().get_base_reservation();
 
                 let start = res.get_assigned_start();
                 let end = res.get_assigned_end();

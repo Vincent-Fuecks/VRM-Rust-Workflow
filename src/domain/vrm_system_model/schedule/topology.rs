@@ -8,6 +8,7 @@ use crate::domain::vrm_system_model::schedule::slotted_schedule::SlottedSchedule
 use crate::domain::vrm_system_model::utils::id::{LinkResourceId, RouterId, SlottedScheduleId};
 use crate::error::ConversionError;
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::sync::Arc;
 
 /// The number of k shortest paths to calculate and cache between any two grid access points.
 const K_NUMBER_OF_PATHS: usize = 10;
@@ -94,10 +95,10 @@ pub struct NetworkTopology {
     pub max_bandwidth_all_paths: i64,
 }
 
-impl TryFrom<(RMSSystemDto, Box<dyn SystemSimulator>, String, ReservationStore)> for NetworkTopology {
+impl TryFrom<(RMSSystemDto, Arc<dyn SystemSimulator>, String, ReservationStore)> for NetworkTopology {
     type Error = ConversionError;
 
-    fn try_from(args: (RMSSystemDto, Box<dyn SystemSimulator>, String, ReservationStore)) -> Result<Self, Self::Error> {
+    fn try_from(args: (RMSSystemDto, Arc<dyn SystemSimulator>, String, ReservationStore)) -> Result<Self, Self::Error> {
         let (dto, simulator, _, reservation_store) = args;
 
         // 1.  Init physical links.
@@ -344,7 +345,7 @@ impl NetworkTopology {
     /// Initializes all `LinkResource` structs and the importance database.
     pub fn setup_network_links(
         dto: &RMSSystemDto,
-        simulator: Box<dyn SystemSimulator>,
+        simulator: Arc<dyn SystemSimulator>,
         reservation_store: ReservationStore,
     ) -> (HashMap<LinkResourceId, LinkResource>, HashMap<LinkResourceId, f64>) {
         let mut network_links: HashMap<LinkResourceId, LinkResource> = HashMap::new();
@@ -358,7 +359,7 @@ impl NetworkTopology {
                 dto.slot_width,
                 link.capacity,
                 true,
-                simulator.clone_box(),
+                simulator.clone_box().into(),
                 reservation_store.clone(),
             );
             let network_link_id: LinkResourceId = LinkResourceId::new(link.id.clone());

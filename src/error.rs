@@ -32,6 +32,9 @@ pub enum ConversionError {
     #[error("ADC construction error: {0}")]
     AdcConstructionError(String),
 
+    #[error("System construction error: {0}")]
+    SystemConstructionError(String),
+
     #[error("A system error occurred during conversion: {0}")]
     SystemError(#[from] Box<Error>),
 }

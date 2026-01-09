@@ -4,7 +4,7 @@ use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct VrmSystemModelDto {
+pub struct VrmDto {
     pub adc: Vec<ADCDto>,
     pub aci: Vec<AcIDto>,
 }

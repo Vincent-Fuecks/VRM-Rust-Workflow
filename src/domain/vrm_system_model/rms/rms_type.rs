@@ -5,6 +5,7 @@ use crate::domain::vrm_system_model::rms::advance_reservation_trait::AdvanceRese
 use crate::domain::vrm_system_model::rms::{null_broker::NullBroker, null_rms::NullRms, rms::Rms};
 use crate::error::ConversionError;
 use std::str::FromStr;
+use std::sync::Arc;
 
 #[derive(Debug)]
 pub enum RmsType {
@@ -16,7 +17,7 @@ pub enum RmsType {
 impl RmsType {
     pub fn get_instance(
         dto: RMSSystemDto,
-        simulator: Box<dyn SystemSimulator>,
+        simulator: Arc<dyn SystemSimulator>,
         aci_name: String,
         reservation_store: ReservationStore,
     ) -> Result<Box<dyn AdvanceReservationRms>, ConversionError> {

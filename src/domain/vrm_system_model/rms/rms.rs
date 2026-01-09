@@ -13,6 +13,7 @@ use crate::error::ConversionError;
 use std::any::Any;
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
+use std::sync::Arc;
 
 pub trait Rms: std::fmt::Debug + Any {
     fn get_base(&self) -> &RmsBase;
@@ -51,13 +52,8 @@ pub trait Rms: std::fmt::Debug + Any {
         return &mut self.get_base_mut().schedule;
     }
 
-    fn set_reservation_state(&mut self, id: ReservationId, state: ReservationState) {
-        if let Some(handle) = self.get_base().reservation_store.get(id) {
-            let mut res = handle.write().unwrap();
-            res.set_state(state);
-        } else {
-            log::error!("Get reservation (id: {:?}) was not possible.", id)
-        }
+    fn set_reservation_state(&mut self, id: ReservationId, new_state: ReservationState) {
+        self.get_base().reservation_store.update_state(id, new_state);
     }
 }
 
@@ -72,9 +68,9 @@ pub struct RmsBase {
     pub reservation_store: ReservationStore,
 }
 
-impl TryFrom<(RMSSystemDto, Box<dyn SystemSimulator>, String, ReservationStore)> for RmsBase {
+impl TryFrom<(RMSSystemDto, Arc<dyn SystemSimulator>, String, ReservationStore)> for RmsBase {
     type Error = ConversionError;
-    fn try_from(args: (RMSSystemDto, Box<dyn SystemSimulator>, String, ReservationStore)) -> Result<Self, Self::Error> {
+    fn try_from(args: (RMSSystemDto, Arc<dyn SystemSimulator>, String, ReservationStore)) -> Result<Self, Self::Error> {
         let (dto, simulator, aci_name, reservation_store) = args;
         let rms_id: RmsId = RmsId::new(format!("AcI: {}, RmsType: {}", aci_name.clone(), &dto.typ));
         let schedule_id: SlottedScheduleId = SlottedScheduleId::new(format!("AcI: {}, RmsType: {}", aci_name, &dto.scheduler_typ));

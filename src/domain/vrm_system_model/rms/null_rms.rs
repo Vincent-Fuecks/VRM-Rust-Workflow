@@ -4,6 +4,7 @@ use crate::domain::vrm_system_model::reservation::reservation_store::Reservation
 use crate::domain::vrm_system_model::rms::rms::{Rms, RmsBase};
 use crate::error::ConversionError;
 use std::any::Any;
+use std::sync::Arc;
 
 #[derive(Debug)]
 pub struct NullRms {
@@ -16,10 +17,10 @@ impl NullRms {
     }
 }
 
-impl TryFrom<(RMSSystemDto, Box<dyn SystemSimulator>, String, ReservationStore)> for NullRms {
+impl TryFrom<(RMSSystemDto, Arc<dyn SystemSimulator>, String, ReservationStore)> for NullRms {
     type Error = ConversionError;
 
-    fn try_from(args: (RMSSystemDto, Box<dyn SystemSimulator>, String, ReservationStore)) -> Result<Self, Self::Error> {
+    fn try_from(args: (RMSSystemDto, Arc<dyn SystemSimulator>, String, ReservationStore)) -> Result<Self, Self::Error> {
         let base = RmsBase::try_from(args)?;
         if base.resources.get_node_resource_count() == 0 {
             log::info!("Empty NullRms Grid: The newly created NullRms contains no Gird Nodes.");

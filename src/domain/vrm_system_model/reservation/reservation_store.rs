@@ -5,7 +5,9 @@ use std::fmt::Debug;
 use std::sync::{Arc, RwLock};
 
 use crate::domain::vrm_system_model::reservation::link_reservation::LinkReservation;
-use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationProceeding, ReservationState, ReservationTyp};
+use crate::domain::vrm_system_model::reservation::reservation::{
+    Reservation, ReservationProceeding, ReservationState, ReservationTrait, ReservationTyp,
+};
 use crate::domain::vrm_system_model::utils::id::{ClientId, ComponentId, ReservationName, RouterId};
 use crate::domain::vrm_system_model::workflow::workflow::Workflow;
 use crate::domain::vrm_system_model::workflow::workflow_node::WorkflowNode;
@@ -25,7 +27,7 @@ new_key_type! {
     pub struct ReservationId;
 }
 
-///
+/// TODO
 #[derive(Debug, Clone)]
 pub struct ReservationStore {
     /// Both maps are protected with a single lock.
@@ -35,7 +37,7 @@ pub struct ReservationStore {
 #[derive(Debug, Clone)]
 struct StoreInner {
     /// Reservation Storage.
-    slots: SlotMap<ReservationId, Arc<RwLock<Box<dyn Reservation>>>>,
+    slots: SlotMap<ReservationId, Arc<RwLock<Reservation>>>,
 
     /// Index lookup InternalKey (ReservationId) using input reservation name (ReservationName).
     name_index: HashMap<ReservationName, ReservationId>,
@@ -68,7 +70,7 @@ impl ReservationStore {
     ///
     /// # Returns
     /// Returns the ReservationId (internal Key for ReservationStore).
-    pub fn add(&self, reservation: Box<dyn Reservation>) -> ReservationId {
+    pub fn add(&self, reservation: Reservation) -> ReservationId {
         let mut guard = self.inner.write().unwrap();
 
         let name = reservation.get_name().clone();
@@ -90,7 +92,7 @@ impl ReservationStore {
     ///  
     /// # Returns
     /// Returns the Some(Reservation) if ReservationId was present in SlotMap else return None.  
-    pub fn get(&self, key: ReservationId) -> Option<Arc<RwLock<Box<dyn Reservation>>>> {
+    pub fn get(&self, key: ReservationId) -> Option<Arc<RwLock<Reservation>>> {
         let guard = self.inner.read().expect("RwLock poisoned");
         guard.slots.get(key).cloned()
     }
@@ -99,7 +101,7 @@ impl ReservationStore {
     ///  
     /// # Returns
     /// Returns Some(Reservation) if ReservationName was present in SlotMap else return None.  
-    pub fn get_by_name(&self, name: &ReservationName) -> Option<Arc<RwLock<Box<dyn Reservation>>>> {
+    pub fn get_by_name(&self, name: &ReservationName) -> Option<Arc<RwLock<Reservation>>> {
         let guard = self.inner.read().expect("RwLock poisoned");
         let key = guard.name_index.get(name)?;
         guard.slots.get(*key).cloned()
@@ -242,6 +244,66 @@ impl ReservationStore {
         }
     }
 
+    /// Returns the booking_interval_end of the provided reservation_id. Panics if no value was found.
+    pub fn get_booking_interval_end(&self, reservation_id: ReservationId) -> i64 {
+        if let Some(handle) = self.get(reservation_id) {
+            let res = handle.read().unwrap();
+            return res.get_booking_interval_end();
+        } else {
+            panic!("Reservation (id: {:?}) does not contain a booking interval end time.", reservation_id);
+        }
+    }
+
+    // Updates the frag_delta value of the corresponding reservation of the provided reservation_id.
+    pub fn set_frag_delta(&mut self, reservation_id: ReservationId, frag_delta: f64) {
+        if let Some(handle) = self.get(reservation_id) {
+            let mut res = handle.write().unwrap();
+            res.set_frag_delta(frag_delta);
+        } else {
+            log::error!("Get reservation (id: {:?}) was not possible.", reservation_id)
+        }
+    }
+
+    // Updates the booking_interval_start value of the corresponding reservation of the provided reservation_id.
+    pub fn set_booking_interval_start(&mut self, reservation_id: ReservationId, booking_interval_start: i64) {
+        if let Some(handle) = self.get(reservation_id) {
+            let mut res = handle.write().unwrap();
+            res.set_booking_interval_start(booking_interval_start);
+        } else {
+            log::error!("Get reservation (id: {:?}) was not possible.", reservation_id)
+        }
+    }
+
+    // Updates the booking_interval_end value of the corresponding reservation of the provided reservation_id.
+    pub fn set_booking_interval_end(&mut self, reservation_id: ReservationId, booking_interval_end: i64) {
+        if let Some(handle) = self.get(reservation_id) {
+            let mut res = handle.write().unwrap();
+            res.set_booking_interval_end(booking_interval_end);
+        } else {
+            log::error!("Get reservation (id: {:?}) was not possible.", reservation_id)
+        }
+    }
+
+    // Updates the assigned_start value of the corresponding reservation of the provided reservation_id.
+    pub fn set_assigned_start(&mut self, reservation_id: ReservationId, assigned_start: i64) {
+        if let Some(handle) = self.get(reservation_id) {
+            let mut res = handle.write().unwrap();
+            res.set_assigned_start(assigned_start);
+        } else {
+            log::error!("Get reservation (id: {:?}) was not possible.", reservation_id)
+        }
+    }
+
+    // Updates the assigned_end value of the corresponding reservation of the provided reservation_id.
+    pub fn set_assigned_end(&mut self, reservation_id: ReservationId, assigned_end: i64) {
+        if let Some(handle) = self.get(reservation_id) {
+            let mut res = handle.write().unwrap();
+            res.set_assigned_end(assigned_end);
+        } else {
+            log::error!("Get reservation (id: {:?}) was not possible.", reservation_id)
+        }
+    }
+
     /// Retrieves form the provided reservation id the is_moldable.
     pub fn is_moldable(&self, reservation_id: ReservationId) -> bool {
         if let Some(handle) = self.get(reservation_id) {
@@ -297,6 +359,15 @@ impl ReservationStore {
         } else {
             log::error!("Get reservation (id: {:?}) was not possible.", reservation_id);
             return false;
+        }
+    }
+
+    pub fn adjust_capacity(&self, reservation_id: ReservationId, capacity: i64) {
+        if let Some(handle) = self.get(reservation_id) {
+            let mut res = handle.write().unwrap();
+            res.adjust_capacity(capacity);
+        } else {
+            log::error!("Get reservation (id: {:?}) was not possible.", reservation_id)
         }
     }
 

@@ -7,6 +7,7 @@ pub mod rms;
 pub mod schedule;
 pub mod scheduler_trait;
 pub mod scheduler_type;
+pub mod system;
 pub mod utils;
 pub mod vrm_system_model;
 pub mod workflow;

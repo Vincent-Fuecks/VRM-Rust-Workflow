@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use crate::api::workflow_dto::reservation_dto::{ReservationProceedingDto, ReservationStateDto};
 use crate::api::workflow_dto::workflow_dto::{TaskDto, WorkflowDto};
 use crate::domain::vrm_system_model::reservation::reservation::{
-    Reservation, ReservationBase, ReservationProceeding, ReservationState, ReservationTyp,
+    Reservation, ReservationBase, ReservationProceeding, ReservationState, ReservationTrait, ReservationTyp,
 };
 use crate::domain::vrm_system_model::reservation::{link_reservation::LinkReservation, node_reservation::NodeReservation};
 use crate::domain::vrm_system_model::utils::id::{
@@ -846,7 +846,7 @@ impl Workflow {
     }
 }
 
-impl Reservation for Workflow {
+impl ReservationTrait for Workflow {
     fn get_base(&self) -> &ReservationBase {
         &self.base
     }
@@ -855,7 +855,7 @@ impl Reservation for Workflow {
         &mut self.base
     }
 
-    fn box_clone(&self) -> Box<dyn Reservation> {
+    fn box_clone(&self) -> Box<dyn ReservationTrait> {
         Box::new(self.clone())
     }
 

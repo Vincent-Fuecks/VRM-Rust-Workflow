@@ -1,25 +1,82 @@
 use serde::Serialize;
 use std::{any::Any, ops::Not};
 
-use crate::domain::vrm_system_model::utils::id::{ClientId, ComponentId, ReservationName};
+use crate::domain::vrm_system_model::{
+    reservation::{link_reservation::LinkReservation, node_reservation::NodeReservation},
+    utils::id::{ClientId, ComponentId, ReservationName},
+    workflow::workflow::Workflow,
+};
 
-pub enum ReservationTyp {
-    Reservation,
-    Workflow,
+#[derive(Debug, Clone)]
+pub enum Reservation {
+    Workflow(Workflow),
+    Node(NodeReservation),
+    Link(LinkReservation),
 }
 
-pub trait Reservation: std::fmt::Debug + Any + Send + Sync {
+pub enum ReservationTyp {
+    Workflow,
+    Link,
+    Node,
+}
+
+impl Reservation {
+    pub fn get_base_reservation(&self) -> &ReservationBase {
+        match self {
+            Reservation::Workflow(w) => &w.base,
+            Reservation::Node(n) => &n.base,
+            Reservation::Link(l) => &l.base,
+        }
+    }
+
+    pub fn get_base_mut_reservation(&mut self) -> &mut ReservationBase {
+        match self {
+            Reservation::Workflow(w) => &mut w.base,
+            Reservation::Node(n) => &mut n.base,
+            Reservation::Link(l) => &mut l.base,
+        }
+    }
+
+    pub fn state(&self) -> &ReservationState {
+        &self.get_base().state
+    }
+}
+
+impl ReservationTrait for Reservation {
+    fn get_base(&self) -> &ReservationBase {
+        self.get_base_reservation()
+    }
+
+    fn get_base_mut(&mut self) -> &mut ReservationBase {
+        self.get_base_mut_reservation()
+    }
+
+    fn box_clone(&self) -> Box<dyn ReservationTrait> {
+        Box::new(self.clone())
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn get_typ(&self) -> ReservationTyp {
+        match self {
+            Reservation::Workflow(_) => ReservationTyp::Workflow,
+            Reservation::Link(_) => ReservationTyp::Link,
+            Reservation::Node(_) => ReservationTyp::Node,
+        }
+    }
+}
+pub trait ReservationTrait: std::fmt::Debug + Any + Send + Sync {
     fn get_base(&self) -> &ReservationBase;
 
     fn get_base_mut(&mut self) -> &mut ReservationBase;
 
-    fn box_clone(&self) -> Box<dyn Reservation>;
+    fn box_clone(&self) -> Box<dyn ReservationTrait>;
 
     fn as_any(&self) -> &dyn Any;
 
-    fn get_typ(&self) -> ReservationTyp {
-        ReservationTyp::Reservation
-    }
+    fn get_typ(&self) -> ReservationTyp;
 
     fn get_name(&self) -> ReservationName {
         self.get_base().name.clone()
@@ -71,6 +128,10 @@ pub trait Reservation: std::fmt::Debug + Any + Send + Sync {
 
     fn get_reservation_proceeding(&self) -> ReservationProceeding {
         self.get_base().request_proceeding
+    }
+
+    fn get_arrival_time(&self) -> i64 {
+        self.get_base().arrival_time
     }
 
     fn set_assigned_end(&mut self, time: i64) {
@@ -126,8 +187,8 @@ pub trait Reservation: std::fmt::Debug + Any + Send + Sync {
     }
 }
 
-impl Clone for Box<dyn Reservation> {
-    fn clone(&self) -> Box<dyn Reservation> {
+impl Clone for Box<dyn ReservationTrait> {
+    fn clone(&self) -> Box<dyn ReservationTrait> {
         self.box_clone()
     }
 }
@@ -272,7 +333,91 @@ impl ReservationBase {
         self.name.clone()
     }
 
-    pub fn set_state(&mut self, state: ReservationState) {
-        self.state = state;
+    pub fn get_task_duration(&self) -> i64 {
+        self.task_duration
+    }
+
+    pub fn get_state(&self) -> ReservationState {
+        self.state
+    }
+
+    pub fn get_booking_interval_start(&self) -> i64 {
+        self.booking_interval_start
+    }
+
+    pub fn get_booking_interval_end(&self) -> i64 {
+        self.booking_interval_end
+    }
+
+    pub fn get_moldable_work(&self) -> i64 {
+        self.moldable_work
+    }
+
+    pub fn get_client_id(&self) -> ClientId {
+        self.client_id.clone()
+    }
+
+    pub fn get_handler_id(&self) -> Option<ComponentId> {
+        self.handler_id.clone()
+    }
+
+    pub fn get_reservation_proceeding(&self) -> ReservationProceeding {
+        self.request_proceeding
+    }
+
+    pub fn get_arrival_time(&self) -> i64 {
+        self.arrival_time
+    }
+
+    pub fn set_assigned_end(&mut self, time: i64) {
+        self.assigned_end = time;
+    }
+
+    pub fn set_assigned_start(&mut self, time: i64) {
+        self.assigned_start = time;
+    }
+
+    pub fn set_state(&mut self, reservation_state: ReservationState) {
+        self.state = reservation_state;
+    }
+
+    pub fn set_task_duration(&mut self, duration: i64) {
+        self.task_duration = duration;
+    }
+
+    pub fn set_reserved_capacity(&mut self, reserved_capacity: i64) {
+        self.reserved_capacity = reserved_capacity;
+    }
+
+    pub fn set_booking_interval_start(&mut self, start_time: i64) {
+        self.booking_interval_start = start_time;
+    }
+
+    pub fn set_booking_interval_end(&mut self, end_time: i64) {
+        self.booking_interval_end = end_time;
+    }
+
+    pub fn set_frag_delta(&mut self, frag_delta: f64) {
+        self.frag_delta = frag_delta;
+    }
+
+    pub fn adjust_capacity(&mut self, capacity: i64) {
+        if capacity != self.reserved_capacity {
+            if self.is_moldable().not() {
+                log::warn!("adjustCapacity for non moldable job {}", self.get_name(),);
+            }
+
+            if capacity == 0 {
+                self.set_task_duration(self.get_moldable_work());
+                self.set_reserved_capacity(1);
+            } else {
+                self.set_task_duration(self.get_moldable_work() / capacity);
+                self.set_reserved_capacity(capacity);
+            }
+
+            if self.get_task_duration() <= 0 {
+                self.set_task_duration(1);
+            }
+        }
     }
 }

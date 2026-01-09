@@ -1,23 +1,10 @@
 use vrm_rust_workflow::api::vrm_system_model_dto::aci_dto::{GridNodeDto, NetworkLinkDto, RMSSystemDto};
 use vrm_rust_workflow::domain::{
-    simulator::simulator::SystemSimulator,
+    simulator::{simulator::SystemSimulator, simulator_mock::MockSimulator},
     vrm_system_model::{reservation::reservation_store::ReservationStore, schedule::topology::NetworkTopology, utils::id::RouterId},
 };
 
-#[derive(Debug, Clone)]
-struct MockSimulator;
-
-impl SystemSimulator for MockSimulator {
-    fn clone_box(&self) -> Box<dyn SystemSimulator> {
-        Box::new(self.clone())
-    }
-    fn get_current_time_in_ms(&self) -> i64 {
-        42
-    }
-    fn get_current_time_in_s(&self) -> i64 {
-        42
-    }
-}
+use std::sync::Arc;
 
 /// Creates a DTO based on a list of directed edges (source -> target).
 /// Automatically creates a GridNode for every router involved to ensure they are "Grid Access Points".
@@ -77,10 +64,10 @@ fn test_topology_case_1_complex_dag() {
     // Shortest way from 1 -> 5 is (two hops):  1 --> 3 --> 5 or 1 --> 4 --> 5
     // Other ways: 1 --> 2 --> 3 --> 5 or 1 --> 2 --> 4 --> 5
     // Edge case: (1) direct connection between 5 --> 1, but false direction
+    let simulator: Arc<dyn SystemSimulator> = Arc::new(MockSimulator::new(0));
 
     let edges = vec![(1, 2), (1, 3), (1, 4), (5, 1), (2, 4), (2, 3), (3, 5), (4, 5)];
     let dto = create_custom_topology_dto(edges);
-    let simulator: Box<dyn SystemSimulator> = Box::new(MockSimulator);
     let reservation_store = ReservationStore::new(None);
 
     let topology = NetworkTopology::try_from((dto, simulator, "case_1".into(), reservation_store)).unwrap();
@@ -111,7 +98,7 @@ fn test_topology_case_2_linear_chain() {
     // 1 -> 2; 2 -> 3; 3 -> 4; 4 -> 5
     let edges = vec![(1, 2), (2, 3), (3, 4), (4, 5)];
     let dto = create_custom_topology_dto(edges);
-    let simulator: Box<dyn SystemSimulator> = Box::new(MockSimulator);
+    let simulator: Arc<dyn SystemSimulator> = Arc::new(MockSimulator::new(0));
     let reservation_store = ReservationStore::new(None);
 
     let topology = NetworkTopology::try_from((dto, simulator, "case_2".into(), reservation_store)).unwrap();
@@ -137,7 +124,7 @@ fn test_topology_case_3_fully_connected() {
         }
     }
     let dto = create_custom_topology_dto(edges);
-    let simulator: Box<dyn SystemSimulator> = Box::new(MockSimulator);
+    let simulator: Arc<dyn SystemSimulator> = Arc::new(MockSimulator::new(0));
     let reservation_store = ReservationStore::new(None);
 
     let topology = NetworkTopology::try_from((dto, simulator, "case_3".into(), reservation_store)).unwrap();
@@ -177,7 +164,7 @@ fn test_topology_case_4_disconnected_groups() {
     }
 
     let dto = create_custom_topology_dto(edges);
-    let simulator: Box<dyn SystemSimulator> = Box::new(MockSimulator);
+    let simulator: Arc<dyn SystemSimulator> = Arc::new(MockSimulator::new(0));
     let reservation_store = ReservationStore::new(None);
 
     let topology = NetworkTopology::try_from((dto, simulator, "case_4".into(), reservation_store)).unwrap();
@@ -198,7 +185,7 @@ fn test_topology_case_4_disconnected_groups() {
 fn test_topology_case_5_empty_network() {
     let edges = vec![];
     let dto = create_custom_topology_dto(edges);
-    let simulator: Box<dyn SystemSimulator> = Box::new(MockSimulator);
+    let simulator: Arc<dyn SystemSimulator> = Arc::new(MockSimulator::new(0));
     let reservation_store = ReservationStore::new(None);
 
     // Should not panic, but create an empty topology
@@ -223,7 +210,7 @@ fn test_topology_case_6_single_node_no_links() {
         network_links: vec![],
     };
 
-    let simulator: Box<dyn SystemSimulator> = Box::new(MockSimulator);
+    let simulator: Arc<dyn SystemSimulator> = Arc::new(MockSimulator::new(0));
     let reservation_store = ReservationStore::new(None);
 
     let topology = NetworkTopology::try_from((dto, simulator, "case_6".into(), reservation_store)).unwrap();
@@ -237,7 +224,7 @@ fn test_topology_case_7_cycles() {
     let edges = vec![(1, 2), (2, 1), (1, 3), (3, 1), (2, 3), (3, 3)];
 
     let dto = create_custom_topology_dto(edges);
-    let simulator: Box<dyn SystemSimulator> = Box::new(MockSimulator);
+    let simulator: Arc<dyn SystemSimulator> = Arc::new(MockSimulator::new(0));
     let reservation_store = ReservationStore::new(None);
 
     let topology = NetworkTopology::try_from((dto, simulator, "case_7".into(), reservation_store)).unwrap();
