@@ -7,7 +7,7 @@ use crate::api::workflow_dto::workflow_dto::{TaskDto, WorkflowDto};
 use crate::domain::vrm_system_model::reservation::reservation::{
     Reservation, ReservationBase, ReservationProceeding, ReservationState, ReservationTrait, ReservationTyp,
 };
-use crate::domain::vrm_system_model::reservation::reservation_store::{ReservationId, ReservationStore};
+use crate::domain::vrm_system_model::reservation::reservation_store::{self, ReservationId, ReservationStore};
 use crate::domain::vrm_system_model::reservation::{link_reservation::LinkReservation, node_reservation::NodeReservation};
 use crate::domain::vrm_system_model::utils::id::{
     ClientId, CoAllocationDependencyId, CoAllocationId, DataDependencyId, ReservationName, SyncDependencyId, WorkflowNodeId, WorkflowNodeTag,
@@ -54,23 +54,20 @@ enum DanglingDependency {
     Sync(SyncDependency),
 }
 
-/// Constructs a complete Workflow graph from a WorkflowDto.
-///
-/// This is the main entry point for parsing a DTO into the internal domain model.
-/// Also builds the **CoAllocation graph**, which is later utilized for scheduling.
-impl TryFrom<(WorkflowDto, ClientId)> for Workflow {
-    type Error = Error;
-
-    fn try_from(args: (WorkflowDto, ClientId)) -> Result<Self, Self::Error> {
-        let (dto, client_id) = args;
+impl Workflow {
+    /// Constructs a complete Workflow graph from a WorkflowDto.
+    ///
+    /// This is the main entry point for parsing a DTO into the internal domain model.
+    /// Also builds the **CoAllocation graph**, which is later utilized for scheduling.
+    pub fn create_form_dto(dto: WorkflowDto, client_id: ClientId, reservation_store: ReservationStore) -> Result<Self, Error> {
         // Phase 0: Create the base workflow object
         let base = Self::build_base_workflow(&dto, client_id.clone());
 
         // Phase 1: Create all WorkflowNodes from the DTO tasks
-        let mut nodes = Self::generate_workflow_nodes(&dto, client_id.clone());
+        let mut nodes = Self::generate_workflow_nodes(&dto, client_id.clone(), reservation_store.clone());
 
         // Phase 2: Create all Data and Sync dependencies from DTO
-        let (data_dependencies, sync_dependencies) = Self::build_all_dependencies(&dto, client_id)?;
+        let (data_dependencies, sync_dependencies) = Self::build_all_dependencies(&dto, client_id, reservation_store.clone())?;
 
         // Phase 3: Populate the adjacency lists (incoming/outgoing) on each node
         Self::populate_node_adjacency_lists(&mut nodes, &data_dependencies, &sync_dependencies);
@@ -104,10 +101,7 @@ impl TryFrom<(WorkflowDto, ClientId)> for Workflow {
             exit_co_allocation,
         })
     }
-}
 
-// Helper functions for the **TryFrom** implementation
-impl Workflow {
     /// **Phase 0: Build Base Workflow**
     ///
     /// Creates the root `ReservationBase` for the `Workflow` itself from the DTO.
@@ -132,7 +126,11 @@ impl Workflow {
     }
 
     /// **Phase 1: Generate Workflow Nodes**
-    pub fn generate_workflow_nodes(dto: &WorkflowDto, client_id: ClientId) -> HashMap<WorkflowNodeId, WorkflowNode> {
+    pub fn generate_workflow_nodes(
+        dto: &WorkflowDto,
+        client_id: ClientId,
+        reservation_store: ReservationStore,
+    ) -> HashMap<WorkflowNodeId, WorkflowNode> {
         let mut nodes = HashMap::new();
 
         for task_dto in &dto.tasks {
@@ -165,9 +163,12 @@ impl Workflow {
                 error_path: node_res_dto.error_path.clone(),
             };
 
+            // Add to reservation_store
+            let reservation_id = reservation_store.add(Reservation::Node(node_reservation));
+
             // Create the WorkflowNode, data and sync links are added later
             let workflow_node = WorkflowNode {
-                reservation: node_reservation,
+                reservation_id,
                 incoming_data: Vec::new(),
                 outgoing_data: Vec::new(),
                 incoming_sync: Vec::new(),
@@ -191,6 +192,7 @@ impl Workflow {
     pub fn build_all_dependencies(
         dto: &WorkflowDto,
         client_id: ClientId,
+        reservation_store: ReservationStore,
     ) -> Result<(HashMap<DataDependencyId, DataDependency>, HashMap<SyncDependencyId, SyncDependency>), Error> {
         let mut data_dependencies = HashMap::new();
         let mut sync_dependencies = HashMap::new();
@@ -234,13 +236,11 @@ impl Workflow {
                     dep_base.is_moldable = true;
                     dep_base.reserved_capacity = size;
                     dep_base.moldable_work = size * dep_base.task_duration;
+                    let link_res = LinkReservation { base: dep_base, start_point: None, end_point: None };
+                    let reservation_id = reservation_store.add(Reservation::Link(link_res));
 
                     let data_dep = DataDependency {
-                        reservation: LinkReservation {
-                            base: dep_base,
-                            start_point: None, // TODO Set by scheduler
-                            end_point: None,   // TODO Set by scheduler
-                        },
+                        reservation_id,
                         source_node: Some(WorkflowNodeId::new(source_node_id.clone())),
                         target_node: None,
                         port_name: port_name.clone(),
@@ -253,13 +253,11 @@ impl Workflow {
                     dep_base.is_moldable = false;
                     dep_base.reserved_capacity = bandwidth;
                     dep_base.moldable_work = bandwidth * dep_base.task_duration;
+                    let link_res = LinkReservation { base: dep_base, start_point: None, end_point: None };
+                    let reservation_id = reservation_store.add(Reservation::Link(link_res));
 
                     let sync_dep = SyncDependency {
-                        reservation: LinkReservation {
-                            base: dep_base,
-                            start_point: None, // TODO Set by scheduler
-                            end_point: None,   // TODO Set by scheduler
-                        },
+                        reservation_id,
                         source_node: Some(WorkflowNodeId::new(source_node_id.clone())),
                         target_node: None,
                         port_name: port_name.clone(),
@@ -282,12 +280,14 @@ impl Workflow {
                     match dangling_dep {
                         DanglingDependency::Data(mut data_dep) => {
                             data_dep.target_node = Some(target_node_id.clone());
-                            let dep_id = DataDependencyId::new(data_dep.reservation.base.name.id.clone());
+                            let name = reservation_store.get_name_for_key(data_dep.reservation_id).unwrap();
+                            let dep_id = DataDependencyId::new(name.id);
                             data_dependencies.insert(dep_id, data_dep);
                         }
                         DanglingDependency::Sync(mut sync_dep) => {
                             sync_dep.target_node = Some(target_node_id.clone());
-                            let dep_id = SyncDependencyId::new(sync_dep.reservation.base.name.id.clone());
+                            let name = reservation_store.get_name_for_key(sync_dep.reservation_id).unwrap();
+                            let dep_id = SyncDependencyId::new(name.id);
                             sync_dependencies.insert(dep_id, sync_dep);
                         }
                     }
@@ -316,6 +316,7 @@ impl Workflow {
                 &mut sync_dependencies,
                 "data",
                 client_id.clone(),
+                reservation_store.clone(),
             );
 
             // "sync" are SyncDependencies with bandwidth 0
@@ -331,6 +332,7 @@ impl Workflow {
                 &mut sync_dependencies,
                 "sync",
                 client_id.clone(),
+                reservation_store.clone(),
             );
         }
 
@@ -351,6 +353,7 @@ impl Workflow {
         sync_deps: &mut HashMap<SyncDependencyId, SyncDependency>,
         dep_type: &str,
         client_id: ClientId,
+        reservation_store: ReservationStore,
     ) {
         for source_id in source_ids {
             let dep_id_str = format!("{}.{}.{}.{}", workflow_id, dep_type, source_id, target_node_id);
@@ -373,10 +376,11 @@ impl Workflow {
                 frag_delta: f64::MAX,
             };
             let link_res = LinkReservation { base: dep_base, start_point: None, end_point: None };
+            let reservation_id = reservation_store.add(Reservation::Link(link_res));
 
             if dep_type == "data" {
                 let data_dep = DataDependency {
-                    reservation: link_res,
+                    reservation_id,
                     source_node: Some(WorkflowNodeId::new(source_id.clone())),
                     target_node: Some(WorkflowNodeId::new(target_node_id.to_string())),
                     port_name: "data".to_string(),
@@ -385,7 +389,7 @@ impl Workflow {
                 data_deps.insert(DataDependencyId::new(dep_id_str), data_dep);
             } else if dep_type == "sync" {
                 let sync_dep = SyncDependency {
-                    reservation: link_res,
+                    reservation_id,
                     source_node: Some(WorkflowNodeId::new(source_id.clone())),
                     target_node: Some(WorkflowNodeId::new(target_node_id.to_string())),
                     port_name: "sync".to_string(),
@@ -666,7 +670,7 @@ impl Workflow {
     /// A `Vec<Option<WorkflowNode>>` containing the `representative` node for
     /// every `CoAllocation` in the workflow, ordered by `rank_upward` in descending
     /// order (largest ranks are first).
-    pub fn calculate_upward_rank(&mut self, avg_net_speed: i64) -> Vec<WorkflowNode> {
+    pub fn calculate_upward_rank(&mut self, avg_net_speed: i64, reservation_store: &ReservationStore) -> Vec<WorkflowNode> {
         let mut finished_node_keys: Vec<CoAllocationId> = Vec::with_capacity(self.co_allocations.len());
         let mut queue: Vec<CoAllocationId> = Vec::new();
 
@@ -693,7 +697,7 @@ impl Workflow {
                 continue;
             }
 
-            let node_duration = node.get_co_allocation_duration(&self.nodes);
+            let node_duration = node.get_co_allocation_duration(&self.nodes, &reservation_store);
             let outgoing_deps = node.outgoing_co_allocation_dependencies.clone();
             let mut rank = node_duration;
             let mut number_of_nodes_critical_path = 1;
@@ -763,7 +767,7 @@ impl Workflow {
     /// A `Vec<Option<WorkflowNode>>` containing the `representative` node for
     /// every `CoAllocation` in the workflow, ordered by `rank_downward` in descending
     /// order (largest ranks are first).
-    fn calculate_downward_rank(mut self, avg_net_speed: i64) -> Vec<Option<WorkflowNode>> {
+    fn calculate_downward_rank(mut self, avg_net_speed: i64, reservation_store: ReservationStore) -> Vec<Option<WorkflowNode>> {
         let mut finished_node_keys: Vec<CoAllocationId> = Vec::with_capacity(self.co_allocations.len());
         let mut queue: Vec<CoAllocationId> = Vec::new();
 
@@ -789,7 +793,7 @@ impl Workflow {
                 continue;
             }
 
-            let node_duration = node.get_co_allocation_duration(&self.nodes);
+            let node_duration = node.get_co_allocation_duration(&self.nodes, &reservation_store);
             let incoming_deps = node.incoming_co_allocation_dependencies.clone();
 
             let mut rank = node_duration;
@@ -877,33 +881,16 @@ impl Workflow {
      * the given Reservation with the data of the given Reservation.
      * @param res Reservation belonging to a Request(Reservation) in the Workflow
      */
-
     pub fn update_reservation(&mut self, reservation_store: ReservationStore, reservation_id: ReservationId) {
         match reservation_store.get_typ(reservation_id) {
             Some(ReservationTyp::Link) => {
-                let data_dep_id: DataDependencyId = reservation_store.get_name_for_key(reservation_id).unwrap().cast();
-                let sync_dep_id: SyncDependencyId = reservation_store.get_name_for_key(reservation_id).unwrap().cast();
-
-                if self.data_dependencies.contains_key(&data_dep_id) {
-                    let dep = self.data_dependencies.get_mut(&data_dep_id).unwrap();
-                    dep.reservation.base = reservation_store.get(reservation_id).unwrap().read().unwrap().get_base_reservation().clone()
-                } else if self.sync_dependencies.contains_key(&sync_dep_id) {
-                    let dep = self.sync_dependencies.get_mut(&sync_dep_id).unwrap();
-                    dep.reservation.base = reservation_store.get(reservation_id).unwrap().read().unwrap().get_base_reservation().clone()
-                } else {
-                    log::error!("Unknown LinkReservation {} at reservation.update_reservation.", self.get_name());
-                }
-
                 self.update_workflow_assigned_start_and_end(reservation_store.clone(), reservation_id);
             }
             Some(ReservationTyp::Node) => {
-                let node_id: WorkflowNodeId = reservation_store.get_name_for_key(reservation_id).unwrap().cast();
-
-                let node = self.nodes.get_mut(&node_id).unwrap();
-                node.reservation.base = reservation_store.get(reservation_id).unwrap().read().unwrap().get_base_reservation().clone();
+                // No more manual struct copying needed!
                 self.update_workflow_assigned_start_and_end(reservation_store.clone(), reservation_id);
             }
-            _ => log::error!("Unknown Reservation type of reservation {} at reservation.update_reservation.", self.get_name()),
+            _ => log::error!("Unknown Reservation type for update."),
         }
     }
 

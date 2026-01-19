@@ -8,7 +8,7 @@ use crate::domain::simulator::simulator::{Simulator, SystemSimulator};
 use crate::domain::vrm_system_model::client;
 use crate::domain::vrm_system_model::grid_resource_management_system::grid_resource_management_system_trait::ExtendedReservationProcessor;
 use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationTrait};
-use crate::domain::vrm_system_model::reservation::reservation_store::{ReservationId, ReservationStore};
+use crate::domain::vrm_system_model::reservation::reservation_store::{self, ReservationId, ReservationStore};
 use crate::domain::vrm_system_model::reservation::reservations::Reservations;
 use crate::domain::vrm_system_model::utils::id::{AdcId, ClientId, WorkflowId};
 use crate::domain::vrm_system_model::vrm_system_model::Vrm;
@@ -51,7 +51,7 @@ pub struct Clients {
 }
 
 impl Clients {
-    pub fn from_dto(dto: ClientsDto, simulator: Arc<dyn SystemSimulator>) -> Result<Self> {
+    pub fn from_dto(dto: ClientsDto, simulator: Arc<dyn SystemSimulator>, reservation_store: ReservationStore) -> Result<Self> {
         let mut clients = HashMap::new();
 
         for client_dto in dto.clients {
@@ -59,7 +59,7 @@ impl Clients {
             let mut unprocessed = Vec::new();
 
             for workflow_dto in client_dto.workflows {
-                let workflow = Workflow::try_from((workflow_dto, client_id.clone()))?;
+                let workflow = Workflow::create_form_dto(workflow_dto, client_id.clone(), reservation_store.clone())?;
                 unprocessed.push(Reservation::Workflow(workflow));
             }
 

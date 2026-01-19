@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::domain::vrm_system_model::{
-    reservation::node_reservation::NodeReservation,
+    reservation::reservation_store::{ReservationId, ReservationStore},
     utils::id::{CoAllocationId, DataDependencyId, SyncDependencyId},
     workflow::workflow::Workflow,
 };
@@ -9,7 +9,7 @@ use crate::domain::vrm_system_model::{
 /// Represents a node in the workflow graph (a computation task).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkflowNode {
-    pub reservation: NodeReservation,
+    pub reservation_id: ReservationId,
 
     /// Graph structure: Keys to the Workflow's HashMaps
     pub incoming_data: Vec<DataDependencyId>,
@@ -23,15 +23,17 @@ pub struct WorkflowNode {
 }
 
 impl WorkflowNode {
-    pub fn update_reservation(&mut self, workflow: &mut Workflow) {
-        if workflow.base.assigned_start == i64::MIN
-            || (self.reservation.base.assigned_start < workflow.base.assigned_start && self.reservation.base.assigned_start != i64::MIN)
-        {
-            workflow.base.set_assigned_start(self.reservation.base.assigned_start);
+    /// Updates the Workflow's assigned start/end based on this node's current state in the store.
+    pub fn update_reservation(&self, workflow: &mut Workflow, reservation_store: &ReservationStore) {
+        let assigned_start = reservation_store.get_assigned_start(self.reservation_id);
+        let assigned_end = reservation_store.get_assigned_end(self.reservation_id);
+
+        if workflow.base.assigned_start == i64::MIN || (assigned_start < workflow.base.assigned_start && assigned_start != i64::MIN) {
+            workflow.base.set_assigned_start(assigned_start);
         }
 
-        if workflow.base.assigned_end == i64::MIN || self.reservation.base.assigned_end > workflow.base.assigned_end {
-            workflow.base.set_assigned_end(self.reservation.base.assigned_end);
+        if workflow.base.assigned_end == i64::MIN || assigned_end > workflow.base.assigned_end {
+            workflow.base.set_assigned_end(assigned_end);
         }
     }
 }

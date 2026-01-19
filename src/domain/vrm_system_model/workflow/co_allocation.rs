@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
+use crate::domain::vrm_system_model::reservation::reservation_store::ReservationStore;
 use crate::domain::vrm_system_model::utils::id::{CoAllocationId, WorkflowNodeId};
 use crate::domain::vrm_system_model::workflow::dependency::{CoAllocationDependency, DataDependency, SyncDependency};
 use crate::domain::vrm_system_model::workflow::workflow_node::WorkflowNode;
@@ -100,13 +101,14 @@ pub struct CoAllocation {
 }
 
 impl CoAllocation {
-    pub fn get_co_allocation_duration(&self, nodes: &HashMap<WorkflowNodeId, WorkflowNode>) -> i64 {
+    pub fn get_co_allocation_duration(&self, nodes: &HashMap<WorkflowNodeId, WorkflowNode>, store: &ReservationStore) -> i64 {
         let mut max_duration: i64 = 0;
 
         for node_key in &self.members {
             if let Some(member) = nodes.get(node_key) {
-                if member.reservation.base.task_duration > max_duration {
-                    max_duration = member.reservation.base.task_duration;
+                let duration = store.get_task_duration(member.reservation_id);
+                if duration > max_duration {
+                    max_duration = duration;
                 }
             } else {
                 log::warn!("Warning: Node key '{}' not found in nodes map.", node_key);

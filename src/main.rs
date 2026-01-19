@@ -1,3 +1,4 @@
+use crate::domain::vrm_system_model::reservation::reservation_store::ReservationStore;
 use crate::domain::vrm_system_model::utils::id::{ClientId, ComponentId, ReservationName};
 use actix::prelude::*;
 use clap::Parser;
@@ -6,27 +7,18 @@ use tokio::net::{TcpListener, TcpStream};
 
 use crate::domain::vrm_system_model::grid_component::component_communication::protocol::{Envelope, Payload};
 use crate::domain::vrm_system_model::grid_component::{
-    component_communication::session::TcpSession,
-    grid_component_trait::GridComponent,
-    utils::{
-        grid_component_base::{GridComponentBase, GridComponentTyp},
-        grid_component_message::GridComponentMessage,
-    },
+    component_communication::session::TcpSession, utils::grid_component_message::GridComponentMessage,
 };
 
 use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationBase, ReservationProceeding, ReservationState};
-use vrm_rust_workflow::domain::vrm_system_model::reservation::reservation_store::ReservationStore;
 
 use crate::domain::vrm_system_model::grid_component::aci::aci::AcI;
 use crate::domain::vrm_system_model::grid_component::adc::adc::ADC;
-use crate::domain::vrm_system_model::system::System;
 
 use crate::api::vrm_system_model_dto::vrm_dto::VrmDto;
 use crate::api::workflow_dto::client_dto::ClientsDto;
-use crate::domain::simulator::simulator::Simulator;
 use crate::domain::simulator::simulator::SystemSimulator;
 use crate::domain::vrm_system_model::client::client::Clients;
-use crate::domain::vrm_system_model::utils::statistics::init_tracing;
 use crate::domain::vrm_system_model::vrm_system_model::Vrm;
 use crate::error::Result;
 use crate::loader::parser::parse_json_file;
@@ -37,13 +29,13 @@ pub mod error;
 pub mod loader;
 pub mod logger;
 
-pub fn get_clients(file_path: &str, simulator: Arc<dyn SystemSimulator>) -> Result<Clients> {
+pub fn get_clients(file_path: &str, simulator: Arc<dyn SystemSimulator>, reservation_store: ReservationStore) -> Result<Clients> {
     log::info!("Starting ClientsDto construction.");
 
     let root_dto: ClientsDto = parse_json_file::<ClientsDto>(file_path)?;
     log::info!("JSON file parsed successfully.");
 
-    let system_model = Clients::from_dto(root_dto, simulator)?;
+    let system_model = Clients::from_dto(root_dto, simulator, reservation_store)?;
     log::info!("Internal SystemModel was constructed successfully.");
 
     Ok(system_model)

@@ -6,7 +6,7 @@ use crate::domain::vrm_system_model::grid_resource_management_system::scheduler:
 use crate::domain::vrm_system_model::grid_resource_management_system::scheduler_comparator::eft_reservation_compare::EFTReservationCompare;
 use crate::domain::vrm_system_model::reservation::node_reservation::NodeReservation;
 use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationState, ReservationTrait};
-use crate::domain::vrm_system_model::reservation::reservation_store::ReservationId;
+use crate::domain::vrm_system_model::reservation::reservation_store::{self, ReservationId, ReservationStore};
 use crate::domain::vrm_system_model::utils::id::{ComponentId, ComponentTag};
 use crate::domain::vrm_system_model::workflow;
 use crate::domain::vrm_system_model::workflow::workflow::Workflow;
@@ -38,7 +38,7 @@ impl HEFTSyncWorkflowScheduler {
             let mut grid_component_res_database: HashMap<ComponentId, HashSet<ReservationId>> = HashMap::new();
 
             if let Reservation::Workflow(ref mut workflow) = *reservation {
-                let ranked_node_reservations = workflow.calculate_upward_rank(average_link_speed);
+                let ranked_node_reservations = workflow.calculate_upward_rank(average_link_speed, &self.base.reservation_store);
 
                 let workflow_booking_interval_end = workflow.get_booking_interval_end();
 
@@ -50,7 +50,9 @@ impl HEFTSyncWorkflowScheduler {
 
                     for data_dependency in co_allocation_node.incoming_data_dependencies.clone() {
                         let data_dep_source_res_id = data_dependency.source_node.unwrap();
-                        let data_dep_source_assigned_end = workflow.nodes.get(&data_dep_source_res_id).unwrap().reservation.base.assigned_end;
+
+                        let data_dep_source_assigned_end =
+                            self.base.reservation_store.get_assigned_end(workflow.nodes.get(&data_dep_source_res_id).unwrap().reservation_id);
 
                         let mut file_transfer_time = data_dependency.size / average_link_speed;
 
@@ -58,7 +60,7 @@ impl HEFTSyncWorkflowScheduler {
                         if data_dependency.size > 0 && file_transfer_time == 0 {
                             log::debug!(
                                 "MissMatchDataDependencySizeTransferTime: The Data dependency {} has a size of {}, however the file transfer time is 0. Process dependency with transfer_time of 1.",
-                                data_dependency.reservation.base.get_name(),
+                                self.base.reservation_store.get_name_for_key(data_dependency.reservation_id).unwrap(),
                                 data_dependency.size
                             );
                             file_transfer_time = 1;
@@ -70,12 +72,15 @@ impl HEFTSyncWorkflowScheduler {
                             start = start_after_this_dep;
                         }
                     }
+                    // Access duration from Store
+                    let task_duration = self.base.reservation_store.get_task_duration(workflow_node.reservation_id);
+                    let node_name = self.base.reservation_store.get_name_for_key(workflow_node.reservation_id).unwrap();
 
                     // Do not process workflow, where the deadline will be missed
-                    if start + workflow_node.reservation.base.get_task_duration() > workflow_booking_interval_end {
+                    if start + task_duration > workflow_booking_interval_end {
                         log::debug!(
                             "No valid schedule found reservation {} of workflow {}, due to missed deadline.",
-                            workflow_node.reservation.base.get_name(),
+                            node_name,
                             workflow.base.get_name()
                         );
                         self.cancel_all_reservations(adc, &grid_component_res_database);
@@ -83,19 +88,19 @@ impl HEFTSyncWorkflowScheduler {
                         return false;
                     }
 
-                    workflow_node.reservation.set_booking_interval_start(start);
+                    self.base.reservation_store.set_booking_interval_start(workflow_node.reservation_id, start);
                     // Possible improvement: Could be shortened by node rank
-                    workflow_node.reservation.set_booking_interval_end(workflow_booking_interval_end);
+                    self.base.reservation_store.set_booking_interval_end(workflow_node.reservation_id, workflow_booking_interval_end);
 
                     // Schedule all compute task (and all synced compute tasks and sync dependencies)
-                    if (!self.schedule_co_allocation_node_reservations(workflow, &mut workflow_node, &adc)) {
+                    if (!self.schedule_co_allocation_node_reservations(workflow, &mut workflow_node, &mut grid_component_res_database, adc)) {
                         self.cancel_all_reservations(adc, &grid_component_res_database);
                         workflow.set_state(ReservationState::Rejected);
                         return false;
                     }
 
                     // Try to get network connection form all predecessors
-                    if (!self.schedule_data_dependencies(&workflow, &mut workflow_node.reservation, adc)) {
+                    if (!self.schedule_data_dependencies(&workflow, &mut workflow_node, adc)) {
                         self.cancel_all_reservations(adc, &grid_component_res_database);
                         workflow.set_state(ReservationState::Rejected);
                         return false;
@@ -121,7 +126,7 @@ impl HEFTSyncWorkflowScheduler {
      * @param aisPerReservation A container for all successful reservations for this workflow
      */
 
-    fn schedule_data_dependencies(&mut self, workflow: &Workflow, workflow_node: &mut NodeReservation, adc: &mut ADC) -> bool {
+    fn schedule_data_dependencies(&mut self, workflow: &Workflow, workflow_node: &mut WorkflowNode, adc: &mut ADC) -> bool {
         todo!()
     }
 
@@ -130,13 +135,12 @@ impl HEFTSyncWorkflowScheduler {
         workflow: &mut Workflow,
         node_to_schedule: &mut WorkflowNode,
         grid_component_res_database: &mut HashMap<ComponentId, HashSet<ReservationId>>,
-        adc: &mut &mut ADC,
+        adc: &mut ADC,
     ) -> bool {
         let co_allocation_to_schedule = node_to_schedule.co_allocation_key.clone().unwrap();
-
         let mut co_allocation_nodes_to_schedule = workflow.co_allocations.get(&co_allocation_to_schedule).unwrap().members.clone();
 
-        let reservation_id_to_schedule = self.base.reservation_store.get_key_for_name(node_to_schedule.reservation.base.get_name());
+        let reservation_id_to_schedule = node_to_schedule.reservation_id;
 
         let first_task_candidate = self.schedule_node_reservation_eft(workflow, reservation_id_to_schedule, grid_component_res_database, adc);
 
@@ -148,6 +152,7 @@ impl HEFTSyncWorkflowScheduler {
         }
         let first_task_candidate = first_task_candidate.unwrap();
 
+        // Updates time boundaries
         workflow.update_reservation(self.base.reservation_store.clone(), first_task_candidate);
 
         // Get Co-Allocation constrains
@@ -156,19 +161,15 @@ impl HEFTSyncWorkflowScheduler {
         let end = self.base.reservation_store.get_assigned_end(first_task_candidate);
 
         // All nodes which are connected by Sync dependencies
+        // Update all group members of Co-Allocation Node
         for co_allocation_node_id in co_allocation_nodes_to_schedule {
-            // TODO is this necessary
-            // if (nextNode.assignedReservation.equalName(firstJobCand)) {
-            // longest/first job already scheduled
-            // continue;
-            // }
-
-            workflow.nodes.get_mut(&co_allocation_node_id).unwrap().reservation.base.set_booking_interval_start(start);
-            workflow.nodes.get_mut(&co_allocation_node_id).unwrap().reservation.base.set_booking_interval_end(end);
-            workflow.nodes.get_mut(&co_allocation_node_id).unwrap().reservation.base.adjust_task_duration(duration);
+            let member_id = workflow.nodes.get(&co_allocation_node_id).unwrap().reservation_id;
+            self.base.reservation_store.set_booking_interval_start(member_id, start);
+            self.base.reservation_store.set_booking_interval_end(member_id, end);
+            self.base.reservation_store.adjust_capacity(member_id, duration);
 
             // Try to reserve this task
-            let reserved_candidate_id = adc.submit_task_at_first_grid_component(, shadow_schedule_id, grid_component_res_database)
+            // TODO
         }
         todo!()
     }
@@ -215,8 +216,10 @@ impl HEFTSyncWorkflowScheduler {
         if !candidate_id.is_none()
             && self.base.reservation_store.is_reservation_state_at_least(candidate_id.unwrap(), ReservationState::ReserveAnswer)
         {
-            workflow.update_reservation(self.base.reservation_store.clone(), candidate_id.unwrap())
+            workflow.update_reservation(self.base.reservation_store.clone(), candidate_id.unwrap());
+            return candidate_id;
         }
+        return None;
     }
 
     /**

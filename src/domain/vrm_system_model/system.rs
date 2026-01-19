@@ -30,7 +30,11 @@ impl System {
 }
 
 impl System {
-    fn from_clients_dto(dto: ClientsDto, simulator: Arc<dyn SystemSimulator>) -> Result<HashMap<ClientId, Client>> {
+    fn from_clients_dto(
+        dto: ClientsDto,
+        simulator: Arc<dyn SystemSimulator>,
+        reservation_store: ReservationStore,
+    ) -> Result<HashMap<ClientId, Client>> {
         let clients = HashMap::new();
 
         for client_dto in dto.clients {
@@ -39,7 +43,7 @@ impl System {
 
             for workflow_dto in client_dto.workflows {
                 let workflow_id = WorkflowId::new(workflow_dto.id.clone());
-                let workflow = Workflow::try_from((workflow_dto, client_id.clone()))?;
+                let workflow = Workflow::create_form_dto(workflow_dto, client_id.clone(), reservation_store.clone())?;
                 workflows.insert(workflow_id, workflow);
             }
 

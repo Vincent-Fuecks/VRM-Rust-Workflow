@@ -1,15 +1,15 @@
 use serde::{Deserialize, Serialize};
 
 use crate::domain::vrm_system_model::{
-    reservation::link_reservation::LinkReservation,
+    reservation::reservation_store::ReservationId,
     utils::id::{CoAllocationDependencyId, CoAllocationId, DataDependencyId, WorkflowNodeId},
 };
 
 /// Represents an edge for data transfer (file).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DataDependency {
-    /// Contains common properties shared by all reservations and includes specific fields for network connectivity.
-    pub reservation: LinkReservation,
+    /// Reference to the actual data in ReservationStore
+    pub reservation_id: ReservationId,
 
     /// Key to Workflow.nodes, which is the sender.
     pub source_node: Option<WorkflowNodeId>,
@@ -27,8 +27,8 @@ pub struct DataDependency {
 /// Represents an edge for synchronous bandwidth (e.g. Co-allocated Communication).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SyncDependency {
-    /// Contains common properties shared by all reservations and includes specific fields for network connectivity.
-    pub reservation: LinkReservation,
+    /// Reference to the actual data in ReservationStore
+    pub reservation_id: ReservationId,
 
     /// Key to Workflow.nodes, which is the sender.
     pub source_node: Option<WorkflowNodeId>,

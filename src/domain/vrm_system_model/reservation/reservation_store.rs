@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use slotmap::{SlotMap, new_key_type};
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
@@ -358,7 +359,7 @@ impl ReservationStore {
         if let Some(handle) = self.get(reservation_id) {
             let res = handle.read().unwrap();
             if let Some(workflow) = res.as_any().downcast_ref::<Workflow>() {
-                return Some(workflow.clone().calculate_upward_rank(average_link_speed));
+                return Some(workflow.clone().calculate_upward_rank(average_link_speed, self));
             } else {
                 log::error!("Reservation {:?} is not a Workflow", reservation_id);
             }
