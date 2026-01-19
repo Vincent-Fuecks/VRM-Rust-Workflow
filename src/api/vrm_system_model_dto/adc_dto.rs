@@ -11,4 +11,5 @@ pub struct ADCDto {
     pub timeout: i64,
     pub max_optimization_time: i64,
     pub reject_new_reservations_at: i64,
+    pub children: Vec<String>,
 }

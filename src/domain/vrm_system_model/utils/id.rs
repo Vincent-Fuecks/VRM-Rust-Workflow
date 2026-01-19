@@ -1,8 +1,8 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::marker::PhantomData;
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Serialize)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Serialize, Deserialize)]
 pub struct Id<T> {
     pub id: String,
     _marker: PhantomData<T>,
@@ -11,6 +11,14 @@ pub struct Id<T> {
 impl<T> Id<T> {
     pub fn new(id: impl Into<String>) -> Self {
         Id { id: id.into(), _marker: PhantomData }
+    }
+
+    pub fn compare(&self, other: &Id<T>) -> bool {
+        self.id == other.id
+    }
+
+    pub fn cast<U>(self) -> Id<U> {
+        Id { id: self.id, _marker: PhantomData }
     }
 }
 
@@ -41,7 +49,7 @@ impl<T> fmt::Debug for Id<T> {
 pub struct ReservationTag;
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Copy)]
 pub struct RouterTag;
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Copy, Serialize, Deserialize)]
 pub struct NodeResourceTag;
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Copy)]
 pub struct LinkResourceTag;
@@ -61,17 +69,17 @@ pub struct ClientTag;
 pub struct ComponentTag;
 
 // Workflow Domain Tags
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Copy, Serialize, Deserialize)]
 pub struct WorkflowTag;
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Copy, Serialize, Deserialize)]
 pub struct WorkflowNodeTag;
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Copy, Serialize, Deserialize)]
 pub struct DataDependencyTag;
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Copy, Serialize, Deserialize)]
 pub struct SyncDependencyTag;
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Copy, Serialize, Deserialize)]
 pub struct CoAllocationTag;
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Copy, Serialize, Deserialize)]
 pub struct CoAllocationDependencyTag;
 
 pub type ReservationName = Id<ReservationTag>;

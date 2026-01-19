@@ -1,5 +1,7 @@
 use std::any::Any;
 
+use serde::{Deserialize, Serialize};
+
 use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationBase, ReservationTrait, ReservationTyp};
 use crate::domain::vrm_system_model::utils::id::RouterId;
 /// This structure extends [`ReservationBase`] to include fields specific to
@@ -13,7 +15,7 @@ use crate::domain::vrm_system_model::utils::id::RouterId;
 ///    bandwidth for short-term coordination and communication between tasks
 ///    associated with co-allocated compute reservations. The specified bandwidth
 ///    **must** be provided for the entire duration.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LinkReservation {
     /// The common base properties shared by all reservations.
     pub base: ReservationBase,
@@ -23,6 +25,16 @@ pub struct LinkReservation {
     pub start_point: Option<RouterId>,
     /// Unique identifier of the end router for the link.
     pub end_point: Option<RouterId>,
+}
+
+impl LinkReservation {
+    pub fn get_start_point(&self) -> Option<RouterId> {
+        self.start_point.clone()
+    }
+
+    pub fn get_end_point(&self) -> Option<RouterId> {
+        self.end_point.clone()
+    }
 }
 
 impl ReservationTrait for LinkReservation {

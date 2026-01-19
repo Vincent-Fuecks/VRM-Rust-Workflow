@@ -1,10 +1,14 @@
 use crate::domain::simulator;
 use crate::domain::simulator::simulator::Simulator;
 use crate::domain::simulator::simulator::SystemSimulator;
+use crate::domain::vrm_system_model::grid_component;
 use crate::domain::vrm_system_model::grid_resource_management_system::aci::{AcI, ScheduleID};
 use crate::domain::vrm_system_model::grid_resource_management_system::aci_order::AcIOrder;
 use crate::domain::vrm_system_model::grid_resource_management_system::grid_resource_management_system_trait::ExtendedReservationProcessor;
+use crate::domain::vrm_system_model::reservation::reservation::Reservation;
+use crate::domain::vrm_system_model::reservation::reservation_store::ReservationId;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationStore;
+use crate::domain::vrm_system_model::reservation::reservations::Reservations;
 use crate::domain::vrm_system_model::schedule::slotted_schedule::SlottedSchedule;
 use crate::domain::vrm_system_model::scheduler_trait::Schedule;
 use crate::domain::vrm_system_model::utils::id::{AciId, AdcId, ComponentId, ShadowScheduleId, SlottedScheduleId};
@@ -31,6 +35,9 @@ pub struct AcIContainer {
     // Contains a AcI or ADC
     pub grid_component: Box<dyn ExtendedReservationProcessor>,
 
+    reservation_store: ReservationStore,
+
+    // TODO Should the schedule get a separated ReservationStore? Currently GridComponent and schedule have the same.
     // AKA SlottedSchedule
     pub schedule: Box<dyn Schedule>,
 
@@ -64,10 +71,21 @@ impl AcIContainer {
 
         let total_capacity = grid_component.get_total_capacity();
 
-        let schedule =
-            Box::new(SlottedSchedule::new(scheduler_id, number_of_real_slots, slot_width, total_capacity, false, simulator, reservation_store));
+        let schedule = Box::new(SlottedSchedule::new(
+            scheduler_id,
+            number_of_real_slots,
+            slot_width,
+            total_capacity,
+            false,
+            simulator,
+            reservation_store.clone(),
+        ));
 
-        Self { grid_component, schedule, registration_index, total_link_capacity, link_resource_count, failures: 0 }
+        Self { grid_component, reservation_store, schedule, registration_index, total_link_capacity, link_resource_count, failures: 0 }
+    }
+
+    pub fn can_handel(&self, res: Reservation) -> bool {
+        self.grid_component.can_handel(res)
     }
 }
 
@@ -90,7 +108,7 @@ pub struct AcIManager {
     adc_id: AdcId,
 
     /// Map of `AciId` to their container wrappers.
-    grid_components: HashMap<ComponentId, AcIContainer>,
+    pub grid_components: HashMap<ComponentId, AcIContainer>,
 
     /// The aggregated sum of link capacities of all registered AcIs (does not mean free capacity).
     total_link_capacity: i64,
@@ -100,6 +118,9 @@ pub struct AcIManager {
 
     /// Monotonic counter used to assign `registration_index` to new AcIContainer's.
     registration_counter: usize,
+
+    /// Is used to create an empty Reservations struct as return value for an unsuccessful probe request
+    reservation_store: ReservationStore,
 }
 
 impl AcIManager {
@@ -145,11 +166,27 @@ impl AcIManager {
             total_link_capacity: aci_manager_total_link_capacity,
             link_resource_count: aci_manager_link_resource_count,
             registration_counter,
+            reservation_store: reservation_store.clone(),
         }
     }
 
     pub fn get_component_mut(&mut self, component_id: ComponentId) -> Option<&mut AcIContainer> {
         self.grid_components.get_mut(&component_id)
+    }
+
+    pub fn can_handel(&self, component_id: ComponentId, res: Reservation) -> bool {
+        match self.grid_components.get(&component_id) {
+            Some(grid_component) => grid_component.grid_component.can_handel(res),
+
+            None => {
+                log::debug!(
+                    "NotFoundGridComponent: ADC {} requested can_handel request of reservation {}",
+                    self.adc_id,
+                    res.get_base_reservation().get_name()
+                );
+                return false;
+            }
+        }
     }
 
     /// Increments and returns the next available registration counter.
@@ -471,6 +508,59 @@ impl AcIManager {
             );
         } else {
             return LoadMetric::new(earliest_start, latest_end, 0.0, 0.0, utilization);
+        }
+    }
+
+    pub fn probe(&mut self, component_id: ComponentId, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> Reservations {
+        match self.grid_components.get_mut(&component_id) {
+            Some(container) => container.grid_component.probe(reservation_id, shadow_schedule_id),
+            None => {
+                log::error!(
+                    "ComponentManagerHasNotFoundGridComponent: ComponentManager of ADC {}, requested component {} for probe request of reservation {:?} on shadow_schedule {:?}",
+                    self.adc_id,
+                    component_id,
+                    reservation_id,
+                    shadow_schedule_id
+                );
+
+                return Reservations::new_empty(self.reservation_store.clone());
+            }
+        }
+    }
+
+    pub fn reserve(
+        &mut self,
+        component_id: ComponentId,
+        reservation_id: ReservationId,
+        shadow_schedule_id: Option<ShadowScheduleId>,
+    ) -> ReservationId {
+        match self.grid_components.get_mut(&component_id) {
+            Some(container) => container.grid_component.reserve(reservation_id, shadow_schedule_id),
+            None => {
+                log::error!(
+                    "ComponentManagerHasNotFoundGridComponent: ComponentManager of ADC {}, requested component {} for reserve request of reservation {:?} on shadow_schedule {:?}",
+                    self.adc_id,
+                    component_id,
+                    reservation_id,
+                    shadow_schedule_id
+                );
+
+                return reservation_id;
+            }
+        }
+    }
+
+    pub fn reserve_without_check(&mut self, component_id: ComponentId, reservation_id: ReservationId) {
+        match self.grid_components.get_mut(&component_id) {
+            Some(container) => container.schedule.reserve_without_check(reservation_id),
+            None => {
+                log::error!(
+                    "ComponentManagerHasNotFoundGridComponent: ComponentManager of ADC {}, requested component {} for reserve_without_check request of reservation {:?} on schedule",
+                    self.adc_id,
+                    component_id,
+                    reservation_id,
+                );
+            }
         }
     }
 }

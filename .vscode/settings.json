@@ -1,11 +1,13 @@
 {
     "cSpell.words": [
+        "actix",
         "adcs",
         "appender",
         "cpus",
         "Deque",
         "GRMS",
         "hiracical",
+        "rtype",
         "slotmap",
         "Slurm",
         "thiserror"

@@ -19,7 +19,15 @@ impl<ID: Clone> BaseResource<ID> {
         Self { id, capacity, connected_routers: connected_routers }
     }
 
-    pub fn can_handle_capacity(&self, reservation_store: ReservationStore, reservation_id: ReservationId) -> bool {
+    pub fn can_handle_adc_capacity_request(&self, res: Reservation) -> bool {
+        if res.get_base_reservation().is_moldable() && res.get_base_reservation().get_reserved_capacity() > 0 {
+            res.get_base_reservation().get_reserved_capacity() <= self.capacity
+        } else {
+            true
+        }
+    }
+
+    pub fn can_handle_aci_capacity_request(&self, reservation_store: ReservationStore, reservation_id: ReservationId) -> bool {
         if reservation_store.is_moldable(reservation_id) && reservation_store.get_reserved_capacity(reservation_id) > 0 {
             reservation_store.get_reserved_capacity(reservation_id) <= self.capacity
         } else {
@@ -55,9 +63,18 @@ impl Resources {
         self.inner.iter().map(|r| r.get_capacity()).sum()
     }
 
-    pub fn can_handle(&self, reservation_store: ReservationStore, reservation_id: ReservationId) -> bool {
+    pub fn can_handle_adc_request(&self, res: Reservation) -> bool {
         for resource in &self.inner {
-            if resource.can_handle(reservation_store.clone(), reservation_id) {
+            if resource.can_handle_adc_capacity_request(res.clone()) {
+                return true;
+            }
+        }
+        false
+    }
+
+    pub fn can_handle_aci_request(&self, reservation_store: ReservationStore, reservation_id: ReservationId) -> bool {
+        for resource in &self.inner {
+            if resource.can_handle_aci_capacity_request(reservation_store.clone(), reservation_id) {
                 return true;
             }
         }

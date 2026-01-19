@@ -30,8 +30,12 @@ impl Resource for NodeResource {
         &self.base.connected_routers
     }
 
-    fn can_handle(&self, reservation_store: ReservationStore, reservation_id: ReservationId) -> bool {
-        self.base.can_handle_capacity(reservation_store, reservation_id)
+    fn can_handle_adc_capacity_request(&self, res: Reservation) -> bool {
+        self.base.can_handle_adc_capacity_request(res)
+    }
+
+    fn can_handle_aci_capacity_request(&self, reservation_store: ReservationStore, reservation_id: ReservationId) -> bool {
+        self.base.can_handle_aci_capacity_request(reservation_store, reservation_id)
     }
 
     fn as_any(&self) -> &dyn Any {

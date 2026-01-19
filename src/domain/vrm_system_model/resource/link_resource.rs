@@ -2,7 +2,7 @@ use std::any::Any;
 use std::collections::HashSet;
 
 use crate::domain::vrm_system_model::reservation::link_reservation::LinkReservation;
-use crate::domain::vrm_system_model::reservation::reservation::Reservation;
+use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationTrait};
 use crate::domain::vrm_system_model::reservation::reservation_store::{self, ReservationId, ReservationStore};
 use crate::domain::vrm_system_model::resource::{
     resource_trait::{Resource, ResourceId},
@@ -47,7 +47,28 @@ impl Resource for LinkResource {
         &self.base.connected_routers
     }
 
-    fn can_handle(&self, reservation_store: ReservationStore, reservation_id: ReservationId) -> bool {
+    fn can_handle_adc_capacity_request(&self, res: Reservation) -> bool {
+        let Some(link) = res.as_link() else {
+            log::debug!(
+                "LinkResourceCanHandleError: Requested can_handle operation of LinkResource, however provided Reservation {} is not Type LinkReservation",
+                res.get_name()
+            );
+            return false;
+        };
+
+        let link_source = link.start_point.clone();
+        let link_target = link.end_point.clone();
+
+        if link_source.is_none() || link_target.is_none() {
+            return false;
+        } else if self.source != link_source.unwrap() || self.target != link_target.unwrap() {
+            return false;
+        } else {
+            return self.base.can_handle_adc_capacity_request(res);
+        }
+    }
+
+    fn can_handle_aci_capacity_request(&self, reservation_store: ReservationStore, reservation_id: ReservationId) -> bool {
         let link_source = reservation_store.get_start_point(reservation_id);
         let link_target = reservation_store.get_end_point(reservation_id);
 
@@ -56,7 +77,7 @@ impl Resource for LinkResource {
         } else if self.source != link_source.unwrap() || self.target != link_target.unwrap() {
             return false;
         } else {
-            return self.base.can_handle_capacity(reservation_store, reservation_id);
+            return self.base.can_handle_aci_capacity_request(reservation_store, reservation_id);
         }
     }
 

@@ -7,18 +7,21 @@ use crate::api::workflow_dto::workflow_dto::{TaskDto, WorkflowDto};
 use crate::domain::vrm_system_model::reservation::reservation::{
     Reservation, ReservationBase, ReservationProceeding, ReservationState, ReservationTrait, ReservationTyp,
 };
+use crate::domain::vrm_system_model::reservation::reservation_store::{ReservationId, ReservationStore};
 use crate::domain::vrm_system_model::reservation::{link_reservation::LinkReservation, node_reservation::NodeReservation};
 use crate::domain::vrm_system_model::utils::id::{
-    ClientId, CoAllocationDependencyId, CoAllocationId, DataDependencyId, ReservationName, SyncDependencyId, WorkflowNodeId,
+    ClientId, CoAllocationDependencyId, CoAllocationId, DataDependencyId, ReservationName, SyncDependencyId, WorkflowNodeId, WorkflowNodeTag,
 };
 use crate::domain::vrm_system_model::workflow::co_allocation::CoAllocation;
 use crate::domain::vrm_system_model::workflow::dependency::{CoAllocationDependency, DataDependency, SyncDependency};
 use crate::domain::vrm_system_model::workflow::workflow_node::WorkflowNode;
+use crate::domain::vrm_system_model::{reservation, workflow};
 use crate::error::Error;
 
+use serde::{Deserialize, Serialize};
 use union_find::{QuickUnionUf, UnionBySize, UnionFind};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Workflow {
     pub base: ReservationBase,
 
@@ -663,7 +666,7 @@ impl Workflow {
     /// A `Vec<Option<WorkflowNode>>` containing the `representative` node for
     /// every `CoAllocation` in the workflow, ordered by `rank_upward` in descending
     /// order (largest ranks are first).
-    pub fn calculate_upward_rank(mut self, avg_net_speed: i64) -> Vec<WorkflowNode> {
+    pub fn calculate_upward_rank(&mut self, avg_net_speed: i64) -> Vec<WorkflowNode> {
         let mut finished_node_keys: Vec<CoAllocationId> = Vec::with_capacity(self.co_allocations.len());
         let mut queue: Vec<CoAllocationId> = Vec::new();
 
@@ -865,5 +868,60 @@ impl ReservationTrait for Workflow {
 
     fn get_typ(&self) -> ReservationTyp {
         ReservationTyp::Workflow
+    }
+}
+
+impl Workflow {
+    /**
+     * Updates the Request, represented by a WorkflowNode or a Dependency, belonging to
+     * the given Reservation with the data of the given Reservation.
+     * @param res Reservation belonging to a Request(Reservation) in the Workflow
+     */
+
+    pub fn update_reservation(&mut self, reservation_store: ReservationStore, reservation_id: ReservationId) {
+        match reservation_store.get_typ(reservation_id) {
+            Some(ReservationTyp::Link) => {
+                let data_dep_id: DataDependencyId = reservation_store.get_name_for_key(reservation_id).unwrap().cast();
+                let sync_dep_id: SyncDependencyId = reservation_store.get_name_for_key(reservation_id).unwrap().cast();
+
+                if self.data_dependencies.contains_key(&data_dep_id) {
+                    let dep = self.data_dependencies.get_mut(&data_dep_id).unwrap();
+                    dep.reservation.base = reservation_store.get(reservation_id).unwrap().read().unwrap().get_base_reservation().clone()
+                } else if self.sync_dependencies.contains_key(&sync_dep_id) {
+                    let dep = self.sync_dependencies.get_mut(&sync_dep_id).unwrap();
+                    dep.reservation.base = reservation_store.get(reservation_id).unwrap().read().unwrap().get_base_reservation().clone()
+                } else {
+                    log::error!("Unknown LinkReservation {} at reservation.update_reservation.", self.get_name());
+                }
+
+                self.update_workflow_assigned_start_and_end(reservation_store.clone(), reservation_id);
+            }
+            Some(ReservationTyp::Node) => {
+                let node_id: WorkflowNodeId = reservation_store.get_name_for_key(reservation_id).unwrap().cast();
+
+                let node = self.nodes.get_mut(&node_id).unwrap();
+                node.reservation.base = reservation_store.get(reservation_id).unwrap().read().unwrap().get_base_reservation().clone();
+                self.update_workflow_assigned_start_and_end(reservation_store.clone(), reservation_id);
+            }
+            _ => log::error!("Unknown Reservation type of reservation {} at reservation.update_reservation.", self.get_name()),
+        }
+    }
+
+    /**
+     * Updates the assigned start and/or end of the workflow, if the assigned start/end
+     * of the given reservation exceeds those interval
+     * @param res Reservation represented by a Request(Reservation) in the Workflow
+     */
+    fn update_workflow_assigned_start_and_end(&mut self, reservation_store: ReservationStore, reservation_id: ReservationId) {
+        if self.base.assigned_start == i64::MIN
+            || (reservation_store.get_assigned_start(reservation_id) < self.base.assigned_start
+                && reservation_store.get_assigned_start(reservation_id) != i64::MIN)
+        {
+            self.base.set_assigned_start(reservation_store.get_assigned_start(reservation_id));
+        }
+
+        if self.base.assigned_end == i64::MIN || reservation_store.get_assigned_end(reservation_id) > self.base.assigned_end {
+            self.base.set_assigned_end(reservation_store.get_assigned_end(reservation_id));
+        }
     }
 }

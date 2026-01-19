@@ -1,4 +1,7 @@
+use std::collections::HashSet;
+
 use crate::api::vrm_system_model_dto::adc_dto::ADCDto;
+use crate::domain::vrm_system_model::utils::id::ComponentId;
 use crate::error::Error;
 
 #[derive(Debug, Clone)]
@@ -11,6 +14,7 @@ pub struct ADC {
     pub timeout: i64,
     pub max_optimization_time: i64,
     pub reject_new_reservations_at: i64,
+    pub children: HashSet<ComponentId>,
 }
 
 /// An enum to describe the available strategies for sorting
@@ -62,6 +66,8 @@ impl TryFrom<ADCDto> for ADC {
 
         let aci_selection_strategy = AcISelectionStrategy::from_str(&dto.request_order);
 
+        let children: HashSet<ComponentId> = dto.children.into_iter().map(|child| ComponentId::new(child)).collect();
+
         let adc = ADC {
             id: dto.id.clone(),
             scheduler_typ: scheduler_typ,
@@ -71,6 +77,7 @@ impl TryFrom<ADCDto> for ADC {
             timeout: dto.timeout.clone(),
             max_optimization_time: dto.max_optimization_time.clone(),
             reject_new_reservations_at: dto.reject_new_reservations_at.clone(),
+            children,
         };
 
         Ok(adc)

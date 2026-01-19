@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use serde::{Deserialize, Serialize};
+
 use crate::domain::vrm_system_model::utils::id::{CoAllocationId, WorkflowNodeId};
 use crate::domain::vrm_system_model::workflow::dependency::{CoAllocationDependency, DataDependency, SyncDependency};
 use crate::domain::vrm_system_model::workflow::workflow_node::WorkflowNode;
@@ -11,7 +13,7 @@ use crate::domain::vrm_system_model::workflow::workflow_node::WorkflowNode;
 /// **Note**: The scheduler later schedules **not** the individual WorkflowNodes, it schedules the **CoAllocation** as one unit.
 /// Therefore, when the scheduler reserves resources for a CoAllocation, it must find a time slot where all member nodes (e.g. A, B, and C) can run simultaneously.
 // The CoAllocation's assigned_start time becomes the assigned_start time for all its member nodes.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CoAllocation {
     pub id: CoAllocationId,
 

@@ -97,6 +97,15 @@ impl ReservationStore {
         guard.slots.get(key).cloned()
     }
 
+    pub fn get_reservation_snapshot(&self, reservation_id: ReservationId) -> Option<Reservation> {
+        let guard = self.inner.read().expect("Repository lock poisoned");
+
+        guard.slots.get(reservation_id).map(|arc_lock| {
+            let res_guard = arc_lock.read().expect("Individual reservation lock poisoned");
+            res_guard.clone()
+        })
+    }
+
     /// Get Reservation with User reservation name (ReservationName).
     ///  
     /// # Returns
@@ -113,6 +122,16 @@ impl ReservationStore {
     /// Returns Some(ReservationName) if ReservationId was present in SlotMap else return None.  
     pub fn get_name_for_key(&self, key: ReservationId) -> Option<ReservationName> {
         self.get(key).map(|handle| handle.read().unwrap().get_name().clone())
+    }
+
+    /// Get Reservation id (ReservationId) for user name (ReservationName).
+    ///  
+    /// # Returns
+    /// Returns Some(ReservationId) if ReservationName was present in SlotMap else return None.  
+    pub fn get_key_for_name(&self, name: ReservationName) -> ReservationId {
+        let guard = self.inner.read().expect("RwLock poisoned");
+        let key = guard.name_index.get(&name);
+        return key.unwrap().clone();
     }
 
     // TODO later return Reservations object if possible.
@@ -325,6 +344,16 @@ impl ReservationStore {
         }
     }
 
+    pub fn get_typ(&self, reservation_id: ReservationId) -> Option<ReservationTyp> {
+        if let Some(handle) = self.get(reservation_id) {
+            let res = handle.read().unwrap();
+            return Some(res.get_typ());
+        } else {
+            log::error!("Get reservation (id: {:?}) was not possible.", reservation_id);
+            return None;
+        }
+    }
+
     pub fn get_upward_rank(&self, reservation_id: ReservationId, average_link_speed: i64) -> Option<Vec<WorkflowNode>> {
         if let Some(handle) = self.get(reservation_id) {
             let res = handle.read().unwrap();
@@ -390,6 +419,17 @@ impl ReservationStore {
             let guard = self.inner.read().unwrap();
             guard.listener.on_reservation_change(id, new_state);
         }
+    }
+
+    /// Provides mutable access to a workflow for scheduling purposes.
+    pub fn with_workflow_mut<F, R>(&self, reservation_id: ReservationId, f: F) -> Option<R>
+    where
+        F: FnOnce(&mut Workflow) -> R,
+    {
+        let handle = self.get(reservation_id).unwrap();
+        let mut guard = handle.write().expect("Lock poisoned");
+
+        guard.as_workflow_mut().map(f)
     }
 
     /// Creates a "Shadow" copy of the store.

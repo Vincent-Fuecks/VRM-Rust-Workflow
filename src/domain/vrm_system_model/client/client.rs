@@ -81,7 +81,7 @@ impl Clients {
 }
 
 impl Client {
-    pub async fn run(mut self, reservation_store: ReservationStore, adc: &mut Box<dyn ExtendedReservationProcessor>) {
+    pub async fn run(mut self, reservation_store: ReservationStore, adc: Arc<tokio::sync::Mutex<Box<dyn ExtendedReservationProcessor>>>) {
         self.unprocessed_reservations.sort_by_key(|r| r.get_arrival_time());
 
         while !self.unprocessed_reservations.is_empty() {
@@ -100,7 +100,7 @@ impl Client {
             let res_id = reservation_store.add(reservation);
 
             // Process the reservation (Probe -> Reserve -> Commit)
-            self.process_reservation(res_id, &reservation_store, adc).await;
+            // self.process_reservation(res_id, &reservation_store, adc).await;
         }
 
         log::info!("Client {} finished processing all reservations.", self.id);

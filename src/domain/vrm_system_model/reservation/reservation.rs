@@ -1,13 +1,13 @@
-use serde::Serialize;
-use std::{any::Any, ops::Not};
+use serde::{Deserialize, Serialize};
+use std::{any::Any, env::Args, ops::Not};
 
 use crate::domain::vrm_system_model::{
     reservation::{link_reservation::LinkReservation, node_reservation::NodeReservation},
-    utils::id::{ClientId, ComponentId, ReservationName},
-    workflow::workflow::Workflow,
+    utils::id::{ClientId, ComponentId, ReservationName, RouterId},
+    workflow::{self, workflow::Workflow},
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum Reservation {
     Workflow(Workflow),
     Node(NodeReservation),
@@ -21,6 +21,18 @@ pub enum ReservationTyp {
 }
 
 impl Reservation {
+    pub fn new_workflow(base: ReservationBase) -> Self {
+        todo!()
+    }
+
+    pub fn new_node(base: ReservationBase, task: Option<String>, out: Option<String>, err: Option<String>) -> Self {
+        Self::Node(NodeReservation { base, task_path: task, output_path: out, error_path: err })
+    }
+
+    pub fn new_link(base: ReservationBase, start: RouterId, end: RouterId) -> Self {
+        Self::Link(LinkReservation { base, start_point: Some(start), end_point: Some(end) })
+    }
+
     pub fn get_base_reservation(&self) -> &ReservationBase {
         match self {
             Reservation::Workflow(w) => &w.base,
@@ -38,7 +50,22 @@ impl Reservation {
     }
 
     pub fn state(&self) -> &ReservationState {
-        &self.get_base().state
+        &self.get_base_reservation().state
+    }
+
+    /// Returns a mutable reference to the Workflow if this is a Workflow reservation.
+    pub fn as_workflow_mut(&mut self) -> Option<&mut Workflow> {
+        match self {
+            Reservation::Workflow(w) => Some(w),
+            _ => None,
+        }
+    }
+
+    pub fn as_link(&self) -> Option<&LinkReservation> {
+        match self {
+            Reservation::Link(l) => Some(l),
+            _ => None,
+        }
     }
 }
 
@@ -199,8 +226,7 @@ impl Clone for Box<dyn ReservationTrait> {
 /// through processing, commitment, and eventual completion or failure.
 ///
 /// The order, from lowest commitment (0) to highest (6).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
-#[serde(untagged)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum ReservationState {
     /// The last request of the reservation was explicitly denied or failed.
     Rejected,
@@ -228,7 +254,7 @@ pub enum ReservationState {
 ///
 /// This determines the lifecycle stage a reservation is intended to reach.
 /// TODO Rework states transition description
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ReservationProceeding {
     /// Executes only the initial resource availability **probe** request to check feasibility.
     /// No resources are formally reserved.
@@ -259,7 +285,7 @@ pub enum ReservationProceeding {
 /// The component initially creating the reservation has to take care to generate only unique names.
 /// Objects representing the same reservation, but in different states
 /// or different configurations have to carry the very same id.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReservationBase {
     /// A globally unique identifier for this reservation across all distributed components.
     pub name: ReservationName,
@@ -418,6 +444,31 @@ impl ReservationBase {
             if self.get_task_duration() <= 0 {
                 self.set_task_duration(1);
             }
+        }
+    }
+
+    pub fn adjust_task_duration(&mut self, mut duration: i64) {
+        if duration != self.get_task_duration() {
+            if !self.is_moldable() {
+                log::error!(
+                    "ErrorAdjustedNonMoldableTaskDuration: Adjusted Task duration from {} to {} of reservation with name {}",
+                    self.get_task_duration(),
+                    duration,
+                    self.get_name()
+                )
+            }
+
+            if duration <= 0 {
+                duration = 1;
+            }
+
+            self.reserved_capacity = self.get_moldable_work() / duration;
+
+            if self.reserved_capacity <= 0 {
+                self.set_reserved_capacity(1);
+            }
+
+            self.set_task_duration(duration);
         }
     }
 }

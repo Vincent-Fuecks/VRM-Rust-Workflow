@@ -1,8 +1,8 @@
 use crate::api::vrm_system_model_dto::aci_dto::AcIDto;
 use crate::domain::simulator::simulator::{Simulator, SystemSimulator};
 use crate::domain::vrm_system_model::grid_resource_management_system::grid_resource_management_system_trait::ExtendedReservationProcessor;
-use crate::domain::vrm_system_model::reservation::reservation::ReservationState;
-use crate::domain::vrm_system_model::reservation::reservation_store::{ReservationId, ReservationStore};
+use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationState};
+use crate::domain::vrm_system_model::reservation::reservation_store::{self, ReservationId, ReservationStore};
 use crate::domain::vrm_system_model::reservation::reservations::Reservations;
 use crate::domain::vrm_system_model::rms::advance_reservation_trait::AdvanceReservationRms;
 use crate::domain::vrm_system_model::rms::rms_type::RmsType;
@@ -166,6 +166,10 @@ impl ExtendedReservationProcessor for AcI {
         self.rms_system.get_link_resource_count()
     }
 
+    fn can_handel(&self, res: Reservation) -> bool {
+        self.rms_system.can_handle_adc_request(res)
+    }
+
     fn commit(&mut self, reservation_id: ReservationId) -> bool {
         log::debug!("AcI {}: is committing reservation {:?}", self.id, reservation_id);
 
@@ -178,7 +182,8 @@ impl ExtendedReservationProcessor for AcI {
                 log::info!("No prior reserve for commit of {:?}. Attempting instant allocation.", reservation_id);
 
                 // Check if RMS can handle it
-                if !self.rms_system.can_handle(self.reservation_store.clone(), reservation_id) {
+
+                if !self.rms_system.can_handle_aci_request(self.reservation_store.clone(), reservation_id) {
                     self.reservation_store.update_state(reservation_id, ReservationState::Rejected);
                     self.log_stat("Commit".to_string(), reservation_id, arrival_time);
                     log::debug!(
@@ -347,7 +352,7 @@ impl ExtendedReservationProcessor for AcI {
         let arrival_time = self.simulator.get_current_time_in_ms();
 
         // Can Rms handle request in general?
-        if !self.rms_system.can_handle(self.reservation_store.clone(), reservation_id) {
+        if !self.rms_system.can_handle_aci_request(self.reservation_store.clone(), reservation_id) {
             if shadow_schedule_id.is_none() {
                 self.log_state_probe(-1, arrival_time);
             }
@@ -381,7 +386,7 @@ impl ExtendedReservationProcessor for AcI {
 
         let arrival_time = self.simulator.get_current_time_in_ms();
 
-        if !self.rms_system.can_handle(self.reservation_store.clone(), reservation_id) {
+        if !self.rms_system.can_handle_aci_request(self.reservation_store.clone(), reservation_id) {
             self.reservation_store.update_state(reservation_id, ReservationState::Rejected);
 
             if shadow_schedule_id.is_none() {
@@ -399,7 +404,7 @@ impl ExtendedReservationProcessor for AcI {
 
         let arrival_time = self.simulator.get_current_time_in_ms();
 
-        if !self.rms_system.can_handle(self.reservation_store.clone(), reservation_id) {
+        if !self.rms_system.can_handle_aci_request(self.reservation_store.clone(), reservation_id) {
             self.reservation_store.update_state(reservation_id, ReservationState::Rejected);
 
             if shadow_schedule_id.is_none() {
@@ -461,15 +466,15 @@ impl AcI {
 
         if let Some(res_handle) = self.reservation_store.get(reservation_id) {
             let (start, end, res_name, capacity, workload, state, proceeding, num_tasks) = {
-                let res = res_handle.read().unwrap().get_base_reservation();
+                let res = res_handle.read().unwrap();
 
-                let start = res.get_assigned_start();
-                let end = res.get_assigned_end();
-                let name = res.get_name().clone();
-                let cap = res.get_reserved_capacity();
-                let workload = res.get_task_duration() * cap;
-                let state = res.get_state();
-                let proceeding = res.get_reservation_proceeding();
+                let start = res.get_base_reservation().get_assigned_start();
+                let end = res.get_base_reservation().get_assigned_end();
+                let name = res.get_base_reservation().get_name().clone();
+                let cap = res.get_base_reservation().get_reserved_capacity();
+                let workload = res.get_base_reservation().get_task_duration() * cap;
+                let state = res.get_base_reservation().get_state();
+                let proceeding = res.get_base_reservation().get_reservation_proceeding();
 
                 // TODO Java implementation also proceeded workflows if so, num_task should not be always be 1 (implement get_task_count())
                 let tasks = 1;

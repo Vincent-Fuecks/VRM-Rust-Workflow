@@ -1,10 +1,12 @@
+use serde::{Deserialize, Serialize};
+
 use crate::domain::vrm_system_model::{
     reservation::link_reservation::LinkReservation,
     utils::id::{CoAllocationDependencyId, CoAllocationId, DataDependencyId, WorkflowNodeId},
 };
 
 /// Represents an edge for data transfer (file).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DataDependency {
     /// Contains common properties shared by all reservations and includes specific fields for network connectivity.
     pub reservation: LinkReservation,
@@ -23,7 +25,7 @@ pub struct DataDependency {
 }
 
 /// Represents an edge for synchronous bandwidth (e.g. Co-allocated Communication).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SyncDependency {
     /// Contains common properties shared by all reservations and includes specific fields for network connectivity.
     pub reservation: LinkReservation,
@@ -42,7 +44,7 @@ pub struct SyncDependency {
 }
 
 /// An edge in the "CoAllocations graph" connecting sync groups.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CoAllocationDependency {
     // Underlying DataDependency ID
     pub id: CoAllocationDependencyId,

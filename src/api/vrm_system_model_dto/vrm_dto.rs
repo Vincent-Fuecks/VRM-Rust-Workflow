@@ -5,6 +5,7 @@ use serde::Deserialize;
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VrmDto {
+    pub adc_master: String,
     pub adc: Vec<ADCDto>,
     pub aci: Vec<AcIDto>,
 }

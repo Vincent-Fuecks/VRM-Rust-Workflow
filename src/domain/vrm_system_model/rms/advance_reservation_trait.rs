@@ -1,5 +1,5 @@
-use crate::domain::vrm_system_model::reservation::reservation::ReservationState;
-use crate::domain::vrm_system_model::reservation::reservation_store::{ReservationId, ReservationStore};
+use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationState};
+use crate::domain::vrm_system_model::reservation::reservation_store::{self, ReservationId, ReservationStore};
 use crate::domain::vrm_system_model::reservation::reservations::Reservations;
 use crate::domain::vrm_system_model::rms::rms::Rms;
 use crate::domain::vrm_system_model::utils::id::ShadowScheduleId;
@@ -306,8 +306,12 @@ pub trait AdvanceReservationRms: Rms {
         }
     }
 
-    fn can_handle(&self, reservation_store: ReservationStore, reservation_id: ReservationId) -> bool {
-        self.get_base().resources.can_handle(reservation_store, reservation_id)
+    fn can_handle_adc_request(&self, res: Reservation) -> bool {
+        self.get_base().resources.can_handle_adc_request(res)
+    }
+
+    fn can_handle_aci_request(&self, reservation_store: ReservationStore, reservation_id: ReservationId) -> bool {
+        self.get_base().resources.can_handle_aci_request(reservation_store, reservation_id)
     }
 
     fn get_total_link_capacity(&self) -> i64 {

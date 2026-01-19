@@ -7,6 +7,7 @@ use crate::domain::simulator;
 use crate::domain::simulator::simulator::{Simulator, SystemSimulator};
 use crate::domain::vrm_system_model::adc::ADC;
 use crate::domain::vrm_system_model::grid_resource_management_system::aci::AcI;
+use crate::domain::vrm_system_model::grid_resource_management_system::grid_resource_management_system_trait::ExtendedReservationProcessor;
 use crate::domain::vrm_system_model::reservation::reservation_store::{self, ReservationStore};
 use crate::domain::vrm_system_model::{
     client::client::Client,
@@ -79,25 +80,25 @@ impl System {
         Ok((adcs, acis))
     }
 
-    pub async fn run_all_clients(&mut self, reservation_store: ReservationStore, simulator: Arc<dyn SystemSimulator>) {
-        let clients: Vec<(ClientId, Client)> = self.clients.drain().collect();
-        let mut handles = vec![];
-        let adc = todo!();
+    // pub async fn run_all_clients(&mut self, reservation_store: ReservationStore, simulator: Arc<dyn SystemSimulator>) {
+    //     let clients: Vec<(ClientId, Client)> = self.clients.drain().collect();
+    //     let mut handles = vec![];
+    //     let mut adc: dyn ExtendedReservationProcessor = self.vrm.adcs.get_mut(&self.vrm.adc_master).expect("Did not find master ADC.");
 
-        for (id, client) in clients {
-            println!("Starting client: {}", id);
+    //     for (id, client) in clients {
+    //         println!("Starting client: {}", id);
 
-            let handle = tokio::spawn(async move {
-                client.run(reservation_store, adc).await;
-            });
+    //         let handle = tokio::spawn(async move {
+    //             client.run(reservation_store, &mut adc).await;
+    //         });
 
-            handles.push(handle);
-        }
+    //         handles.push(handle);
+    //     }
 
-        for handle in handles {
-            let _ = handle.await;
-        }
+    //     for handle in handles {
+    //         let _ = handle.await;
+    //     }
 
-        println!("All clients have completed their reservations.");
-    }
+    //     println!("All clients have completed their reservations.");
+    // }
 }
