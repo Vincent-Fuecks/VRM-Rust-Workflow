@@ -43,17 +43,13 @@ impl OrderGridComponentResDatabase {
         }
     }
 
-    /// This replicates your 'compare' method logic.
-    /// It is a helper used during the sorting process.
     fn compare_reservations(&self, aci_manager: &AcIManager, res1: ReservationId, res2: ReservationId) -> Ordering {
-        // 1. First compare the reservations themselves
         let mut order = (self.res_comparator)(res1, res2);
-        // 2. If they have equal rank, use the order of the AI
+
         if order == Ordering::Equal {
             let ai1 = self.store.get(&res1);
             let ai2 = self.store.get(&res2);
 
-            // Replicating the Logger.fatal check
             match (ai1, ai2) {
                 (Some(a), Some(b)) => {
                     let aci0 = aci_manager.grid_components.get(a).unwrap();
@@ -63,7 +59,6 @@ impl OrderGridComponentResDatabase {
                     order = (self.ai_comparator)(aci0, aci1);
                 }
                 _ => {
-                    // In Rust, 'panic!' is the standard way to handle unrecoverable fatal errors
                     panic!("FATAL: Reservations cannot be compared, as they are not elements of this container. {:?}, {:?}", res1, res2);
                 }
             }
@@ -74,7 +69,6 @@ impl OrderGridComponentResDatabase {
     pub fn sorted_key_set(&self, aci_manager: &AcIManager) -> Vec<ReservationId> {
         let mut keys: Vec<ReservationId> = self.store.keys().cloned().collect();
 
-        // Use our internal logic to sort the keys
         keys.sort_by(|a, b| self.compare_reservations(aci_manager, *a, *b));
 
         keys

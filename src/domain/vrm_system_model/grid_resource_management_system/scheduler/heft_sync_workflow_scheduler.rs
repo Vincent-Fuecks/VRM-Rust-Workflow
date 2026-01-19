@@ -168,7 +168,7 @@ impl HEFTSyncWorkflowScheduler {
             workflow.nodes.get_mut(&co_allocation_node_id).unwrap().reservation.base.adjust_task_duration(duration);
 
             // Try to reserve this task
-            // TODO
+            let reserved_candidate_id = adc.submit_task_at_first_grid_component(, shadow_schedule_id, grid_component_res_database)
         }
         todo!()
     }
