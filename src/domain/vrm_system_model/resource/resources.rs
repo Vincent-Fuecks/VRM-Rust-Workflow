@@ -105,4 +105,9 @@ impl Resources {
     pub fn contains_router(&self, router_id: RouterId) -> bool {
         return self.router_list.contains(&router_id);
     }
+
+    /// Return the, the list of all RouterIds, which the Resource contains
+    pub fn get_router_list(&self) -> Vec<RouterId> {
+        return self.router_list.clone();
+    }
 }

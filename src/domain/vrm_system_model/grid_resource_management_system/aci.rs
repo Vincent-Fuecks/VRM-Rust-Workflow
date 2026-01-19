@@ -6,7 +6,7 @@ use crate::domain::vrm_system_model::reservation::reservation_store::{self, Rese
 use crate::domain::vrm_system_model::reservation::reservations::Reservations;
 use crate::domain::vrm_system_model::rms::advance_reservation_trait::AdvanceReservationRms;
 use crate::domain::vrm_system_model::rms::rms_type::RmsType;
-use crate::domain::vrm_system_model::utils::id::{AciId, AdcId, ClientId, ComponentId, ShadowScheduleId};
+use crate::domain::vrm_system_model::utils::id::{AciId, AdcId, ClientId, ComponentId, RouterId, ShadowScheduleId};
 use crate::domain::vrm_system_model::utils::load_buffer::LoadMetric;
 use crate::domain::vrm_system_model::utils::statistics::ANALYTICS_TARGET;
 use crate::error::ConversionError;
@@ -164,6 +164,10 @@ impl ExtendedReservationProcessor for AcI {
 
     fn get_link_resource_count(&self) -> usize {
         self.rms_system.get_link_resource_count()
+    }
+
+    fn get_router_list(&self) -> Vec<RouterId> {
+        self.rms_system.get_router_list()
     }
 
     fn can_handel(&self, res: Reservation) -> bool {

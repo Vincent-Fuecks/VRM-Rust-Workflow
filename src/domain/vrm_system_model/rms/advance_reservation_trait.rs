@@ -2,7 +2,7 @@ use crate::domain::vrm_system_model::reservation::reservation::{Reservation, Res
 use crate::domain::vrm_system_model::reservation::reservation_store::{self, ReservationId, ReservationStore};
 use crate::domain::vrm_system_model::reservation::reservations::Reservations;
 use crate::domain::vrm_system_model::rms::rms::Rms;
-use crate::domain::vrm_system_model::utils::id::ShadowScheduleId;
+use crate::domain::vrm_system_model::utils::id::{RouterId, ShadowScheduleId};
 use crate::domain::vrm_system_model::utils::load_buffer::LoadMetric;
 
 use std::cmp::Ordering;
@@ -328,6 +328,10 @@ pub trait AdvanceReservationRms: Rms {
 
     fn get_link_resource_count(&self) -> usize {
         self.get_base().resources.get_link_resource_count()
+    }
+
+    fn get_router_list(&self) -> Vec<RouterId> {
+        self.get_base().resources.get_router_list()
     }
 }
 

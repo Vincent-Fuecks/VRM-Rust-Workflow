@@ -1,4 +1,5 @@
 use crate::domain::simulator::simulator::SystemSimulator;
+use crate::domain::vrm_system_model::grid_component;
 use crate::domain::vrm_system_model::grid_resource_management_system::aci::AcI;
 use crate::domain::vrm_system_model::grid_resource_management_system::aci_manager::{self, AcIContainer, AcIManager, DUMMY_COMPONENT_ID};
 use crate::domain::vrm_system_model::grid_resource_management_system::aci_order::AcIOrder;
@@ -7,7 +8,7 @@ use crate::domain::vrm_system_model::grid_resource_management_system::order_grid
 use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationState};
 use crate::domain::vrm_system_model::reservation::reservation_store::{self, ReservationId, ReservationStore};
 use crate::domain::vrm_system_model::reservation::reservations::Reservations;
-use crate::domain::vrm_system_model::utils::id::{AciId, AdcId, ComponentId, ReservationName, ShadowScheduleId};
+use crate::domain::vrm_system_model::utils::id::{AciId, AdcId, ComponentId, ReservationName, RouterId, ShadowScheduleId};
 use crate::domain::vrm_system_model::utils::load_buffer::LoadMetric;
 use crate::domain::vrm_system_model::workflow::workflow::Workflow;
 use std::cmp::Ordering;
@@ -192,7 +193,7 @@ impl ADC {
         &mut self,
         reservation_id: ReservationId,
         shadow_schedule_id: Option<ShadowScheduleId>,
-        grid_component_res_database: &mut HashMap<ComponentId, HashSet<ReservationId>>,
+        grid_component_res_database: &mut HashMap<ReservationId, ComponentId>,
     ) -> ReservationId {
         // Wrong order
         for component_id in self.aci_manager.get_ordered_acis(self.aci_order) {
@@ -205,10 +206,15 @@ impl ADC {
                 if self.reservation_store.is_reservation_state_at_least(reserve_res_id, ReservationState::ReserveAnswer) {
                     // Register new schedule Sub-Task
                     // Update grid_component_res_database for rollback and for ADC to keep track
-                    if grid_component_res_database.contains_key(&component_id.clone()) {
-                        grid_component_res_database.get_mut(&component_id.clone()).unwrap().insert(reserve_res_id);
+                    if grid_component_res_database.contains_key(&reserve_res_id) {
+                        log::error!(
+                            "ErrorReservationWasReservedInMultipleGridComponents: The reservation {:?} was multiple times to the GirdComponent {} submitted.",
+                            self.reservation_store.get_name_for_key(reserve_res_id),
+                            component_id
+                        );
+                        grid_component_res_database.insert(reserve_res_id, component_id.clone());
                     } else {
-                        grid_component_res_database.insert(component_id.clone(), HashSet::from([reserve_res_id]));
+                        grid_component_res_database.insert(reserve_res_id, component_id.clone());
                     }
                     self.aci_manager.reserve_without_check(component_id.clone(), reserve_res_id);
 
@@ -254,7 +260,7 @@ impl ADC {
         &mut self,
         reservation_id: ReservationId,
         shadow_schedule_id: Option<ShadowScheduleId>,
-        grid_component_res_database: &mut HashMap<ComponentId, HashSet<ReservationId>>,
+        grid_component_res_database: &mut HashMap<ReservationId, ComponentId>,
         reservation_order: F,
     ) -> Option<ReservationId>
     where
@@ -297,10 +303,16 @@ impl ADC {
             if self.reservation_store.is_reservation_state_at_least(candidate_id, ReservationState::ReserveAnswer) {
                 // Register new schedule Sub-Task
                 // Update grid_component_res_database for rollback and for ADC to keep track
-                if grid_component_res_database.contains_key(component_id) {
-                    grid_component_res_database.get_mut(component_id).unwrap().insert(candidate_id);
+
+                if grid_component_res_database.contains_key(&candidate_id) {
+                    log::error!(
+                        "ErrorReservationWasReservedInMultipleGridComponents: The reservation {:?} was multiple times to the GirdComponent {} submitted.",
+                        self.reservation_store.get_name_for_key(candidate_id),
+                        component_id
+                    );
+                    grid_component_res_database.insert(candidate_id, component_id.clone());
                 } else {
-                    grid_component_res_database.insert(component_id.clone(), HashSet::from([candidate_id]));
+                    grid_component_res_database.insert(candidate_id, component_id.clone());
                 }
 
                 // Update local schedule
@@ -333,16 +345,16 @@ impl ADC {
      *
      * @see #deleteJob(Reservation, String)
      */
-    pub fn delete_tasks_at_component(
+    pub fn delete_task_at_component(
         &mut self,
         component_id: ComponentId,
-        reservation_id_set: HashSet<ReservationId>,
+        reservation_id: ReservationId,
         shadow_schedule_id: Option<ShadowScheduleId>,
     ) {
         todo!()
     }
 
-    pub fn register_workflow_subtasks(&mut self, workflow: &Workflow, grid_component_res_database: &HashMap<ComponentId, HashSet<ReservationId>>) {
+    pub fn register_workflow_subtasks(&mut self, workflow: &Workflow, grid_component_res_database: &HashMap<ReservationId, ComponentId>) {
         todo!()
     }
 }
@@ -366,6 +378,17 @@ impl ExtendedReservationProcessor for ADC {
 
     fn get_link_resource_count(&self) -> usize {
         todo!()
+    }
+
+    fn get_router_list(&self) -> Vec<RouterId> {
+        let component_router_list = self
+            .aci_manager
+            .get_random_ordered_acis()
+            .into_iter()
+            .flat_map(|component_id| self.aci_manager.get_component_router_list(component_id))
+            .collect();
+
+        return component_router_list;
     }
 
     fn can_handel(&self, res: Reservation) -> bool {

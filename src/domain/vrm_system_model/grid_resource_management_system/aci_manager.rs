@@ -11,6 +11,7 @@ use crate::domain::vrm_system_model::reservation::reservation_store::Reservation
 use crate::domain::vrm_system_model::reservation::reservations::Reservations;
 use crate::domain::vrm_system_model::schedule::slotted_schedule::SlottedSchedule;
 use crate::domain::vrm_system_model::scheduler_trait::Schedule;
+use crate::domain::vrm_system_model::utils::id::RouterId;
 use crate::domain::vrm_system_model::utils::id::{AciId, AdcId, ComponentId, ShadowScheduleId, SlottedScheduleId};
 use crate::domain::vrm_system_model::utils::load_buffer::LoadMetric;
 use lazy_static::lazy_static;
@@ -86,6 +87,10 @@ impl AcIContainer {
 
     pub fn can_handel(&self, res: Reservation) -> bool {
         self.grid_component.can_handel(res)
+    }
+
+    pub fn get_router_list(&self) -> Vec<RouterId> {
+        self.grid_component.get_router_list()
     }
 }
 
@@ -170,6 +175,10 @@ impl AcIManager {
         }
     }
 
+    pub fn get_component_router_list(&self, component_id: ComponentId) -> Vec<RouterId> {
+        self.grid_components.get(&component_id).unwrap();
+        todo!()
+    }
     pub fn get_component_mut(&mut self, component_id: ComponentId) -> Option<&mut AcIContainer> {
         self.grid_components.get_mut(&component_id)
     }

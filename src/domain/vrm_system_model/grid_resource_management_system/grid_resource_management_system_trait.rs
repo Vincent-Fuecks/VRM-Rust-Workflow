@@ -1,7 +1,7 @@
 use crate::domain::vrm_system_model::reservation::reservation::Reservation;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationId;
 use crate::domain::vrm_system_model::reservation::reservations::Reservations;
-use crate::domain::vrm_system_model::utils::id::{ComponentId, ShadowScheduleId};
+use crate::domain::vrm_system_model::utils::id::{ComponentId, RouterId, ShadowScheduleId};
 use crate::domain::vrm_system_model::utils::load_buffer::LoadMetric;
 
 use std::cmp::Ordering;
@@ -43,6 +43,9 @@ pub trait ExtendedReservationProcessor: std::fmt::Debug {
 
     /// Returns the total node capacity (often same as total capacity depending on model).
     fn get_total_node_capacity(&self) -> i64;
+
+    /// Returns a list of all Router which the GridComponent contains
+    fn get_router_list(&self) -> Vec<RouterId>;
 
     // Return true, if the provided reservation can be scheduled on teh GridComponent
     fn can_handel(&self, res: Reservation) -> bool;

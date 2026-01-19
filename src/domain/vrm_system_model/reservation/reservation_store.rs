@@ -324,6 +324,36 @@ impl ReservationStore {
         }
     }
 
+    // Updates the reserved_capacity value of the corresponding reservation of the provided reservation_id.
+    pub fn set_reserved_capacity(&mut self, reservation_id: ReservationId, reserved_capacity: i64) {
+        if let Some(handle) = self.get(reservation_id) {
+            let mut res = handle.write().unwrap();
+            res.set_reserved_capacity(reserved_capacity);
+        } else {
+            log::error!("Get reservation (id: {:?}) was not possible.", reservation_id)
+        }
+    }
+
+    // Updates the task_duration value of the corresponding reservation of the provided reservation_id.
+    pub fn set_task_duration(&mut self, reservation_id: ReservationId, task_duration: i64) {
+        if let Some(handle) = self.get(reservation_id) {
+            let mut res = handle.write().unwrap();
+            res.set_task_duration(task_duration);
+        } else {
+            log::error!("Get reservation (id: {:?}) was not possible.", reservation_id)
+        }
+    }
+
+    // Updates the is_moldable value of the corresponding reservation of the provided reservation_id.
+    pub fn set_is_moldable(&mut self, reservation_id: ReservationId, is_moldable: bool) {
+        if let Some(handle) = self.get(reservation_id) {
+            let mut res = handle.write().unwrap();
+            res.set_is_moldable(is_moldable);
+        } else {
+            log::error!("Get reservation (id: {:?}) was not possible.", reservation_id)
+        }
+    }
+
     /// Retrieves form the provided reservation id the is_moldable.
     pub fn is_moldable(&self, reservation_id: ReservationId) -> bool {
         if let Some(handle) = self.get(reservation_id) {
@@ -339,6 +369,16 @@ impl ReservationStore {
         if let Some(handle) = self.get(reservation_id) {
             let res = handle.read().unwrap();
             return matches!(res.get_typ(), ReservationTyp::Workflow);
+        } else {
+            log::error!("Get reservation (id: {:?}) was not possible.", reservation_id);
+            return false;
+        }
+    }
+
+    pub fn is_link(&self, reservation_id: ReservationId) -> bool {
+        if let Some(handle) = self.get(reservation_id) {
+            let res = handle.read().unwrap();
+            return matches!(res.get_typ(), ReservationTyp::Link);
         } else {
             log::error!("Get reservation (id: {:?}) was not possible.", reservation_id);
             return false;
@@ -396,6 +436,15 @@ impl ReservationStore {
         if let Some(handle) = self.get(reservation_id) {
             let mut res = handle.write().unwrap();
             res.adjust_capacity(capacity);
+        } else {
+            log::error!("Get reservation (id: {:?}) was not possible.", reservation_id)
+        }
+    }
+
+    pub fn adjust_task_duration(&self, reservation_id: ReservationId, duration: i64) {
+        if let Some(handle) = self.get(reservation_id) {
+            let mut res = handle.write().unwrap();
+            res.adjust_task_duration(duration);
         } else {
             log::error!("Get reservation (id: {:?}) was not possible.", reservation_id)
         }

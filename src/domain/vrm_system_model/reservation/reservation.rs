@@ -67,6 +67,12 @@ impl Reservation {
             _ => None,
         }
     }
+    pub fn as_link_mut(&mut self) -> Option<&mut LinkReservation> {
+        match self {
+            Reservation::Link(l) => Some(l),
+            _ => None,
+        }
+    }
 }
 
 impl ReservationTrait for Reservation {
@@ -173,12 +179,37 @@ pub trait ReservationTrait: std::fmt::Debug + Any + Send + Sync {
         self.get_base_mut().state = reservation_state;
     }
 
+    /**
+     * Changes the job duration (VRM time in s) and change also the capacity/duration quotient
+     * for moldable reservations. To adjust the duration, while keeping the
+     * quotient, use #adjustJobDuration.
+     *
+     * @param jobDuration
+     *            the job duration in s (VRM time)
+     * @see #adjustJobDuration
+     * @see #adjustCapacity
+     * @see #setReservedCapacity(int)
+     */
     fn set_task_duration(&mut self, duration: i64) {
         self.get_base_mut().task_duration = duration;
+        self.get_base_mut().moldable_work = self.get_base().reserved_capacity * duration
     }
 
+    /**
+     * Changes the capacity value and change also the capacity/duration quotient
+     * for moldable reservations.
+     *
+     * The capacity is measured in a unit according to the job type e.g. number
+     * of CPUs for {@link NodeReservation} or kBit/s Bandwidth for
+     * {@link LinkReservation}.
+     *
+     * @param reservedCapacity
+     *            the reservedCapacity to set
+     * @see Reservation#adjustCapacity(int)
+     */
     fn set_reserved_capacity(&mut self, reserved_capacity: i64) {
         self.get_base_mut().reserved_capacity = reserved_capacity;
+        self.get_base_mut().moldable_work = reserved_capacity * self.get_task_duration()
     }
 
     fn set_booking_interval_start(&mut self, start_time: i64) {
@@ -191,6 +222,10 @@ pub trait ReservationTrait: std::fmt::Debug + Any + Send + Sync {
 
     fn set_frag_delta(&mut self, frag_delta: f64) {
         self.get_base_mut().frag_delta = frag_delta;
+    }
+
+    fn set_is_moldable(&mut self, is_moldable: bool) {
+        self.get_base_mut().is_moldable = is_moldable;
     }
 
     fn adjust_capacity(&mut self, capacity: i64) {
@@ -211,6 +246,9 @@ pub trait ReservationTrait: std::fmt::Debug + Any + Send + Sync {
                 self.set_task_duration(1);
             }
         }
+    }
+    fn adjust_task_duration(&mut self, duration: i64) {
+        self.get_base_mut().adjust_task_duration(duration);
     }
 }
 
@@ -427,6 +465,24 @@ impl ReservationBase {
         self.frag_delta = frag_delta;
     }
 
+    /**
+     * Adjust the job duration and requested capacity for moldable reservations.
+     * This means the method changes the duration and capacity such that the
+     * quotient of both stays constant. For inherit changes of the job size use
+     * {@link #setReservedCapacity(int)}.
+     *
+     * The capacity is measured in a unit according to the job type e.g. number
+     * of CPUs for {@link NodeReservation} or kBit/s Bandwidth for
+     * {@link LinkReservation}.
+     *
+     * This method can only be called if {@link #isMoldable()} return
+     * <code>true</code>.
+     *
+     * @param capacity
+     *            the new capacity
+     * @see #setReservedCapacity
+     * @see #adjustJobDuration(int)
+     */
     pub fn adjust_capacity(&mut self, capacity: i64) {
         if capacity != self.reserved_capacity {
             if self.is_moldable().not() {
@@ -447,6 +503,20 @@ impl ReservationBase {
         }
     }
 
+    /**
+     * Adjust the job duration and requested capacity for moldable reservations.
+     * This means the method changes the duration and capacity such that the
+     * quotient of both stays constant. For inherit changes of the job size use
+     * {@link #setJobDuration(int)}.
+     *
+     * This method can only be called if {@link #isMoldable()} return
+     * <code>true</code>.
+     *
+     * @param duration
+     *            the job duration in s (VRM time)
+     * @see #setJobDuration
+     * @see #adjustCapacity(int)
+     */
     pub fn adjust_task_duration(&mut self, mut duration: i64) {
         if duration != self.get_task_duration() {
             if !self.is_moldable() {
