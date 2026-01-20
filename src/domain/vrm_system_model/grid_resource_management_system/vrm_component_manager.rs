@@ -1,10 +1,6 @@
-use crate::domain::simulator;
-use crate::domain::simulator::simulator::Simulator;
 use crate::domain::simulator::simulator::SystemSimulator;
-use crate::domain::vrm_system_model::grid_component;
-use crate::domain::vrm_system_model::grid_resource_management_system::aci::{AcI, ScheduleID};
-use crate::domain::vrm_system_model::grid_resource_management_system::aci_order::AcIOrder;
-use crate::domain::vrm_system_model::grid_resource_management_system::grid_resource_management_system_trait::ExtendedReservationProcessor;
+use crate::domain::vrm_system_model::grid_resource_management_system::vrm_component_order::VrmComponentOrder;
+use crate::domain::vrm_system_model::grid_resource_management_system::vrm_component_trait::VrmComponent;
 use crate::domain::vrm_system_model::reservation::reservation::Reservation;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationId;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationStore;
@@ -12,7 +8,7 @@ use crate::domain::vrm_system_model::reservation::reservations::Reservations;
 use crate::domain::vrm_system_model::schedule::slotted_schedule::SlottedSchedule;
 use crate::domain::vrm_system_model::scheduler_trait::Schedule;
 use crate::domain::vrm_system_model::utils::id::RouterId;
-use crate::domain::vrm_system_model::utils::id::{AciId, AdcId, ComponentId, ShadowScheduleId, SlottedScheduleId};
+use crate::domain::vrm_system_model::utils::id::{AdcId, ComponentId, ShadowScheduleId, SlottedScheduleId};
 use crate::domain::vrm_system_model::utils::load_buffer::LoadMetric;
 use lazy_static::lazy_static;
 use rand::rng;
@@ -27,14 +23,11 @@ lazy_static! {
 // TODO Functions must be synchronized with the AcIs
 // TODO Old Java Version contained all resources and enabled access to them looks like this is now not necessary
 
-/// Container holding the **Access Interface (AcI)** connection and metadata required for sorting and management.
-///
-/// This struct wraps the raw `AcI` with additional local state used by the `AcIManager` to track
-/// reliability (failures), capacity, and registration order.
+/// Container holds a VrmComponents (**AcI** or **ADC**) instance and metadata required for sorting and management.
 #[derive(Debug)]
-pub struct AcIContainer {
+pub struct VrmComponentContainer {
     // Contains a AcI or ADC
-    pub grid_component: Box<dyn ExtendedReservationProcessor>,
+    pub vrm_component: Box<dyn VrmComponent>,
 
     reservation_store: ReservationStore,
 
@@ -45,19 +38,19 @@ pub struct AcIContainer {
     /// The sequence number assigned at registration time, used for stable sorting.
     pub registration_index: usize,
 
-    /// A counter of how many times operations on this AcI have failed.
+    /// A counter of how many times operations on this VrmComponent have failed.
     pub failures: u32,
 
-    /// The total bandwidth or capacity available on the link to this AcI (does not mean free capacity).
+    /// The total bandwidth available on all links of the VrmComponent (does not mean free capacity).
     pub total_link_capacity: i64,
 
-    /// The number of distinct link resources of the AcI.
+    /// The number of distinct link resources of the VrmComponent.
     pub link_resource_count: usize,
 }
 
-impl AcIContainer {
+impl VrmComponentContainer {
     pub fn new(
-        grid_component: Box<dyn ExtendedReservationProcessor>,
+        vrm_component: Box<dyn VrmComponent>,
         simulator: Arc<dyn SystemSimulator>,
         reservation_store: ReservationStore,
         registration_index: usize,
@@ -66,11 +59,11 @@ impl AcIContainer {
         total_link_capacity: i64,
         link_resource_count: usize,
     ) -> Self {
-        let component_id = grid_component.get_id();
+        let component_id = vrm_component.get_id();
         // TODO Add Option for different schedule
-        let scheduler_id = SlottedScheduleId::new(format!("ADC View for AcI: {:?}", component_id));
+        let scheduler_id = SlottedScheduleId::new(format!("Scheduler of VrmComponent: {:?}", component_id));
 
-        let total_capacity = grid_component.get_total_capacity();
+        let total_capacity = vrm_component.get_total_capacity();
 
         let schedule = Box::new(SlottedSchedule::new(
             scheduler_id,
@@ -82,38 +75,48 @@ impl AcIContainer {
             reservation_store.clone(),
         ));
 
-        Self { grid_component, reservation_store, schedule, registration_index, total_link_capacity, link_resource_count, failures: 0 }
+        Self { vrm_component, reservation_store, schedule, registration_index, total_link_capacity, link_resource_count, failures: 0 }
     }
 
     pub fn can_handel(&self, res: Reservation) -> bool {
-        self.grid_component.can_handel(res)
+        self.vrm_component.can_handel(res)
     }
 
     pub fn get_router_list(&self) -> Vec<RouterId> {
-        self.grid_component.get_router_list()
+        self.vrm_component.get_router_list()
     }
 }
 
-/// Manages a collection of **AcIs** within a specific **ADC**.
+/// Manages a collection of **VrmComponents (ADCs and/or AcIs)** for a specific **ADC**.
 ///
-/// The `AcIManager` acts as a central registry and aggregator for distributed resources. It handles:
-/// * Registration and deregistration of AcIs.
+/// The `VrmComponentManager` acts as a central registry and aggregator for distributed resources. It handles:
+/// * Registration and deregistration of VrmComponents.
 /// * Aggregation of system-wide metrics (Satisfaction, Load).
-/// * Retrieval of AcIs based on specific ordering strategies (Random, Load-balanced, etc.).
+/// * Retrieval of VrmComponents based on specific ordering strategies (Random, Load-balanced, etc.).
 ///
 /// # Distributed Context & Synchronization
 ///
-/// This manager operates within a distributed Grid/VRM system. While `AcIManager` provides a local view
-/// of the resources, operations performed on the contained `AcI` objects may involve network communication
-/// with remote entities. Callers should assume that state changes (like load updates) require synchronization
-/// with the remote AcIs.
+/// This manager operates within a distributed Grid/VRM system. While `VrmComponentManager` provides a local view
+/// of the resources, operations performed on the contained `VrmComponents` objects involve network communication
+/// with remote entities (ADCs local, AcIs remote). Callers should assume that state changes (like load updates)
+/// require synchronization with the remote AcIs.
 #[derive(Debug)]
-pub struct AcIManager {
+pub struct VrmComponentManager {
     /// The ID of the ADC owning this manager.
     adc_id: AdcId,
 
-    /// Map of `AciId` to their container wrappers.
-    pub grid_components: HashMap<ComponentId, AcIContainer>,
+    /// Map of `VrmComponentId` to their container wrappers.
+    pub vrm_components: HashMap<ComponentId, VrmComponentContainer>,
+
+    // --- Reservation Tracking (The "Who has What") ---
+    /// Maps a `ReservationId` (Atomic Job or Workflow Subtask) to the `VrmComponentId` that handles it.
+    pub res_to_vrm_component: HashMap<ReservationId, ComponentId>,
+
+    /// Maps a `WorkflowId` (Parent) to a list of its sub-reservations (Nodes and Links).
+    pub workflow_subtasks: HashMap<ReservationId, Vec<ReservationId>>,
+
+    /// Maps a Subtask `ReservationId` back to its Parent `WorkflowId`.
+    pub reverse_workflow_subtasks: HashMap<ReservationId, ReservationId>,
 
     /// The aggregated sum of link capacities of all registered AcIs (does not mean free capacity).
     total_link_capacity: i64,
@@ -121,37 +124,37 @@ pub struct AcIManager {
     /// The aggregated sum distinct link resources of all registered AcIs.
     link_resource_count: usize,
 
-    /// Monotonic counter used to assign `registration_index` to new AcIContainer's.
+    /// Monotonic counter used to assign `registration_index` to new VrmComponentContainer's.
     registration_counter: usize,
 
     /// Is used to create an empty Reservations struct as return value for an unsuccessful probe request
     reservation_store: ReservationStore,
 }
 
-impl AcIManager {
+impl VrmComponentManager {
     pub fn new(
         adc_id: AdcId,
-        grid_component_set: HashSet<Box<dyn ExtendedReservationProcessor>>,
+        vrm_components_set: HashSet<Box<dyn VrmComponent>>,
         simulator: Arc<dyn SystemSimulator>,
         reservation_store: ReservationStore,
         number_of_real_slots: i64,
         slot_width: i64,
     ) -> Self {
-        let mut grid_components = HashMap::with_capacity(grid_component_set.len());
+        let mut vrm_components = HashMap::with_capacity(vrm_components_set.len());
         let mut registration_counter = 0;
-        let mut aci_manager_total_link_capacity = 0;
-        let mut aci_manager_link_resource_count = 0;
+        let mut manager_total_link_capacity = 0;
+        let mut manager_link_resource_count = 0;
 
-        for grid_component in grid_component_set {
-            let aci_id = grid_component.get_id().clone();
-            let total_link_capacity = grid_component.get_total_link_capacity();
-            let link_resource_count = grid_component.get_link_resource_count();
+        for vrm_component in vrm_components_set {
+            let component_id = vrm_component.get_id().clone();
+            let total_link_capacity = vrm_component.get_total_link_capacity();
+            let link_resource_count = vrm_component.get_link_resource_count();
 
-            aci_manager_total_link_capacity += total_link_capacity;
-            aci_manager_link_resource_count += link_resource_count;
+            manager_total_link_capacity += total_link_capacity;
+            manager_link_resource_count += link_resource_count;
 
-            let container = AcIContainer::new(
-                grid_component,
+            let container = VrmComponentContainer::new(
+                vrm_component,
                 simulator.clone_box().into(),
                 reservation_store.clone(),
                 registration_counter,
@@ -162,30 +165,87 @@ impl AcIManager {
             );
 
             registration_counter += 1;
-            grid_components.insert(aci_id, container);
+            vrm_components.insert(component_id, container);
         }
 
-        AcIManager {
+        VrmComponentManager {
             adc_id,
-            grid_components,
-            total_link_capacity: aci_manager_total_link_capacity,
-            link_resource_count: aci_manager_link_resource_count,
+            vrm_components,
+            res_to_vrm_component: HashMap::new(),
+            workflow_subtasks: HashMap::new(),
+            reverse_workflow_subtasks: HashMap::new(),
+            total_link_capacity: manager_total_link_capacity,
+            link_resource_count: manager_link_resource_count,
             registration_counter,
             reservation_store: reservation_store.clone(),
         }
     }
 
+    // --- Tracking Methods ---
+    /// Registers a mapping for a single reservation (Atomic Job).
+    pub fn register_allocation(&mut self, reservation_id: ReservationId, component_id: ComponentId) {
+        self.res_to_vrm_component.insert(reservation_id, component_id);
+    }
+
+    /// Merges a "transaction map" (from a Workflow Scheduler) into the global state.
+    /// This corresponds to `ADCcore.registerWorkflowSubjobs` in Java.
+    pub fn register_workflow_allocation(&mut self, workflow_id: ReservationId, allocations: HashMap<ReservationId, ComponentId>) {
+        let subtask_ids: Vec<ReservationId> = allocations.keys().cloned().collect();
+
+        // 1. Merge the allocation map (Who has what)
+        self.res_to_vrm_component.extend(allocations);
+
+        // 2. Track relationship: Parent -> Children
+        self.workflow_subtasks.insert(workflow_id.clone(), subtask_ids.clone());
+
+        // 3. Track relationship: Child -> Parent
+        for subtask_id in subtask_ids {
+            self.reverse_workflow_subtasks.insert(subtask_id, workflow_id.clone());
+        }
+    }
+
+    /// Retrieves the ComponentId responsible for a specific reservation.
+    pub fn get_handler_id(&self, reservation_id: ReservationId) -> Option<ComponentId> {
+        self.res_to_vrm_component.get(&reservation_id).cloned()
+    }
+
+    /// Retrieves the Parent Workflow ID for a given subtask.
+    pub fn get_parent_workflow(&self, subtask_id: ReservationId) -> Option<ReservationId> {
+        self.reverse_workflow_subtasks.get(&subtask_id).cloned()
+    }
+
+    /// Removes tracking for a reservation.
+    /// If it's a workflow, this might need to clean up children, or children cleanup calls this.
+    /// Currently, this removes the specific ID from the allocation map.
+    pub fn remove_allocation(&mut self, reservation_id: &ReservationId) -> Option<ComponentId> {
+        // Remove from reverse lookup if it exists
+        self.reverse_workflow_subtasks.remove(reservation_id);
+        // Remove from allocation map
+        self.res_to_vrm_component.remove(reservation_id)
+    }
+
+    /// Removes all tracking associated with a workflow (children and the workflow entry itself).
+    pub fn remove_workflow_tracking(&mut self, workflow_id: &ReservationId) {
+        if let Some(subtasks) = self.workflow_subtasks.remove(workflow_id) {
+            for subtask in subtasks {
+                self.res_to_vrm_component.remove(&subtask);
+                self.reverse_workflow_subtasks.remove(&subtask);
+            }
+        }
+    }
+
+    // Should aggregate hte router list of all components
     pub fn get_component_router_list(&self, component_id: ComponentId) -> Vec<RouterId> {
-        self.grid_components.get(&component_id).unwrap();
+        self.vrm_components.get(&component_id).unwrap();
         todo!()
     }
-    pub fn get_component_mut(&mut self, component_id: ComponentId) -> Option<&mut AcIContainer> {
-        self.grid_components.get_mut(&component_id)
+    pub fn get_component_mut(&mut self, component_id: ComponentId) -> Option<&mut VrmComponentContainer> {
+        self.vrm_components.get_mut(&component_id)
     }
 
     pub fn can_handel(&self, component_id: ComponentId, res: Reservation) -> bool {
-        match self.grid_components.get(&component_id) {
-            Some(grid_component) => grid_component.grid_component.can_handel(res),
+        match self.vrm_components.get(&component_id) {
+            Some(vrm_component) => vrm_component.vrm_component.can_handel(res),
 
             None => {
                 log::debug!(
@@ -214,37 +274,37 @@ impl AcIManager {
         return self.total_link_capacity as f64 / self.link_resource_count as f64;
     }
 
-    /// Registers a new **AcI** with the manager.
+    /// Registers a new **VrmComponent** with the manager.
     ///
     /// # Arguments
-    /// * `aci` - The `AcI` instance to add.
+    /// * `vrm_component` - The `VrmComponent` instance to add.
     ///
     /// # Returns
-    /// * `true` - If the AcI was successfully added.
-    /// * `false` - If the AcI ID already exists or if an insertion error occurred (integrity compromised).
-    pub fn add_aci(
+    /// * `true` - If the VrmComponent was successfully added.
+    /// * `false` - If the VrmComponent ID already exists or if an insertion error occurred (integrity compromised).
+    pub fn add_vrm_component(
         &mut self,
-        grid_component: Box<dyn ExtendedReservationProcessor>,
+        vrm_component: Box<dyn VrmComponent>,
         simulator: Arc<dyn SystemSimulator>,
         reservation_store: ReservationStore,
         number_of_real_slots: i64,
         slot_width: i64,
     ) -> bool {
-        if self.grid_components.contains_key(&grid_component.get_id()) {
+        if self.vrm_components.contains_key(&vrm_component.get_id()) {
             log::error!(
-                "Process of adding a new AcI to the AciManger failed. It is not allowed to add the same aci multiple times. Please first delete the AcI: {}.",
-                grid_component.get_id()
+                "Process of adding a new VrmComponent to the VrmComponentManger failed. It is not allowed to add the same VrmComponent multiple times. Please first delete the VrmComponent: {}.",
+                vrm_component.get_id()
             );
             return false;
         }
 
-        let grid_component_id = grid_component.get_id();
-        let total_link_capacity = grid_component.get_total_link_capacity();
-        let link_resource_count = grid_component.get_link_resource_count();
+        let vrm_component_id = vrm_component.get_id();
+        let total_link_capacity = vrm_component.get_total_link_capacity();
+        let link_resource_count = vrm_component.get_link_resource_count();
         let registration_index = self.get_new_registration_counter();
 
-        let container = AcIContainer::new(
-            grid_component,
+        let container = VrmComponentContainer::new(
+            vrm_component,
             simulator,
             reservation_store,
             registration_index,
@@ -254,39 +314,42 @@ impl AcIManager {
             link_resource_count,
         );
 
-        if self.grid_components.insert(grid_component_id.clone(), container).is_none() {
+        if self.vrm_components.insert(vrm_component_id.clone(), container).is_none() {
             return true;
         } else {
             log::error!(
-                "Error happened in the process of adding a new AcI: {} to the AciManager (Adc: {}). The AciManger is now compromised.",
-                grid_component_id,
+                "Error happened in the process of adding a new VrmComponent: {} to the VrmComponentManager (Adc: {}). The VrmComponentManger is now compromised.",
+                vrm_component_id,
                 self.adc_id
             );
             return false;
         }
     }
 
-    /// Removes an **AcI** from the manager by its ID.
+    /// Removes an **VrmComponent** from the manager by its ID.
     ///
     /// Updates the total link capacity and link resource counts upon successful removal.
     ///
     /// # Arguments
-    /// * `aci_id` - The identifier of the AcI to remove.
+    /// * `VrmComponentId` - The identifier of the VrmComponent to remove.
     ///
     /// # Returns
-    /// * `true` - If the AcI was found and removed.
-    /// * `false` - If the AcI ID was not found.
-    pub fn delete_aci(&mut self, component_id: ComponentId) -> bool {
-        let container = self.grid_components.remove(&component_id);
+    /// * `true` - If the VrmComponent was found and removed.
+    /// * `false` - If the VrmComponent ID was not found.
+    pub fn delete_vrm_component(&mut self, component_id: ComponentId) -> bool {
+        let container = self.vrm_components.remove(&component_id);
         match container {
             Some(container) => {
                 self.total_link_capacity -= container.total_link_capacity;
                 self.link_resource_count -= container.link_resource_count;
+                // TODO
+                // Also remove any reservations handled by this VrmComponent?
+                // This would be complex as we'd need to iterate res_to_vrm_component
                 return true;
             }
             None => {
                 log::error!(
-                    "The process of deleting the AcI: {} form AciManager (Adc: {}). Failed, because the AciId was not present in the AciManager.",
+                    "The process of deleting the VrmComponent: {} form VrmComponentManager (Adc: {}). Failed, because the VrmComponentId was not present in the VrmComponentManager.",
                     component_id,
                     self.adc_id
                 );
@@ -295,33 +358,33 @@ impl AcIManager {
         }
     }
 
-    /// Returns a list of all registered AcI IDs in **random order**.
+    /// Returns a list of all registered VrmComponent IDs in **random order**.
     ///
     /// # Returns
-    /// A `Vec<AciId>` where the AciIds are in random order.
-    pub fn get_random_ordered_acis(&self) -> Vec<ComponentId> {
-        let mut keys: Vec<ComponentId> = self.grid_components.keys().cloned().into_iter().collect();
+    /// A `Vec<VrmComponentId>` where the VrmComponentIds are in random order.
+    pub fn get_random_ordered_vrm_components(&self) -> Vec<ComponentId> {
+        let mut keys: Vec<ComponentId> = self.vrm_components.keys().cloned().into_iter().collect();
         keys.shuffle(&mut rng());
         return keys;
     }
 
-    /// Returns a list of registered AcI IDs sorted according to the specified strategy.
-    /// If strict ordering is not required, `get_random_ordered_acis` is preferred for performance.
+    /// Returns a list of registered VrmComponent IDs sorted according to the specified strategy.
+    /// If strict ordering is not required, `get_random_ordered_vrm_components` is preferred for performance.
     ///
     /// # Returns
-    /// A `Vec<AciId>` sorted based on the comparator provided by `AcIOrder`.
-    pub fn get_ordered_acis(&self, request_order: AcIOrder) -> Vec<ComponentId> {
+    /// A `Vec<VrmComponentId>` sorted based on the comparator provided by `VrmComponentOrder`.
+    pub fn get_ordered_vrm_components(&self, request_order: VrmComponentOrder) -> Vec<ComponentId> {
         let comparator = request_order.get_comparator();
-        let mut acis_vec: Vec<&AcIContainer> = self.grid_components.values().collect();
+        let mut components_vec: Vec<&VrmComponentContainer> = self.vrm_components.values().collect();
 
-        acis_vec.sort_unstable_by(|a, b| comparator(a, b));
+        components_vec.sort_unstable_by(|a, b| comparator(a, b));
 
-        let sorted_keys: Vec<ComponentId> = acis_vec.into_iter().map(|container| container.grid_component.get_id()).collect();
+        let sorted_keys: Vec<ComponentId> = components_vec.into_iter().map(|container| container.vrm_component.get_id()).collect();
         return sorted_keys;
     }
 
     /// Calculates the average **Satisfaction Score** (0.0 to 1.0) for the current schedule within a specific time window.
-    /// This method queries all connected AcIs and calculates the capacity-weighted average satisfaction.
+    /// This method queries all directly and indirectly connected AcIs and calculates the capacity-weighted average satisfaction.
     ///
     /// # Arguments
     /// * `start` - The start of the time window.
@@ -342,8 +405,8 @@ impl AcIManager {
         let mut satisfaction_sum = 0.0;
         let mut total_capacity = 0.0;
 
-        for (id, container) in self.grid_components.iter_mut() {
-            let satisfaction = container.grid_component.get_satisfaction(start, end, shadow_schedule_id.clone());
+        for (id, container) in self.vrm_components.iter_mut() {
+            let satisfaction = container.vrm_component.get_satisfaction(start, end, shadow_schedule_id.clone());
 
             if satisfaction < 0.0 {
                 log::debug!(
@@ -353,7 +416,7 @@ impl AcIManager {
                     shadow_schedule_id
                 );
             } else {
-                let cap = container.grid_component.get_total_node_capacity() as f64;
+                let cap = container.vrm_component.get_total_node_capacity() as f64;
                 satisfaction_sum += satisfaction * cap;
                 total_capacity += cap;
             }
@@ -363,7 +426,7 @@ impl AcIManager {
     }
 
     /// Calculates the system-wide **Satisfaction Score** (0.0 to 1.0) across the full range of every schedule.
-    /// This method queries all connected AcIs and calculates the capacity-weighted average.
+    /// This method queries all directly and indirectly connected AcIs and calculates the capacity-weighted average.
     ///
     /// # Behavioral Note
     /// **Network AcIs:** This calculation generally excludes network AIs if their satisfaction/fragmentation
@@ -381,8 +444,8 @@ impl AcIManager {
         let mut satisfaction_sum = 0.0;
         let mut total_capacity = 0.0;
 
-        for (id, container) in self.grid_components.iter_mut() {
-            let satisfaction = container.grid_component.get_system_satisfaction(shadow_schedule_id.clone());
+        for (id, container) in self.vrm_components.iter_mut() {
+            let satisfaction = container.vrm_component.get_system_satisfaction(shadow_schedule_id.clone());
             if satisfaction < 0.0 {
                 log::debug!(
                     "System satisfaction of AcI is not allowed to be negative. ADC: {}, AcIs:  {} with ShadowScheduleId: {:?}",
@@ -391,7 +454,7 @@ impl AcIManager {
                     shadow_schedule_id
                 );
             } else {
-                let cap = container.grid_component.get_total_node_capacity() as f64;
+                let cap = container.vrm_component.get_total_node_capacity() as f64;
                 satisfaction_sum += satisfaction * cap;
                 total_capacity += cap;
             }
@@ -401,7 +464,7 @@ impl AcIManager {
     }
 
     /// Computes the **Load Metric** for a specific time range.
-    /// This method aggregates the load of all AcIs.
+    /// This method aggregates the load of all directly and indirectly connected AcIs.
     /// **Note:** Only jobs submitted via this ADC are typically counted; actual load on the physical resource
     /// may be higher due to local jobs or other ADCs.
     ///
@@ -412,19 +475,19 @@ impl AcIManager {
     ///
     /// # Returns
     /// A `LoadMetric` struct containing utilization, start/end times, and capacity details.
-    pub fn get_load_metric(&mut self, start: i64, end: i64, shadow_schedule_id: Option<ShadowScheduleId>) -> LoadMetric {
+    pub fn get_load_metric(&self, start: i64, end: i64, shadow_schedule_id: Option<ShadowScheduleId>) -> LoadMetric {
         let mut total_possible_reserved_capacity = 0.0;
         let mut total_average_reserved_capacity = 0.0;
         let mut earliest_start = i64::MAX;
         let mut latest_end = i64::MIN;
-        let mut num_of_valid_acis = 0;
+        let mut num_of_valid_components = 0;
 
-        for (id, container) in self.grid_components.iter_mut() {
-            let load_matic = container.grid_component.get_load_metric_up_to_date(start, end, shadow_schedule_id.clone());
+        for (id, container) in self.vrm_components.iter() {
+            let load_matic = container.vrm_component.get_load_metric(start, end, shadow_schedule_id.clone());
 
             if load_matic.start_time < 0 {
                 log::debug!(
-                    "Get Load Metric of AcI with negative start time is not allowed. ADC: {}, AcIs:  {} with ShadowScheduleId: {:?}",
+                    "Get Load Metric with negative start time is not allowed. ADC: {}, child VrmComponent:  {} with ShadowScheduleId: {:?}",
                     self.adc_id,
                     id,
                     shadow_schedule_id
@@ -432,7 +495,7 @@ impl AcIManager {
             } else {
                 total_average_reserved_capacity += load_matic.avg_reserved_capacity;
                 total_possible_reserved_capacity += load_matic.possible_capacity;
-                num_of_valid_acis += 1;
+                num_of_valid_components += 1;
 
                 if earliest_start > load_matic.start_time {
                     earliest_start = load_matic.start_time;
@@ -449,12 +512,12 @@ impl AcIManager {
             utilization = total_average_reserved_capacity / total_possible_reserved_capacity;
         }
 
-        if num_of_valid_acis > 0 {
+        if num_of_valid_components > 0 {
             return LoadMetric::new(
                 earliest_start,
                 latest_end,
-                total_average_reserved_capacity / num_of_valid_acis as f64,
-                total_possible_reserved_capacity / num_of_valid_acis as f64,
+                total_average_reserved_capacity / num_of_valid_components as f64,
+                total_possible_reserved_capacity / num_of_valid_components as f64,
                 utilization,
             );
         } else {
@@ -475,14 +538,14 @@ impl AcIManager {
         let mut total_average_reserved_capacity = 0.0;
         let mut earliest_start = i64::MAX;
         let mut latest_end = i64::MIN;
-        let mut num_of_valid_acis = 0;
+        let mut num_of_valid_components = 0;
 
-        for (id, container) in self.grid_components.iter_mut() {
-            let load_matic = container.grid_component.get_simulation_load_metric(shadow_schedule_id.clone());
+        for (id, container) in self.vrm_components.iter_mut() {
+            let load_matic = container.vrm_component.get_simulation_load_metric(shadow_schedule_id.clone());
 
             if load_matic.start_time < 0 {
                 log::debug!(
-                    "Get Load Metric of AcI with negative start time is not allowed. ADC: {}, AcIs:  {} with ShadowScheduleId: {:?}",
+                    "Get Load Metric with negative start time is not allowed. ADC: {}, child VrmComponent:  {} with ShadowScheduleId: {:?}",
                     self.adc_id,
                     id,
                     shadow_schedule_id
@@ -490,7 +553,7 @@ impl AcIManager {
             } else {
                 total_average_reserved_capacity += load_matic.avg_reserved_capacity;
                 total_possible_reserved_capacity += load_matic.possible_capacity;
-                num_of_valid_acis += 1;
+                num_of_valid_components += 1;
 
                 if earliest_start > load_matic.start_time {
                     earliest_start = load_matic.start_time;
@@ -507,12 +570,12 @@ impl AcIManager {
             utilization = total_average_reserved_capacity / total_possible_reserved_capacity;
         }
 
-        if num_of_valid_acis > 0 {
+        if num_of_valid_components > 0 {
             return LoadMetric::new(
                 earliest_start,
                 latest_end,
-                total_average_reserved_capacity / num_of_valid_acis as f64,
-                total_possible_reserved_capacity / num_of_valid_acis as f64,
+                total_average_reserved_capacity / num_of_valid_components as f64,
+                total_possible_reserved_capacity / num_of_valid_components as f64,
                 utilization,
             );
         } else {
@@ -521,8 +584,8 @@ impl AcIManager {
     }
 
     pub fn probe(&mut self, component_id: ComponentId, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> Reservations {
-        match self.grid_components.get_mut(&component_id) {
-            Some(container) => container.grid_component.probe(reservation_id, shadow_schedule_id),
+        match self.vrm_components.get_mut(&component_id) {
+            Some(container) => container.vrm_component.probe(reservation_id, shadow_schedule_id),
             None => {
                 log::error!(
                     "ComponentManagerHasNotFoundGridComponent: ComponentManager of ADC {}, requested component {} for probe request of reservation {:?} on shadow_schedule {:?}",
@@ -543,8 +606,8 @@ impl AcIManager {
         reservation_id: ReservationId,
         shadow_schedule_id: Option<ShadowScheduleId>,
     ) -> ReservationId {
-        match self.grid_components.get_mut(&component_id) {
-            Some(container) => container.grid_component.reserve(reservation_id, shadow_schedule_id),
+        match self.vrm_components.get_mut(&component_id) {
+            Some(container) => container.vrm_component.reserve(reservation_id, shadow_schedule_id),
             None => {
                 log::error!(
                     "ComponentManagerHasNotFoundGridComponent: ComponentManager of ADC {}, requested component {} for reserve request of reservation {:?} on shadow_schedule {:?}",
@@ -560,7 +623,7 @@ impl AcIManager {
     }
 
     pub fn reserve_without_check(&mut self, component_id: ComponentId, reservation_id: ReservationId) {
-        match self.grid_components.get_mut(&component_id) {
+        match self.vrm_components.get_mut(&component_id) {
             Some(container) => container.schedule.reserve_without_check(reservation_id),
             None => {
                 log::error!(

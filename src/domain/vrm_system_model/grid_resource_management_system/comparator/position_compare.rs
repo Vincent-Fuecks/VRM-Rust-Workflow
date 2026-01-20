@@ -1,8 +1,8 @@
-use crate::domain::vrm_system_model::grid_resource_management_system::aci_manager::AcIContainer;
+use crate::domain::vrm_system_model::grid_resource_management_system::vrm_component_manager::VrmComponentContainer;
 
 use std::cmp::Ordering;
 
-/// Compares AcIContainer using the order they have been registered with the ADC.
+/// Compares VrmComponentContainer using the order they have been registered with the ADC.
 /// Additionally, a start position can be given at creation time. Then AcIs
 /// registered earlier will be assumed to be at the end of the list.
 pub struct PositionCompare {
@@ -20,7 +20,7 @@ impl PositionCompare {
         Self { start: start_value }
     }
 
-    pub fn compare(&self, aci1: &AcIContainer, aci2: &AcIContainer) -> Ordering {
+    pub fn compare(&self, aci1: &VrmComponentContainer, aci2: &VrmComponentContainer) -> Ordering {
         if aci1.registration_index == aci2.registration_index {
             return Ordering::Equal;
         }

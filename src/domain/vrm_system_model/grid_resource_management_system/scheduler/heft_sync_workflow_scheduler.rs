@@ -1,42 +1,66 @@
 use crate::domain::vrm_system_model::grid_resource_management_system::adc::ADC;
+use crate::domain::vrm_system_model::grid_resource_management_system::scheduler::workflow_scheduler::{WorkflowScheduler, WorkflowSchedulerBase};
+use crate::domain::vrm_system_model::grid_resource_management_system::scheduler_comparator::eft_reservation_compare::EFTReservationCompare;
+use crate::domain::vrm_system_model::reservation::reservations::Reservations;
+use std::any::Any;
 use std::collections::HashMap;
 
-use crate::domain::vrm_system_model::grid_resource_management_system::scheduler::workflow_scheduler::WorkflowSchedulerBase;
-use crate::domain::vrm_system_model::grid_resource_management_system::scheduler_comparator::eft_reservation_compare::EFTReservationCompare;
-
 use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationState, ReservationTrait};
-use crate::domain::vrm_system_model::reservation::reservation_store::ReservationId;
+use crate::domain::vrm_system_model::reservation::reservation_store::{ReservationId, ReservationStore};
 use crate::domain::vrm_system_model::utils::id::{ComponentId, RouterId, WorkflowNodeId};
 
 use crate::domain::vrm_system_model::workflow::workflow::Workflow;
 use crate::domain::vrm_system_model::workflow::workflow_node::WorkflowNode;
-/**
- * Scheduler using the HEFTSync workflow scheduling algorithm.
- *
- * The basic idea of the scheduling algorithm is a list scheduler
- * using the length of the critical path assuming average resources
- * as list sorting criteria. For each job in the resource providing
- * the earliest finishing time (EFT) will be selected. This algorithm
- * was extended to cope with co-allocations (synchronous dependencies
- * in the VRM).
- *
- * @see ADC
- * @see Workflow
- */
 
+/// A high-performance scheduler implementing the **HEFTSync** algorithm for distributed Virtual Resource Management (VRM).
+///
+/// ### Core Methodology
+/// **HEFTSync** (Heterogeneous Earliest Finish Time with Synchronization) is a list-based heuristic
+/// designed for task-graph scheduling. It operates in two primary phases:
+///
+/// 1.  **Prioritization (Upward Rank):** Tasks are sorted based on their "Upward Rank," which represents
+///     the length of the critical path from the task to the exit node, calculated using average
+///     computation and communication costs across the grid.
+/// 2.  **Processor Selection (EFT):** Each task is assigned to the resource that minimizes its
+///     **Earliest Finish Time (EFT)**, accounting for resource availability and data transfer latencies.
+///
+/// ### Distributed Co-Allocation Support
+/// This implementation extends the standard HEFT algorithm to support **Synchronous Co-Allocations**.
+/// In a Grid/VRM environment, this ensures that interdependent sub-tasks across geographically
+/// distributed nodes are scheduled with overlapping execution windows to facilitate real-time
+/// synchronization or parallel execution.
+#[derive(Debug)]
 pub struct HEFTSyncWorkflowScheduler {
     pub base: WorkflowSchedulerBase,
 }
 
-impl HEFTSyncWorkflowScheduler {
-    pub fn reserve(&mut self, reservation_id: ReservationId, adc: &mut ADC, average_link_speed: i64) -> bool {
+impl WorkflowScheduler for HEFTSyncWorkflowScheduler {
+    fn new(reservation_store: ReservationStore) -> Box<dyn WorkflowScheduler> {
+        Box::new(Self { base: WorkflowSchedulerBase { reservation_store } })
+    }
+
+    fn get_reservation_store(&self) -> &ReservationStore {
+        &self.base.reservation_store
+    }
+
+    fn name(&self) -> &str {
+        "HEFTSyncWorkflowScheduler"
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn reserve(&mut self, workflow_res_id: ReservationId, adc: &mut ADC) -> bool {
         // 1. Get exclusive access via the store
-        if let Some(workflow_handle) = self.base.reservation_store.get(reservation_id) {
+        if let Some(workflow_handle) = self.base.reservation_store.get(workflow_res_id) {
             let mut reservation = workflow_handle.write().unwrap();
 
+            // Local reservation map will be later committed to global state if all reservations where successful
             let mut grid_component_res_database: HashMap<ReservationId, ComponentId> = HashMap::new();
 
             if let Reservation::Workflow(ref mut workflow) = *reservation {
+                let average_link_speed = adc.manager.get_average_link_speed() as i64;
                 let ranked_node_reservations = workflow.calculate_upward_rank(average_link_speed, &self.base.reservation_store);
 
                 let workflow_booking_interval_end = workflow.get_booking_interval_end();
@@ -47,6 +71,7 @@ impl HEFTSyncWorkflowScheduler {
                     let co_allocation_key = &workflow_node.co_allocation_key.clone().unwrap();
                     let co_allocation_node = workflow.co_allocations.get(co_allocation_key).unwrap();
 
+                    // Calculate Earliest Start Time based on data dependencies
                     for data_dependency in co_allocation_node.incoming_data_dependencies.clone() {
                         let data_dep_source_res_id = data_dependency.source_node.unwrap();
 
@@ -78,12 +103,12 @@ impl HEFTSyncWorkflowScheduler {
                     // Do not process workflow, where the deadline will be missed
                     if start + task_duration > workflow_booking_interval_end {
                         log::debug!(
-                            "No valid schedule found reservation {} of workflow {}, due to missed deadline.",
-                            node_name,
+                            "Deadline exceeded for node {:?} or workflow {}. Rolling back.",
+                            workflow_node.reservation_id,
                             workflow.base.get_name()
                         );
-                        self.cancel_all_reservations(adc, &grid_component_res_database);
-                        self.base.reservation_store.update_state(reservation_id, ReservationState::Rejected);
+                        self.cancel_all_reservations(adc, &mut grid_component_res_database);
+                        self.base.reservation_store.update_state(workflow_res_id, ReservationState::Rejected);
                         return false;
                     }
 
@@ -92,22 +117,23 @@ impl HEFTSyncWorkflowScheduler {
                     self.base.reservation_store.set_booking_interval_end(workflow_node.reservation_id, workflow_booking_interval_end);
 
                     // Schedule all compute task (and all synced compute tasks and sync dependencies)
+                    // Schedule Co-Allocation nodes
                     if !self.schedule_co_allocation_node_reservations(workflow, &mut workflow_node, &mut grid_component_res_database, adc) {
-                        self.cancel_all_reservations(adc, &grid_component_res_database);
+                        self.cancel_all_reservations(adc, &mut grid_component_res_database);
                         workflow.set_state(ReservationState::Rejected);
                         return false;
                     }
 
-                    // Try to get network connection form all predecessors
+                    // Try to get network connection form all predecessors (data dependencies)
                     if !self.schedule_data_dependencies(workflow, &mut workflow_node, &mut grid_component_res_database, adc) {
-                        self.cancel_all_reservations(adc, &grid_component_res_database);
+                        self.cancel_all_reservations(adc, &mut grid_component_res_database);
                         workflow.set_state(ReservationState::Rejected);
                         return false;
                     }
                 }
 
-                // Inform ADC about the done Reservations
-                adc.register_workflow_subtasks(&workflow, &grid_component_res_database);
+                // Success: Submit done reservations into global state ADC -> VrmComponentManager
+                adc.register_workflow_subtasks(workflow_res_id, &grid_component_res_database);
                 workflow.set_state(ReservationState::ReserveAnswer);
                 return true;
             }
@@ -115,6 +141,12 @@ impl HEFTSyncWorkflowScheduler {
         return false;
     }
 
+    fn probe(&mut self, workflow_res_id: ReservationId, adc: &mut ADC) -> Reservations {
+        todo!("Not implemented yet!")
+    }
+}
+
+impl HEFTSyncWorkflowScheduler {
     /**
      * Schedule and try to reserve all data dependencies (e.g. file transfers) to
      * all {@link NodeReservation}s co-allocated with the given reservation. All
@@ -124,6 +156,7 @@ impl HEFTSyncWorkflowScheduler {
      * @param mainTargetRes A representative for a set of {@link NodeReservation}s which are connected by sync dependencies
      * @param aisPerReservation A container for all successful reservations for this workflow
      */
+    /// Safely schedules data dependencies by handling missing mappings in the component database.
 
     fn schedule_data_dependencies(
         &mut self,
@@ -177,9 +210,11 @@ impl HEFTSyncWorkflowScheduler {
                 )
             }
         }
-        return false;
+        return true;
     }
 
+    /// Manages co-allocation groups while ensuring that failed sub-reservations do not leave
+    /// the scheduler in an inconsistent state.
     fn schedule_co_allocation_node_reservations(
         &mut self,
         workflow: &mut Workflow,
@@ -359,10 +394,9 @@ impl HEFTSyncWorkflowScheduler {
         // Request all GirdComponents for reservation candidates and sort them according to EFT (earliest finishing time)
 
         let comparator = EFTReservationCompare::new(self.base.reservation_store.clone());
-
         let reservation_order = move |id0: ReservationId, id1: ReservationId| comparator.compare(id0, id1);
 
-        let candidate_id = adc.submit_task_at_best_aci(reservation_id, None, grid_component_res_database, reservation_order);
+        let candidate_id = adc.submit_task_at_best_vrm_component(reservation_id, None, grid_component_res_database, reservation_order);
 
         if !candidate_id.is_none()
             && self.base.reservation_store.is_reservation_state_at_least(candidate_id.unwrap(), ReservationState::ReserveAnswer)
@@ -378,10 +412,11 @@ impl HEFTSyncWorkflowScheduler {
      *
      * @param aisPerReservation a container with all reservations to cancel and the AIs where they are booked.
      */
-    pub fn cancel_all_reservations(&mut self, adc: &mut ADC, grid_component_res_database: &HashMap<ReservationId, ComponentId>) {
-        for (reservation_id, component_id) in grid_component_res_database {
+    pub fn cancel_all_reservations(&mut self, adc: &mut ADC, grid_component_res_database: &mut HashMap<ReservationId, ComponentId>) {
+        for (reservation_id, component_id) in grid_component_res_database.clone() {
             adc.delete_task_at_component(component_id.clone(), reservation_id.clone(), None)
         }
+        grid_component_res_database.clear();
     }
 
     /**
@@ -450,8 +485,8 @@ impl HEFTSyncWorkflowScheduler {
             self.base.reservation_store.set_task_duration(dependency_reservation_id, end - start);
         }
 
-        let source_component_router_id_list = adc.aci_manager.get_component_router_list(source_component_id.clone());
-        let target_component_router_id_list = adc.aci_manager.get_component_router_list(target_component_id.clone());
+        let source_component_router_id_list = adc.manager.get_component_router_list(source_component_id.clone());
+        let target_component_router_id_list = adc.manager.get_component_router_list(target_component_id.clone());
 
         for source_router_id in &source_component_router_id_list {
             for target_router_id in &target_component_router_id_list {

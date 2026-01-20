@@ -1,7 +1,7 @@
 use std::{cmp::Ordering, collections::HashMap};
 
 use crate::domain::vrm_system_model::{
-    grid_resource_management_system::aci_manager::{AcIContainer, AcIManager},
+    grid_resource_management_system::vrm_component_manager::{VrmComponentContainer, VrmComponentManager},
     reservation::{reservation_store::ReservationId, reservations::Reservations},
     utils::id::ComponentId,
 };
@@ -16,17 +16,17 @@ use crate::domain::vrm_system_model::{
  *
  * @see AIReservationDatabase
  */
-pub struct OrderGridComponentResDatabase {
+pub struct OrderResVrmComponentDatabase {
     pub store: HashMap<ReservationId, ComponentId>,
     res_comparator: Box<dyn Fn(ReservationId, ReservationId) -> Ordering>,
-    ai_comparator: Box<dyn Fn(&AcIContainer, &AcIContainer) -> Ordering>,
+    ai_comparator: Box<dyn Fn(&VrmComponentContainer, &VrmComponentContainer) -> Ordering>,
 }
 
-impl OrderGridComponentResDatabase {
+impl OrderResVrmComponentDatabase {
     pub fn new<F1, F2>(res_sort: F1, ai_sort: F2) -> Self
     where
         F1: Fn(ReservationId, ReservationId) -> Ordering + 'static,
-        F2: Fn(&AcIContainer, &AcIContainer) -> Ordering + 'static,
+        F2: Fn(&VrmComponentContainer, &VrmComponentContainer) -> Ordering + 'static,
     {
         Self { store: HashMap::new(), res_comparator: Box::new(res_sort), ai_comparator: Box::new(ai_sort) }
     }
@@ -43,7 +43,7 @@ impl OrderGridComponentResDatabase {
         }
     }
 
-    fn compare_reservations(&self, aci_manager: &AcIManager, res1: ReservationId, res2: ReservationId) -> Ordering {
+    fn compare_reservations(&self, manager: &VrmComponentManager, res1: ReservationId, res2: ReservationId) -> Ordering {
         let mut order = (self.res_comparator)(res1, res2);
 
         if order == Ordering::Equal {
@@ -52,11 +52,11 @@ impl OrderGridComponentResDatabase {
 
             match (ai1, ai2) {
                 (Some(a), Some(b)) => {
-                    let aci0 = aci_manager.grid_components.get(a).unwrap();
+                    let container0 = manager.vrm_components.get(a).unwrap();
 
-                    let aci1 = aci_manager.grid_components.get(b).unwrap();
+                    let container1 = manager.vrm_components.get(b).unwrap();
 
-                    order = (self.ai_comparator)(aci0, aci1);
+                    order = (self.ai_comparator)(container0, container1);
                 }
                 _ => {
                     panic!("FATAL: Reservations cannot be compared, as they are not elements of this container. {:?}, {:?}", res1, res2);
@@ -66,10 +66,10 @@ impl OrderGridComponentResDatabase {
         order
     }
 
-    pub fn sorted_key_set(&self, aci_manager: &AcIManager) -> Vec<ReservationId> {
+    pub fn sorted_key_set(&self, manager: &VrmComponentManager) -> Vec<ReservationId> {
         let mut keys: Vec<ReservationId> = self.store.keys().cloned().collect();
 
-        keys.sort_by(|a, b| self.compare_reservations(aci_manager, *a, *b));
+        keys.sort_by(|a, b| self.compare_reservations(manager, *a, *b));
 
         keys
     }

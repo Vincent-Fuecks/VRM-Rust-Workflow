@@ -7,7 +7,7 @@ use crate::domain::simulator;
 use crate::domain::simulator::simulator::{Simulator, SystemSimulator};
 use crate::domain::vrm_system_model::adc::ADC;
 use crate::domain::vrm_system_model::grid_resource_management_system::aci::AcI;
-use crate::domain::vrm_system_model::grid_resource_management_system::grid_resource_management_system_trait::ExtendedReservationProcessor;
+use crate::domain::vrm_system_model::grid_resource_management_system::vrm_component_trait::VrmComponent;
 use crate::domain::vrm_system_model::reservation::reservation_store::{self, ReservationStore};
 use crate::domain::vrm_system_model::{
     client::client::Client,

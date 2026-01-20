@@ -1,6 +1,6 @@
 use crate::api::vrm_system_model_dto::aci_dto::AcIDto;
 use crate::domain::simulator::simulator::{Simulator, SystemSimulator};
-use crate::domain::vrm_system_model::grid_resource_management_system::grid_resource_management_system_trait::ExtendedReservationProcessor;
+use crate::domain::vrm_system_model::grid_resource_management_system::vrm_component_trait::VrmComponent;
 use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationState};
 use crate::domain::vrm_system_model::reservation::reservation_store::{self, ReservationId, ReservationStore};
 use crate::domain::vrm_system_model::reservation::reservations::Reservations;
@@ -145,7 +145,7 @@ impl TryFrom<(AcIDto, Arc<dyn SystemSimulator>)> for AcI {
     }
 }
 
-impl ExtendedReservationProcessor for AcI {
+impl VrmComponent for AcI {
     fn get_id(&self) -> ComponentId {
         ComponentId::new(self.id.to_string())
     }

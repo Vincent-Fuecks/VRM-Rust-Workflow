@@ -28,7 +28,7 @@ use std::cmp::Ordering;
 /// This interface allows operations to be performed against a "Shadow Schedule" a sandbox
 /// environment used to simulate scheduling changes without affecting the live production
 /// resource flow.
-pub trait ExtendedReservationProcessor: std::fmt::Debug {
+pub trait VrmComponent: std::fmt::Debug {
     /// Returns the unique identifier of the component (AcI or ADC).
     fn get_id(&self) -> ComponentId;
 

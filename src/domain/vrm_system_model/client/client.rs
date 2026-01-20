@@ -6,7 +6,7 @@ use crate::api::workflow_dto::client_dto::{ClientDto, ClientsDto};
 use crate::domain::simulator;
 use crate::domain::simulator::simulator::{Simulator, SystemSimulator};
 use crate::domain::vrm_system_model::client;
-use crate::domain::vrm_system_model::grid_resource_management_system::grid_resource_management_system_trait::ExtendedReservationProcessor;
+use crate::domain::vrm_system_model::grid_resource_management_system::vrm_component_trait::VrmComponent;
 use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationTrait};
 use crate::domain::vrm_system_model::reservation::reservation_store::{self, ReservationId, ReservationStore};
 use crate::domain::vrm_system_model::reservation::reservations::Reservations;
@@ -81,7 +81,7 @@ impl Clients {
 }
 
 impl Client {
-    pub async fn run(mut self, reservation_store: ReservationStore, adc: Arc<tokio::sync::Mutex<Box<dyn ExtendedReservationProcessor>>>) {
+    pub async fn run(mut self, reservation_store: ReservationStore, adc: Arc<tokio::sync::Mutex<Box<dyn VrmComponent>>>) {
         self.unprocessed_reservations.sort_by_key(|r| r.get_arrival_time());
 
         while !self.unprocessed_reservations.is_empty() {
@@ -106,12 +106,7 @@ impl Client {
         log::info!("Client {} finished processing all reservations.", self.id);
     }
 
-    async fn process_reservation(
-        &mut self,
-        reservation_id: ReservationId,
-        reservation_store: &ReservationStore,
-        adc: &mut Box<dyn ExtendedReservationProcessor>,
-    ) {
+    async fn process_reservation(&mut self, reservation_id: ReservationId, reservation_store: &ReservationStore, adc: &mut Box<dyn VrmComponent>) {
         todo!()
     }
 }

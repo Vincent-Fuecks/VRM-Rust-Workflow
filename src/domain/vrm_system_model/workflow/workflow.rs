@@ -911,4 +911,26 @@ impl Workflow {
             self.base.set_assigned_end(reservation_store.get_assigned_end(reservation_id));
         }
     }
+
+    /**
+     * @return 	List of all Requests(Reservations) in this Workflow. That are all Reservations represented
+     * 			by WorkflowNodes and Dependencys.
+     */
+    pub fn get_all_reservation_ids(&self) -> Vec<ReservationId> {
+        let mut workflow_res_ids = Vec::new();
+
+        for node in self.nodes.values() {
+            workflow_res_ids.push(node.reservation_id.clone());
+        }
+
+        for data_dep in self.data_dependencies.values() {
+            workflow_res_ids.push(data_dep.reservation_id.clone());
+        }
+
+        for sync_dep in self.sync_dependencies.values() {
+            workflow_res_ids.push(sync_dep.reservation_id.clone());
+        }
+
+        return workflow_res_ids;
+    }
 }
