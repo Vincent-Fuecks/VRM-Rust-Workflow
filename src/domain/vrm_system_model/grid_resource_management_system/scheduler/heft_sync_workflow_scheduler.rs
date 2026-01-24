@@ -249,6 +249,11 @@ impl HEFTSyncWorkflowScheduler {
         // Update all group members of Co-Allocation Node
         for co_allocation_node_id in co_allocation_nodes_to_schedule.clone() {
             let member_id = workflow.nodes.get(&co_allocation_node_id).unwrap().reservation_id;
+
+            if member_id == first_task_candidate {
+                continue;
+            }
+
             self.base.reservation_store.set_booking_interval_start(member_id, start);
             self.base.reservation_store.set_booking_interval_end(member_id, end);
             self.base.reservation_store.adjust_capacity(member_id, duration);
@@ -342,7 +347,7 @@ impl HEFTSyncWorkflowScheduler {
         for sync_dep_id in &target_node.incoming_sync.clone() {
             let sync_dep = workflow.sync_dependencies.get(sync_dep_id).unwrap();
             let sync_dep_source_res_id = workflow.nodes.get(&sync_dep.source_node.clone().unwrap()).unwrap().reservation_id;
-            let sync_dep_target_res_id = workflow.nodes.get(&sync_dep.source_node.clone().unwrap()).unwrap().reservation_id;
+            let sync_dep_target_res_id = workflow.nodes.get(&sync_dep.target_node.clone().unwrap()).unwrap().reservation_id;
 
             if let Some(source_component_id) = grid_component_res_database.get(&sync_dep_source_res_id) {
                 if let Some(target_component_id) = grid_component_res_database.get(&sync_dep_target_res_id) {

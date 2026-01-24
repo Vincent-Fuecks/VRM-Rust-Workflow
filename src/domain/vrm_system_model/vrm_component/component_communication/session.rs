@@ -1,7 +1,7 @@
-use crate::domain::vrm_system_model::grid_component::{
+use crate::domain::vrm_system_model::vrm_component::{
     component_communication::codec::DistSystemCodec,
     component_communication::protocol::{Envelope, Payload},
-    utils::grid_component_message::GridComponentMessage,
+    utils::vrm_component_message::VrmComponentMessage,
 };
 use actix::prelude::*;
 use std::io;
@@ -14,7 +14,7 @@ use tokio_util::codec::FramedRead;
 pub struct TcpSession {
     /// Address of the main component actor to forward received messages to.
     /// Changed from Addr<Node> to Recipient<NodeMessage> for polymorphism.
-    node: Recipient<GridComponentMessage>,
+    node: Recipient<VrmComponentMessage>,
     /// Write sink for the TCP stream.
     /// GENERICS ORDER IS CRITICAL: <Item, IO, Codec>
     framed_write: actix::io::FramedWrite<Envelope, tokio::io::WriteHalf<TcpStream>, DistSystemCodec>,
@@ -24,7 +24,7 @@ pub struct TcpSession {
 
 impl TcpSession {
     pub fn new(
-        node: Recipient<GridComponentMessage>,
+        node: Recipient<VrmComponentMessage>,
         write_half: tokio::io::WriteHalf<TcpStream>,
         read_half: tokio::io::ReadHalf<TcpStream>,
     ) -> Addr<Self> {
@@ -40,7 +40,7 @@ impl Actor for TcpSession {
 
     fn stopped(&mut self, _ctx: &mut Self::Context) {
         if let Some(id) = self.remote_id.take() {
-            self.node.do_send(GridComponentMessage::Disconnect { id });
+            self.node.do_send(VrmComponentMessage::Disconnect { id });
         }
     }
 }
@@ -59,9 +59,9 @@ impl StreamHandler<Result<Envelope, io::Error>> for TcpSession {
             Ok(env) => {
                 if let Payload::Register { from_id } = &env.payload {
                     self.remote_id = Some(from_id.clone());
-                    self.node.do_send(GridComponentMessage::RegisterChild { id: from_id.clone(), addr: ctx.address().recipient() });
+                    self.node.do_send(VrmComponentMessage::RegisterChild { id: from_id.clone(), addr: ctx.address().recipient() });
                 } else {
-                    self.node.do_send(GridComponentMessage::Route(env));
+                    self.node.do_send(VrmComponentMessage::Route(env));
                 }
             }
             Err(e) => {

@@ -1,4 +1,4 @@
-use crate::domain::vrm_system_model::grid_component::component_communication::protocol::{Envelope, Payload};
+use crate::domain::vrm_system_model::vrm_component::component_communication::protocol::{Envelope, Payload};
 use bytes::BytesMut;
 use std::io;
 use tokio_util::codec::{Decoder, Encoder, LengthDelimitedCodec};

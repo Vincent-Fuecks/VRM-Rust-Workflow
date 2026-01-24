@@ -1,4 +1,3 @@
-use serde::{Deserialize, Serialize};
 use slotmap::{SlotMap, new_key_type};
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
@@ -87,6 +86,21 @@ impl ReservationStore {
         }
 
         return key;
+    }
+
+    /// Checks if the provided reservation ids are in the ReservationStore
+    ///
+    /// # Returns
+    /// Returns true, if all reservation ids are in the store otherwise false is returned.     
+    pub fn contains_reservations(&self, reservation_ids: Vec<ReservationId>) -> bool {
+        let guard = self.inner.read().expect("RwLock poisoned");
+
+        for reservation_id in reservation_ids {
+            if !guard.slots.contains_key(reservation_id) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /// Get Reservation with internal Id (ReservationId).

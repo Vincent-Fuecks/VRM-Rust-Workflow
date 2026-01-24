@@ -289,6 +289,20 @@ impl ADC {
     pub fn register_workflow_subtasks(&mut self, workflow_res_id: ReservationId, grid_component_res_database: &HashMap<ReservationId, ComponentId>) {
         self.manager.register_workflow_allocation(workflow_res_id, grid_component_res_database.clone());
     }
+
+    // Clean all related child task, which where potentialy scheduled
+    fn handle_failure(&mut self, workflow_id: ReservationId) {
+        if self.reservation_store.is_workflow(workflow_id) {
+            let workflow_child_res_ids = self.workflow_scheduler.get_sub_ids(workflow_id);
+            for child_id in workflow_child_res_ids {
+                self.manager.delete_reservation(&child_id, None);
+            }
+
+            self.manager.delete_reservation(&workflow_id, None);
+            self.reservation_store.update_state(workflow_id, ReservationState::Rejected);
+        }
+        self.reservation_store.update_state(workflow_id, ReservationState::Rejected);
+    }
 }
 
 impl VrmComponent for ADC {
@@ -343,7 +357,7 @@ impl VrmComponent for ADC {
                 // Check if this specific sub-component succeeded
                 if state != ReservationState::Committed || !component_answer {
                     log::error!("Sub-task {:?} failed in workflow {:?}", res_id, reservation_id);
-                    self.workflow_scheduler.handle_failure(reservation_id);
+                    self.handle_failure(reservation_id);
                     return false;
                 }
             }
@@ -357,31 +371,36 @@ impl VrmComponent for ADC {
     }
 
     fn commit_shadow_schedule(&mut self, shadow_schedule_id: ShadowScheduleId) -> bool {
-        todo!()
+        // TODO Please implement me.
+        log::debug!("CommitShadowScheduleIsNotImplemented: Please implement commit_shadow_schedule in adc.rs.");
+        return false;
     }
 
     fn create_shadow_schedule(&mut self, shadow_schedule_id: ShadowScheduleId) -> bool {
-        todo!()
+        // TODO Please implement me.
+        log::debug!("CreateShadowScheduleIsNotImplemented: Please implement create_shadow_schedule in adc.rs.");
+        return false;
     }
 
     fn delete_shadow_schedule(&mut self, shadow_schedule_id: ShadowScheduleId) -> bool {
-        todo!()
+        // TODO Please implement me.
+        log::debug!("DeleteShadowScheduleIsNotImplemented: Please implement delete_shadow_schedule in adc.rs.");
+        return false;
     }
 
+    // TODO delete_task to delete
     fn delete_task(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> ReservationId {
         if self.reservation_store.is_workflow(reservation_id) {
-            // TODO
-            todo!();
-        }
+            let sub_ids = self.workflow_scheduler.get_sub_ids(reservation_id);
 
-        if let Some(component_id) = self.manager.get_handler_id(reservation_id) {
-            self.delete_task_at_component(component_id, reservation_id, shadow_schedule_id);
-            return reservation_id;
+            for res_id in sub_ids {
+                self.delete_task(res_id, None);
+            }
+            self.reservation_store.update_state(reservation_id, ReservationState::Deleted);
         } else {
-            log::error!("ADC Delete: No handler found for reservation {:?}", reservation_id);
-            self.reservation_store.update_state(reservation_id, ReservationState::Rejected);
-            return reservation_id;
+            self.manager.delete_reservation(&reservation_id, shadow_schedule_id);
         }
+        return reservation_id;
     }
 
     fn get_load_metric(&self, start: i64, end: i64, shadow_schedule_id: Option<ShadowScheduleId>) -> LoadMetric {

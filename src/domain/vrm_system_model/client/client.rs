@@ -40,8 +40,11 @@ pub struct Client {
     pub id: ClientId,
     pub simulator: Arc<dyn SystemSimulator>,
 
+    /** list of reservation, which are not yet submitted */
     pub unprocessed_reservations: Vec<Reservation>,
+    /** list of reservations are executed in the moment (commited, but not finished) */
     pub open_reservations: Vec<Reservation>,
+    /** name of the adc to use */
     pub adc_id: Option<AdcId>,
 }
 
@@ -77,6 +80,13 @@ impl Clients {
         }
 
         Ok(Clients { clients })
+    }
+
+    // Updates the client in a specific interval, what the state of all his reservation is
+    // Also inform the client, in case a total workflow is finished
+    // Also informs the client if all his Reservations are finished
+    pub fn update_clients(self) {
+        todo!()
     }
 }
 

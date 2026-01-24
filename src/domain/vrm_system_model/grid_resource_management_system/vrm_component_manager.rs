@@ -2,6 +2,7 @@ use crate::domain::simulator::simulator::SystemSimulator;
 use crate::domain::vrm_system_model::grid_resource_management_system::vrm_component_order::VrmComponentOrder;
 use crate::domain::vrm_system_model::grid_resource_management_system::vrm_component_trait::VrmComponent;
 use crate::domain::vrm_system_model::reservation::reservation::Reservation;
+use crate::domain::vrm_system_model::reservation::reservation::ReservationState;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationId;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationStore;
 use crate::domain::vrm_system_model::reservation::reservations::Reservations;
@@ -16,6 +17,11 @@ use rand::seq::SliceRandom;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
+/**
+ * Used as dummy AI for all jobs, which are not really send to AIs but
+ * rather processed internally. E.g. workflow network transfers, which are
+ * skipped as both endpoints are on the same node.
+ */
 lazy_static! {
     pub static ref DUMMY_COMPONENT_ID: ComponentId = ComponentId::new("ADC INTERNAL JOB");
 }
@@ -632,6 +638,42 @@ impl VrmComponentManager {
                     component_id,
                     reservation_id,
                 );
+            }
+        }
+    }
+
+    // Handles only single reservation and no child reservations (deletes also workflow reservation but not the related children)
+    pub fn delete_reservation(&mut self, reservation_id: &ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> ReservationId {
+        match self.res_to_vrm_component.get(reservation_id) {
+            Some(component_id) => {
+                // No real reservation
+                if component_id.compare(&DUMMY_COMPONENT_ID) {
+                    self.reservation_store.update_state(*reservation_id, ReservationState::Deleted);
+                    return *reservation_id;
+                }
+                // Del Reservation form VrmComponent and update Local schedule view
+                if let Some(container) = self.vrm_components.get_mut(component_id) {
+                    container.vrm_component.delete_task(reservation_id.clone(), shadow_schedule_id);
+                    container.schedule.delete_reservation(reservation_id.clone());
+                } else {
+                    log::error!(
+                        "ComponentManagerHasNotFoundVrmComponentWhereReservationIsLocated: ComponentManager of ADC {}, requested to delete the reservation {:?} on shadow schedule {:?} on VrmComponent {}. ",
+                        self.adc_id,
+                        self.reservation_store.get_name_for_key(reservation_id.clone()),
+                        shadow_schedule_id,
+                        component_id,
+                    );
+                }
+                return *reservation_id;
+            }
+            None => {
+                log::error!(
+                    "ComponentManagerHasNotFoundVrmComponentForReservationToDelete: ComponentManager of ADC {}, requested to delete the reservation {:?} on shadow schedule {:?}. ",
+                    self.adc_id,
+                    self.reservation_store.get_name_for_key(reservation_id.clone()),
+                    shadow_schedule_id
+                );
+                return *reservation_id;
             }
         }
     }

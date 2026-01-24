@@ -1,329 +1,146 @@
-use serde::Serialize;
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::{self, Write};
-use std::sync::{OnceLock, mpsc};
-use std::thread;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::sync::Mutex;
+use tracing::{
+    Event, Subscriber,
+    field::{Field, Visit},
+};
 
-/// Each event consists of a set of key-value-pairs with the measured data or some meta data of the event.
-/// This enum specifies all allowed key values and thus the column in the output file.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
-pub enum StatParameter {
-    /// Time in seconds since simulation start.
-    Time,
+use tracing_appender::non_blocking::{NonBlocking, WorkerGuard};
+use tracing_appender::rolling;
+use tracing_subscriber::{Layer, layer::Context};
 
-    /// Description why this entry was made
-    LogDescription,
+pub const ANALYTICS_TARGET: &str = "analytics";
 
-    // Component
-    /// Type of the component is "CLIENT", "ADC", "AI" or "SIMULATOR"
-    ComponentType,
+const CSV_HEADERS: &[&str] = &[
+    "Time",
+    "LogDescription",
+    "ComponentType",
+    "ComponentName",
+    "ComponentCapacity",
+    "ComponentUtilization",
+    "ComponentFragmentation",
+    "ReservationName",
+    "ReservationCapacity",
+    "ReservationWorkload",
+    "ReservationState",
+    "ReservationProceeding",
+    "NumberOfTasks",
+    "Command",
+    "ProcessingTime",
+    "FragmentationBefore",
+    "FragmentationAfter",
+    "NumberOfCoAllocationDependencies",
+    "NumberOfDataDependencies",
+    "ProbeAnswers",
+];
 
-    /// Name of component
-    ComponentName,
-
-    /// Overall or estimated capacity of the component
-    ComponentCapacity,
-
-    /// Load of component
-    ComponentUtilization,
-
-    /// Fragmentation of component */
-    ComponentFragmentation,
-
-    // Reservation
-    /// Name of the reservation
-    ReservationName,
-
-    /// Size of Reservation (capacity)
-    ReservationCapacity,
-
-    /// Overall size of Reservation (capacity * duration)
-    ReservationWorkload,
-
-    /// ReservationState of Reservation
-    ReservationState,
-
-    /// ReservationProceeding of Reservation
-    ReservationProceeding,
-
-    /// Number of Tasks in Reservation. Is 1 if Reservation was not a Workflow
-    NumberOfTasks,
-
-    // Operation
-    /// Command send or answered
-    Command,
-
-    /// Time to process command in ms
-    ProcessingTime,
-
-    /// System fragmentation before reservation  
-    FragmentationBefore,
-
-    /// System fragmentation after reservation
-    FragmentationAfter,
-
-    /// Number of CoAllocation Dependencies (if the reservation is a Workflow)
-    NumberOfCoAllocationDependencies,
-
-    /// Number of DataDependencies (if the reservation is a Workflow)
-    NumberOfDataDependencies,
+/// A custom Tracing Layer that writes analytics events to a CSV.
+pub struct CsvAnalyticsLayer {
+    /// Mutex is required because `Layer::on_event` is immutable (&self),
+    /// but writing to the CSV writer requires mutability.
+    /// We use `NonBlocking` writer here to ensure the application thread
+    /// never blocks on disk I/O.
+    writer: Mutex<csv::Writer<NonBlocking>>,
 }
 
-impl StatParameter {
-    /// Returns the defined order of columns for the CSV header
-    pub fn headers() -> Vec<&'static str> {
-        vec![
-            "Time",
-            "LogDescription",
-            "ComponentType",
-            "ComponentName",
-            "ComponentCapacity",
-            "ComponentUtilization",
-            "ComponentFragmentation",
-            "ReservationName",
-            "ReservationCapacity",
-            "ReservationWorkload",
-            "ReservationState",
-            "ReservationProceeding",
-            "NumberOfTasks",
-            "Command",
-            "ProcessingTime",
-            "FragmentationBefore",
-            "FragmentationAfter",
-            "NumberOfCoAllocationDependencies",
-            "NumberOfDataDependencies",
-        ]
+impl CsvAnalyticsLayer {
+    pub fn new(writer: NonBlocking) -> Self {
+        // We do not wrap in BufWriter because tracing_appender::NonBlocking
+        // already buffers internally.
+        let mut wtr = csv::WriterBuilder::new().delimiter(b';').from_writer(writer);
+
+        // Write the header row immediately.
+        // Note: In a rolling file scenario, this header writes every time the app starts,
+        // but new rolling files created while running might miss headers unless handled
+        // by a more complex custom appender.
+        // For a prototype, writing headers on startup is sufficient.
+        if let Err(e) = wtr.write_record(CSV_HEADERS) {
+            eprintln!("Failed to write CSV headers: {}", e);
+        }
+        let _ = wtr.flush();
+
+        Self { writer: Mutex::new(wtr) }
     }
 }
 
-/// store values in their native format, only format them when writing to the CSV.
-#[derive(Debug, Clone, Serialize)]
-#[serde(untagged)]
-pub enum StatValue {
-    Integer(i64),
-    Float(f64),
-    Text(String),
-    Bool(bool),
-}
-
-// Automatic conversion helpers
-impl From<i32> for StatValue {
-    fn from(v: i32) -> Self {
-        StatValue::Integer(v as i64)
-    }
-}
-
-impl From<i64> for StatValue {
-    fn from(v: i64) -> Self {
-        StatValue::Integer(v)
-    }
-}
-
-impl From<f64> for StatValue {
-    fn from(v: f64) -> Self {
-        StatValue::Float(v)
-    }
-}
-
-impl From<String> for StatValue {
-    fn from(v: String) -> Self {
-        StatValue::Text(v)
-    }
-}
-
-impl From<&str> for StatValue {
-    fn from(v: &str) -> Self {
-        StatValue::Text(v.to_string())
-    }
-}
-
-impl From<bool> for StatValue {
-    fn from(v: bool) -> Self {
-        StatValue::Bool(v)
-    }
-}
-
-// --- 2. The Event Object ---
-
-#[derive(Debug, Clone)]
-pub struct StatisticEvent {
-    data: HashMap<StatParameter, StatValue>,
-}
-
-impl StatisticEvent {
-    pub fn new() -> Self {
-        Self { data: HashMap::new() }
-    }
-
-    pub fn set<V: Into<StatValue>>(&mut self, param: StatParameter, value: V) -> &mut Self {
-        self.data.insert(param, value.into());
-        self
-    }
-
-    pub fn get(&self, param: StatParameter) -> Option<&StatValue> {
-        self.data.get(&param)
-    }
-}
-
-/// Messages sent from the simulation threads to the writer thread.
-enum StatsMessage {
-    Log(StatisticEvent),
-    Flush,
-    Shutdown,
-}
-
-/// The global handle that allows components to log events.
-/// It holds the "Sender" side of the channel.
-pub struct StatsCollector {
-    sender: mpsc::Sender<StatsMessage>,
-    start_time: u64,
-}
-
-impl StatsCollector {
-    /// Initialize the statistics system.
-    /// Spawns a background thread that manages the file writing.
-    pub fn init(filename: Option<String>) -> Self {
-        let (tx, rx) = mpsc::channel();
-
-        let start_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-
-        // Spawn the background writer thread
-        thread::spawn(move || {
-            Self::worker_loop(rx, filename);
-        });
-
-        StatsCollector { sender: tx, start_time }
-    }
-
-    /// The logic running in the background thread.
-    fn worker_loop(rx: mpsc::Receiver<StatsMessage>, filename: Option<String>) {
-        // Setup Output (File or Stdout)
-        let writer: Box<dyn Write> = match filename {
-            Some(f) => Box::new(File::create(f).expect("Could not create statistics file")),
-            None => Box::new(io::stdout()),
-        };
-
-        // Initialize CSV Writer
-        let mut csv_wtr = csv::WriterBuilder::new().delimiter(b';').from_writer(writer);
-
-        // Write Header
-        let headers = StatParameter::headers();
-        if let Err(e) = csv_wtr.write_record(&headers) {
-            log::error!("Stats Error: Failed to write headers: {}", e);
+impl<S> Layer<S> for CsvAnalyticsLayer
+where
+    S: Subscriber,
+{
+    fn on_event(&self, event: &Event<'_>, _ctx: Context<'_, S>) {
+        // 1. Filter: Ignore standard logs, only process our "analytics" target
+        if event.metadata().target() != ANALYTICS_TARGET {
+            return;
         }
 
-        // Process incoming messages
-        for msg in rx {
-            match msg {
-                StatsMessage::Log(event) => {
-                    // Convert the Map into a Row based on Header order
-                    let row: Vec<String> = StatParameter::headers()
-                        .iter()
-                        .map(|header_str| {
-                            // Find the enum variant matching this header string
-                            // (In a real app, you might iterate the enum variants directly to avoid string matching overhead)
-                            let param = Self::str_to_param(header_str);
+        // 2. Extract: Use a Visitor to walk the fields of the event
+        let mut visitor = CsvVisitor::default();
+        event.record(&mut visitor);
 
-                            match param {
-                                Some(p) => match event.data.get(&p) {
-                                    // Use Serde to format the value safely (handles quotes, etc)
-                                    Some(val) => match val {
-                                        StatValue::Text(t) => t.clone(),
-                                        StatValue::Integer(i) => i.to_string(),
-                                        StatValue::Float(f) => f.to_string(),
-                                        StatValue::Bool(b) => b.to_string(),
-                                    },
-                                    None => "NA".to_string(),
-                                },
-                                None => "ERROR".to_string(),
-                            }
-                        })
-                        .collect();
+        // 3. Write: Lock the writer and output the row
+        // Because we use NonBlocking, this lock is held only for the duration
+        // of a memory copy, not a disk write.
+        if let Ok(mut wtr) = self.writer.lock() {
+            // Map the collected fields to the strict CSV_HEADERS order
+            let row: Vec<String> =
+                CSV_HEADERS.iter().map(|header| visitor.fields.get(*header).cloned().unwrap_or_else(|| "N/A".to_string())).collect();
 
-                    if let Err(e) = csv_wtr.write_record(&row) {
-                        eprintln!("Stats Error: Failed to write record: {}", e);
-                    }
-                }
-                StatsMessage::Flush => {
-                    let _ = csv_wtr.flush();
-                }
-                StatsMessage::Shutdown => {
-                    let _ = csv_wtr.flush();
-                    break;
-                }
+            if let Err(e) = wtr.write_record(&row) {
+                eprintln!("Failed to write analytics row: {}", e);
             }
+            // No need to flush manually; the background worker handles it.
         }
-    }
-
-    // Helper to map header strings back to Enums (simple lookup)
-    fn str_to_param(s: &str) -> Option<StatParameter> {
-        // In a production app, use `strum` crate for EnumString derivation
-        match s {
-            "Time" => Some(StatParameter::Time),
-            "LogDescription" => Some(StatParameter::LogDescription),
-            "ComponentType" => Some(StatParameter::ComponentType),
-            "ComponentName" => Some(StatParameter::ComponentName),
-            "ComponentCapacity" => Some(StatParameter::ComponentCapacity),
-            "ComponentUtilization" => Some(StatParameter::ComponentUtilization),
-            "ComponentFragmentation" => Some(StatParameter::ComponentFragmentation),
-            "ReservationName" => Some(StatParameter::ReservationName),
-            "ReservationCapacity" => Some(StatParameter::ReservationCapacity),
-            "ReservationWorkload" => Some(StatParameter::ReservationWorkload),
-            "ReservationState" => Some(StatParameter::ReservationState),
-            "ReservationProceeding" => Some(StatParameter::ReservationProceeding),
-            "NumberOfJobs" => Some(StatParameter::NumberOfTasks),
-            "Command" => Some(StatParameter::Command),
-            "ProcessingTime" => Some(StatParameter::ProcessingTime),
-            "FragmentationBefore" => Some(StatParameter::FragmentationBefore),
-            "FragmentationAfter" => Some(StatParameter::FragmentationAfter),
-            "NumberOfCoAllocationDependencies" => Some(StatParameter::NumberOfCoAllocationDependencies),
-            "NumberOfDataDependencies" => Some(StatParameter::NumberOfDataDependencies),
-            _ => None,
-        }
-    }
-
-    /// Public API to log an event.
-    /// This is non-blocking (just sends a message).
-    pub fn add_event(&self, mut event: StatisticEvent) {
-        // Inject timestamp automatically if not present
-        if event.get(StatParameter::Time).is_none() {
-            let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-            // Calculate relative time if needed, or just absolute
-            let relative = now.saturating_sub(self.start_time);
-            event.set(StatParameter::Time, relative as i64);
-        }
-
-        // Send to writer thread
-        // We ignore errors here (e.g., if writer thread crashed) to not crash the simulation
-        let _ = self.sender.send(StatsMessage::Log(event));
     }
 }
 
-static GLOBAL_STATS: OnceLock<StatsCollector> = OnceLock::new();
-
-/// Initialize the global statistics collector.
-pub fn init_global(filename: Option<String>) {
-    let collector = StatsCollector::init(filename);
-    let _ = GLOBAL_STATS.set(collector);
+/// A helper struct to "visit" (extract) values from a tracing Event.
+#[derive(Default)]
+struct CsvVisitor {
+    fields: HashMap<String, String>,
 }
 
-/// Helper to log an event to the global collector.
-/// Safe to call from anywhere, from any thread.
-pub fn add_global_event(event: StatisticEvent) {
-    if let Some(collector) = GLOBAL_STATS.get() {
-        collector.add_event(event);
-    } else {
-        log::error!("Warning: Statistics event dropped. Call init_global() first.");
+impl Visit for CsvVisitor {
+    fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
+        // Fallback for types not handled specifically below
+        self.fields.insert(field.name().to_string(), format!("{:?}", value));
     }
+
+    fn record_str(&mut self, field: &Field, value: &str) {
+        self.fields.insert(field.name().to_string(), value.to_string());
+    }
+
+    fn record_i64(&mut self, field: &Field, value: i64) {
+        self.fields.insert(field.name().to_string(), value.to_string());
+    }
+
+    fn record_f64(&mut self, field: &Field, value: f64) {
+        self.fields.insert(field.name().to_string(), value.to_string());
+    }
+
+    // Implement record_bool, record_u64, etc. as needed...
 }
 
-// fn main() {
-//     init_global(Some("vrm_stats.csv".to_string()));
+/// Initialize the global subscriber for high-throughput analytics.
+///
+/// # Returns
+/// Returns a `WorkerGuard`. This guard MUST be assigned to a variable in `main`
+/// (e.g. `let _guard = init_tracing(...)`). Dropping it will shut down the background writer.
+pub fn init_tracing(directory: &str, filename_prefix: &str) -> WorkerGuard {
+    use tracing_subscriber::prelude::*;
 
-//     let mut component = MyVRMComponent { capacity: 100, load: 75.5 };
-//     let event = component.generate_statistics();
+    // Create a rolling file appender (e.g., logs/analytics.2023-10-27)
+    let file_appender = rolling::daily(directory, filename_prefix);
 
-//     add_global_event(event);
-// }
+    // Wrap it in a non-blocking writer.
+    // 'non_blocking' is the writer handle, 'guard' keeps the worker thread alive.
+    let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
+
+    let csv_layer = CsvAnalyticsLayer::new(non_blocking);
+
+    tracing_subscriber::registry()
+        .with(csv_layer)
+        .with(tracing_subscriber::fmt::layer()) // Keep standard console logging
+        .init();
+
+    guard
+}

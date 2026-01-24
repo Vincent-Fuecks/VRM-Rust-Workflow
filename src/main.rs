@@ -5,15 +5,15 @@ use clap::Parser;
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
 
-use crate::domain::vrm_system_model::grid_component::component_communication::protocol::{Envelope, Payload};
-use crate::domain::vrm_system_model::grid_component::{
-    component_communication::session::TcpSession, utils::grid_component_message::GridComponentMessage,
+use crate::domain::vrm_system_model::vrm_component::component_communication::protocol::{Envelope, Payload};
+use crate::domain::vrm_system_model::vrm_component::{
+    component_communication::session::TcpSession, utils::vrm_component_message::VrmComponentMessage,
 };
 
 use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationBase, ReservationProceeding, ReservationState};
 
-use crate::domain::vrm_system_model::grid_component::aci::aci::AcI;
-use crate::domain::vrm_system_model::grid_component::adc::adc::ADC;
+use crate::domain::vrm_system_model::vrm_component::aci::AcI;
+use crate::domain::vrm_system_model::vrm_component::adc::ADC;
 
 use crate::api::vrm_system_model_dto::vrm_dto::VrmDto;
 use crate::api::workflow_dto::client_dto::ClientsDto;
@@ -85,9 +85,9 @@ async fn main() -> std::io::Result<()> {
             Arbiter::new().spawn(async move {
                 let node_addr = ADC::new(id.clone()).start();
 
-                node_addr.do_send(GridComponentMessage::SetParent(m_addr.clone().recipient::<Envelope>()));
+                node_addr.do_send(VrmComponentMessage::SetParent(m_addr.clone().recipient::<Envelope>()));
 
-                m_addr.do_send(GridComponentMessage::RegisterChild { id: id.clone(), addr: node_addr.clone().recipient::<Envelope>() });
+                m_addr.do_send(VrmComponentMessage::RegisterChild { id: id.clone(), addr: node_addr.clone().recipient::<Envelope>() });
 
                 let listener = TcpListener::bind(format!("0.0.0.0:{}", port)).await.unwrap();
                 log::info!("{} listening on {}", id, port);
@@ -95,7 +95,7 @@ async fn main() -> std::io::Result<()> {
                     while let Ok((stream, _)) = listener.accept().await {
                         let (r, w) = tokio::io::split(stream);
                         // TcpSession now takes Recipient<NodeMessage>
-                        TcpSession::new(node_addr.clone().recipient::<GridComponentMessage>(), w, r);
+                        TcpSession::new(node_addr.clone().recipient::<VrmComponentMessage>(), w, r);
                     }
                 });
             });
@@ -124,7 +124,7 @@ async fn main() -> std::io::Result<()> {
             };
 
             let reservation = Reservation::new_node(base, None, None, None);
-            master_addr.do_send(GridComponentMessage::Route(Envelope {
+            master_addr.do_send(VrmComponentMessage::Route(Envelope {
                 sender_id: "master".into(),
                 target_id: "master".into(),
                 payload: Payload::Commit { reservation: reservation },
@@ -142,7 +142,7 @@ async fn main() -> std::io::Result<()> {
         actix_rt::spawn(async move {
             while let Ok((stream, _)) = listener.accept().await {
                 let (r, w) = tokio::io::split(stream);
-                TcpSession::new(n_addr.clone().recipient::<GridComponentMessage>(), w, r);
+                TcpSession::new(n_addr.clone().recipient::<VrmComponentMessage>(), w, r);
             }
         });
     }
@@ -150,8 +150,8 @@ async fn main() -> std::io::Result<()> {
     if let Some(target) = args.connect {
         if let Ok(stream) = TcpStream::connect(target).await {
             let (r, w) = tokio::io::split(stream);
-            let session_addr = TcpSession::new(node_addr.clone().recipient::<GridComponentMessage>(), w, r);
-            node_addr.do_send(GridComponentMessage::SetParent(session_addr.recipient::<Envelope>()));
+            let session_addr = TcpSession::new(node_addr.clone().recipient::<VrmComponentMessage>(), w, r);
+            node_addr.do_send(VrmComponentMessage::SetParent(session_addr.recipient::<Envelope>()));
         }
     }
 
