@@ -69,6 +69,15 @@ impl Reservations {
         self.reservations.len()
     }
 
+    // Log all reservations
+    pub fn dump_reservation(&self) {
+        log::error!("=== RESERVATION RESERVATION(s) DUMP ({} entries) ===", self.reservations.len());
+        for reservation_id in &self.reservations {
+            log::error!("  -> ID: {:?} | Name: {:?}", reservation_id, self.reservation_store.get_name_for_key(reservation_id.clone()));
+        }
+        log::error!("=== END OF DUMP ===");
+    }
+
     pub fn is_empty(&self) -> bool {
         self.reservations.is_empty()
     }

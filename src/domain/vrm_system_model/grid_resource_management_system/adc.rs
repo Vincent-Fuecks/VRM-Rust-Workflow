@@ -1,19 +1,25 @@
+use crate::api::vrm_system_model_dto::adc_dto::ADCDto;
 use crate::domain::simulator::simulator::SystemSimulator;
 use crate::domain::vrm_system_model::grid_resource_management_system::order_res_vrm_component_database::OrderResVrmComponentDatabase;
 use crate::domain::vrm_system_model::grid_resource_management_system::scheduler::workflow_scheduler::WorkflowScheduler;
 use crate::domain::vrm_system_model::grid_resource_management_system::vrm_component_manager::{DUMMY_COMPONENT_ID, VrmComponentManager};
 use crate::domain::vrm_system_model::grid_resource_management_system::vrm_component_order::VrmComponentOrder;
+use crate::domain::vrm_system_model::grid_resource_management_system::vrm_component_registry::registry_client::RegistryClient;
+use crate::domain::vrm_system_model::grid_resource_management_system::vrm_component_registry::vrm_component_proxy::VrmComponentProxy;
 use crate::domain::vrm_system_model::grid_resource_management_system::vrm_component_trait::VrmComponent;
 use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationState};
 use crate::domain::vrm_system_model::reservation::reservation_store::{ReservationId, ReservationStore};
 use crate::domain::vrm_system_model::reservation::reservations::Reservations;
 use crate::domain::vrm_system_model::utils::id::{AdcId, ComponentId, ReservationName, RouterId, ShadowScheduleId};
 use crate::domain::vrm_system_model::utils::load_buffer::LoadMetric;
+use crate::domain::vrm_system_model::utils::statistics::ANALYTICS_TARGET;
+use crate::error::Error;
 
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::i64;
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 /// The **Administrative Domain Controller (ADC)** acts as the central Grid Broker within the VRM system.
 ///
@@ -33,6 +39,9 @@ pub struct ADC {
     /// Registry and management interface for all connected VrmComponents in the domain.
     pub manager: VrmComponentManager,
 
+    /// Registry and management interface for all connected VrmComponents.
+    pub registry: RegistryClient,
+
     /// Logic for decomposing and scheduling workflows.
     pub workflow_scheduler: Box<dyn WorkflowScheduler>,
 
@@ -50,9 +59,10 @@ pub struct ADC {
 }
 
 impl ADC {
-    fn new(
+    pub fn new(
         adc_id: AdcId,
-        vrm_components_set: HashSet<Box<dyn VrmComponent>>,
+        vrm_components_list: Vec<VrmComponentProxy>,
+        registry: RegistryClient,
         reservation_store: ReservationStore,
         workflow_scheduler: Box<dyn WorkflowScheduler>,
         vrm_component_order: VrmComponentOrder,
@@ -63,7 +73,7 @@ impl ADC {
     ) -> Self {
         let vrm_component_manager = VrmComponentManager::new(
             adc_id.clone(),
-            vrm_components_set,
+            vrm_components_list,
             simulator.clone_box().into(),
             reservation_store.clone(),
             num_of_slots,
@@ -73,6 +83,7 @@ impl ADC {
         ADC {
             id: adc_id,
             manager: vrm_component_manager,
+            registry: registry,
             workflow_scheduler: workflow_scheduler,
             reservation_store: reservation_store,
             vrm_component_order: vrm_component_order,
@@ -91,7 +102,7 @@ impl ADC {
     }
 
     /// Adds a new `GridComponent` to the domain and initializes its local schedule view.
-    fn add_vrm_component(&mut self, vrm_component: Box<dyn VrmComponent>) -> bool {
+    fn add_vrm_component(&mut self, vrm_component: VrmComponentProxy) -> bool {
         log::debug!("ADC: {} adds AcI: {}", self.id, vrm_component.get_id());
         return self.manager.add_vrm_component(
             vrm_component,
@@ -297,19 +308,19 @@ impl VrmComponent for ADC {
     }
 
     fn get_total_capacity(&self) -> i64 {
-        todo!()
+        self.manager.get_total_capacity()
     }
 
     fn get_total_link_capacity(&self) -> i64 {
-        todo!()
+        self.manager.get_total_link_capacity()
     }
 
     fn get_total_node_capacity(&self) -> i64 {
-        todo!()
+        self.manager.get_total_node_capacity()
     }
 
     fn get_link_resource_count(&self) -> usize {
-        todo!()
+        self.manager.get_link_resource_count()
     }
 
     fn get_router_list(&self) -> Vec<RouterId> {
@@ -405,7 +416,21 @@ impl VrmComponent for ADC {
     }
 
     fn probe(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> Reservations {
-        todo!()
+        let arrival_time = self.simulator.get_current_time_in_ms();
+        let probe_request_answer = self.manager.probe_all_components(reservation_id);
+
+        if probe_request_answer.is_empty() {
+            if shadow_schedule_id.is_none() {
+                self.log_state_probe(0, arrival_time);
+            }
+            return probe_request_answer;
+        }
+
+        if shadow_schedule_id.is_none() {
+            self.log_state_probe(probe_request_answer.len() as i64, arrival_time);
+        }
+
+        return probe_request_answer;
     }
 
     fn probe_best(
@@ -435,5 +460,20 @@ impl VrmComponent for ADC {
             }
             return res_id;
         }
+    }
+}
+
+impl ADC {
+    pub fn log_state_probe(&mut self, num_of_answers: i64, arrival_time_at_aci: i64) {
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        let processing_time = self.simulator.get_current_time_in_ms() - arrival_time_at_aci;
+        // TODO
+        tracing::info!(
+            target: ANALYTICS_TARGET,
+            Time = now,
+            Command = "Commit".to_string(),
+            ProbeAnswers = num_of_answers,
+            ProcessingTime = processing_time,
+        );
     }
 }

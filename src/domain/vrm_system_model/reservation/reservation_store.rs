@@ -98,6 +98,14 @@ impl ReservationStore {
         guard.slots.get(key).cloned()
     }
 
+    /// Returns true, if provided ReservationId is in store otherwise return false.
+    pub fn contains(&self, reservation_id: ReservationId) -> bool {
+        match self.get(reservation_id) {
+            Some(_) => true,
+            None => false,
+        }
+    }
+
     pub fn get_reservation_snapshot(&self, reservation_id: ReservationId) -> Option<Reservation> {
         let guard = self.inner.read().expect("Repository lock poisoned");
 
@@ -260,6 +268,7 @@ impl ReservationStore {
             let res = handle.read().unwrap();
             return res.get_booking_interval_start();
         } else {
+            self.dump_store_contents();
             panic!("Reservation (id: {:?}) does not contain a booking interval start time.", reservation_id);
         }
     }
@@ -385,6 +394,16 @@ impl ReservationStore {
         }
     }
 
+    pub fn is_reservation_proceeding(&self, reservation_id: ReservationId, reservation_proceeding: ReservationProceeding) -> bool {
+        if let Some(handle) = self.get(reservation_id) {
+            let res = handle.read().unwrap();
+            return res.get_reservation_proceeding() == reservation_proceeding;
+        } else {
+            log::error!("Get reservation (id: {:?}) was not possible.", reservation_id);
+            return false;
+        }
+    }
+
     pub fn get_typ(&self, reservation_id: ReservationId) -> Option<ReservationTyp> {
         if let Some(handle) = self.get(reservation_id) {
             let res = handle.read().unwrap();
@@ -482,6 +501,19 @@ impl ReservationStore {
         guard.as_workflow_mut().map(f)
     }
 
+    /// Sorts the provided Reservation Ids by there arrival time (ascending)
+    pub fn get_sorted_res_ids_with_arrival_time(&self, reservation_ids: Vec<ReservationId>) -> Vec<(ReservationId, i64)> {
+        let guard = self.inner.read().unwrap();
+
+        let mut res_id_arrival_time_list = Vec::new();
+        for res_id in reservation_ids {
+            let res = guard.slots.get(res_id).expect("Reservation should exist in store.");
+            res_id_arrival_time_list.push((res_id, res.read().expect("Lock poisoned").get_arrival_time()));
+        }
+        res_id_arrival_time_list.iter().is_sorted_by(|a, b| a.1 <= b.1);
+        return res_id_arrival_time_list;
+    }
+
     /// Creates a "Shadow" copy of the store.
     ///
     /// This creates a deep copy of all reservations.
@@ -501,5 +533,24 @@ impl ReservationStore {
         };
 
         ReservationStore { inner: Arc::new(RwLock::new(new_inner)) }
+    }
+
+    /// Iterates through all reservations and logs their ID and Name to the error log.
+    pub fn dump_store_contents(&self) {
+        let guard = self.inner.read().expect("RwLock poisoned");
+        log::error!("=== RESERVATION STORE DUMP ({} entries) ===", guard.slots.len());
+
+        for (id, res_handle) in &guard.slots {
+            // We attempt to read the reservation name directly from the object
+            match res_handle.read() {
+                Ok(res) => {
+                    log::error!("  -> ID: {:?} | Name: {:?}", id, res.get_name());
+                }
+                Err(_) => {
+                    log::error!("  -> ID: {:?} | [Lock Poisoned]", id);
+                }
+            }
+        }
+        log::error!("=== END OF DUMP ===");
     }
 }

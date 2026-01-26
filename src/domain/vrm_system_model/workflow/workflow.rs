@@ -59,7 +59,7 @@ impl Workflow {
     ///
     /// This is the main entry point for parsing a DTO into the internal domain model.
     /// Also builds the **CoAllocation graph**, which is later utilized for scheduling.
-    pub fn create_form_dto(dto: WorkflowDto, client_id: ClientId, reservation_store: ReservationStore) -> Result<Self, Error> {
+    pub fn create_form_dto(dto: WorkflowDto, client_id: ClientId, reservation_store: ReservationStore) -> Result<ReservationId, Error> {
         // Phase 0: Create the base workflow object
         let base = Self::build_base_workflow(&dto, client_id.clone());
 
@@ -87,8 +87,7 @@ impl Workflow {
                 node.co_allocation_key = Some(group_id);
             }
         }
-
-        Ok(Workflow {
+        let workflow = Workflow {
             base,
             nodes,
             data_dependencies,
@@ -99,7 +98,11 @@ impl Workflow {
             exit_nodes,
             entry_co_allocation,
             exit_co_allocation,
-        })
+        };
+
+        let workflow_reservation_id = reservation_store.add(Reservation::Workflow(workflow));
+
+        Ok(workflow_reservation_id)
     }
 
     /// **Phase 0: Build Base Workflow**

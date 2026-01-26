@@ -1,4 +1,5 @@
 use vrm_rust_workflow::api::vrm_system_model_dto::aci_dto::{GridNodeDto, NetworkLinkDto, RMSSystemDto};
+use vrm_rust_workflow::domain::vrm_system_model::utils::id::AciId;
 use vrm_rust_workflow::domain::{
     simulator::{simulator::SystemSimulator, simulator_mock::MockSimulator},
     vrm_system_model::{reservation::reservation_store::ReservationStore, schedule::topology::NetworkTopology, utils::id::RouterId},
@@ -70,7 +71,7 @@ fn test_topology_case_1_complex_dag() {
     let dto = create_custom_topology_dto(edges);
     let reservation_store = ReservationStore::new(None);
 
-    let topology = NetworkTopology::try_from((dto, simulator, "case_1".into(), reservation_store)).unwrap();
+    let topology = NetworkTopology::try_from((dto, simulator, AciId::new("case_1"), reservation_store)).unwrap();
 
     // Check paths
     // 1 --> 3 --> 5
@@ -101,7 +102,7 @@ fn test_topology_case_2_linear_chain() {
     let simulator: Arc<dyn SystemSimulator> = Arc::new(MockSimulator::new(0));
     let reservation_store = ReservationStore::new(None);
 
-    let topology = NetworkTopology::try_from((dto, simulator, "case_2".into(), reservation_store)).unwrap();
+    let topology = NetworkTopology::try_from((dto, simulator, AciId::new("case_2"), reservation_store)).unwrap();
 
     // Check path form 1 to 5
     assert_paths_contain(
@@ -127,7 +128,7 @@ fn test_topology_case_3_fully_connected() {
     let simulator: Arc<dyn SystemSimulator> = Arc::new(MockSimulator::new(0));
     let reservation_store = ReservationStore::new(None);
 
-    let topology = NetworkTopology::try_from((dto, simulator, "case_3".into(), reservation_store)).unwrap();
+    let topology = NetworkTopology::try_from((dto, simulator, AciId::new("case_3"), reservation_store)).unwrap();
 
     let r1 = RouterId::new("Router-001");
     let r2 = RouterId::new("Router-002");
@@ -167,7 +168,7 @@ fn test_topology_case_4_disconnected_groups() {
     let simulator: Arc<dyn SystemSimulator> = Arc::new(MockSimulator::new(0));
     let reservation_store = ReservationStore::new(None);
 
-    let topology = NetworkTopology::try_from((dto, simulator, "case_4".into(), reservation_store)).unwrap();
+    let topology = NetworkTopology::try_from((dto, simulator, AciId::new("case_4"), reservation_store)).unwrap();
 
     let r1 = RouterId::new("Router-001");
     let r4 = RouterId::new("Router-004");
@@ -189,7 +190,7 @@ fn test_topology_case_5_empty_network() {
     let reservation_store = ReservationStore::new(None);
 
     // Should not panic, but create an empty topology
-    let topology = NetworkTopology::try_from((dto, simulator, "case_5".into(), reservation_store)).unwrap();
+    let topology = NetworkTopology::try_from((dto, simulator, AciId::new("case_5"), reservation_store)).unwrap();
 
     assert!(topology.path_cache.is_empty());
     assert!(topology.virtual_link_resources.is_empty());
@@ -213,7 +214,7 @@ fn test_topology_case_6_single_node_no_links() {
     let simulator: Arc<dyn SystemSimulator> = Arc::new(MockSimulator::new(0));
     let reservation_store = ReservationStore::new(None);
 
-    let topology = NetworkTopology::try_from((dto, simulator, "case_6".into(), reservation_store)).unwrap();
+    let topology = NetworkTopology::try_from((dto, simulator, AciId::new("case_6"), reservation_store)).unwrap();
 
     // Topology is valid, but no paths can be calculated
     assert!(topology.path_cache.is_empty());
@@ -227,7 +228,7 @@ fn test_topology_case_7_cycles() {
     let simulator: Arc<dyn SystemSimulator> = Arc::new(MockSimulator::new(0));
     let reservation_store = ReservationStore::new(None);
 
-    let topology = NetworkTopology::try_from((dto, simulator, "case_7".into(), reservation_store)).unwrap();
+    let topology = NetworkTopology::try_from((dto, simulator, AciId::new("case_7"), reservation_store)).unwrap();
 
     // Check 1 -> 3 should not find a cycle
     // 1 --> 3

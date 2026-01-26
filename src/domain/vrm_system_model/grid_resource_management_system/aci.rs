@@ -1,8 +1,8 @@
 use crate::api::vrm_system_model_dto::aci_dto::AcIDto;
-use crate::domain::simulator::simulator::{Simulator, SystemSimulator};
+use crate::domain::simulator::simulator::SystemSimulator;
 use crate::domain::vrm_system_model::grid_resource_management_system::vrm_component_trait::VrmComponent;
 use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationState};
-use crate::domain::vrm_system_model::reservation::reservation_store::{self, ReservationId, ReservationStore};
+use crate::domain::vrm_system_model::reservation::reservation_store::{ReservationId, ReservationStore};
 use crate::domain::vrm_system_model::reservation::reservations::Reservations;
 use crate::domain::vrm_system_model::rms::advance_reservation_trait::AdvanceReservationRms;
 use crate::domain::vrm_system_model::rms::rms_type::RmsType;
@@ -104,7 +104,7 @@ pub struct AcI {
     pub id: AciId,
     adc_id: AdcId,
     commit_timeout: i64,
-    rms_system: Box<dyn AdvanceReservationRms>,
+    rms_system: Box<dyn AdvanceReservationRms + Send>,
     shadow_schedule_reservations: ShadowScheduleReservations,
     committed_reservations: HashMap<ReservationId, ReservationContainer>,
     not_committed_reservations: HashMap<ReservationId, ReservationContainer>,
@@ -113,22 +113,19 @@ pub struct AcI {
     reservation_store: ReservationStore,
 }
 
-impl TryFrom<(AcIDto, Arc<dyn SystemSimulator>)> for AcI {
+impl TryFrom<(AcIDto, Arc<dyn SystemSimulator>, ReservationStore)> for AcI {
     type Error = ConversionError;
 
-    fn try_from(args: (AcIDto, Arc<dyn SystemSimulator>)) -> Result<Self, ConversionError> {
-        let (dto, simulator) = args;
+    fn try_from(args: (AcIDto, Arc<dyn SystemSimulator>, ReservationStore)) -> Result<Self, ConversionError> {
+        let (dto, simulator, reservation_store) = args;
 
-        let aci_name = dto.id.clone();
+        let aci_id = AciId::new(dto.id.clone());
         let adc_id: AdcId = AdcId::new(dto.adc_id);
 
-        // TODO Should be located in VRM
-        let reservation_store: ReservationStore = ReservationStore::new(None);
-
-        let rms_system = RmsType::get_instance(dto.rms_system, simulator.clone(), dto.id, reservation_store.clone())?;
+        let rms_system = RmsType::get_instance(dto.rms_system, simulator.clone(), aci_id.clone(), reservation_store.clone())?;
 
         Ok(AcI {
-            id: AciId::new(aci_name),
+            id: aci_id,
             adc_id: adc_id,
             commit_timeout: dto.commit_timeout,
             rms_system,
@@ -507,6 +504,7 @@ impl AcI {
             );
         } else {
             // Handling in case reservation is missing (e.g. deleted/cleaned up)
+
             tracing::warn!(
                 target: ANALYTICS_TARGET,
                 Time = now,

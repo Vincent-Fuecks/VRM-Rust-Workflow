@@ -1,4 +1,5 @@
 use vrm_rust_workflow::api::vrm_system_model_dto::aci_dto::{GridNodeDto, NetworkLinkDto, RMSSystemDto};
+use vrm_rust_workflow::domain::vrm_system_model::utils::id::AciId;
 use vrm_rust_workflow::domain::{
     simulator::{
         simulator::SystemSimulator,
@@ -91,8 +92,8 @@ fn test_setup_network_links() {
     let dto = create_vrm_test_dto();
     let simulator: Arc<dyn SystemSimulator> = Arc::new(MockSimulator::new(0));
     let reservation_store = ReservationStore::new(None);
-
-    let (links, importance_db) = NetworkTopology::setup_network_links(&dto, simulator, reservation_store);
+    let aci_id = AciId::new("Test_setup_network_links_id");
+    let (links, importance_db) = NetworkTopology::setup_network_links(&dto, aci_id, simulator, reservation_store);
 
     // Assert
     // Setup has 5 links, but 2 have the exact same ID "Router-002--To--Router-001".
@@ -116,8 +117,9 @@ fn test_setup_adjacency_matrix() {
     let dto = create_vrm_test_dto();
     let simulator: Arc<dyn SystemSimulator> = Arc::new(MockSimulator::new(0));
     let reservation_store = ReservationStore::new(None);
+    let aci_id = AciId::new("test_setup_adjacency_matrix");
 
-    let (links, _) = NetworkTopology::setup_network_links(&dto, simulator, reservation_store);
+    let (links, _) = NetworkTopology::setup_network_links(&dto, aci_id, simulator, reservation_store);
     let routers = NetworkTopology::setup_routers(&dto);
 
     let adjacency = NetworkTopology::setup_adjacency_matrix(&links, &routers);
@@ -150,7 +152,7 @@ fn test_full_topology_creation_integration() {
     let dto = create_vrm_test_dto();
     let simulator: Arc<dyn SystemSimulator> = Arc::new(MockSimulator::new(0));
     let reservation_store = ReservationStore::new(None);
-    let rms_id = "test_rms".to_string();
+    let rms_id = AciId::new("test_rms");
     let result = NetworkTopology::try_from((dto, simulator, rms_id, reservation_store));
 
     assert!(result.is_ok());

@@ -1,7 +1,10 @@
 use crate::domain::simulator::simulator::SystemSimulator;
 use crate::domain::vrm_system_model::grid_resource_management_system::vrm_component_order::VrmComponentOrder;
+use crate::domain::vrm_system_model::grid_resource_management_system::vrm_component_registry::vrm_component_proxy::VrmComponentProxy;
 use crate::domain::vrm_system_model::grid_resource_management_system::vrm_component_trait::VrmComponent;
 use crate::domain::vrm_system_model::reservation::reservation::Reservation;
+use crate::domain::vrm_system_model::reservation::reservation::ReservationState;
+use crate::domain::vrm_system_model::reservation::reservation_store;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationId;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationStore;
 use crate::domain::vrm_system_model::reservation::reservations::Reservations;
@@ -27,7 +30,7 @@ lazy_static! {
 #[derive(Debug)]
 pub struct VrmComponentContainer {
     // Contains a AcI or ADC
-    pub vrm_component: Box<dyn VrmComponent>,
+    pub vrm_component: Box<dyn VrmComponent + Send>,
 
     reservation_store: ReservationStore,
 
@@ -50,7 +53,7 @@ pub struct VrmComponentContainer {
 
 impl VrmComponentContainer {
     pub fn new(
-        vrm_component: Box<dyn VrmComponent>,
+        vrm_component: Box<dyn VrmComponent + Send>,
         simulator: Arc<dyn SystemSimulator>,
         reservation_store: ReservationStore,
         registration_index: usize,
@@ -119,10 +122,10 @@ pub struct VrmComponentManager {
     pub reverse_workflow_subtasks: HashMap<ReservationId, ReservationId>,
 
     /// The aggregated sum of link capacities of all registered AcIs (does not mean free capacity).
-    total_link_capacity: i64,
+    pub total_link_capacity: i64,
 
     /// The aggregated sum distinct link resources of all registered AcIs.
-    link_resource_count: usize,
+    pub link_resource_count: usize,
 
     /// Monotonic counter used to assign `registration_index` to new VrmComponentContainer's.
     registration_counter: usize,
@@ -134,18 +137,18 @@ pub struct VrmComponentManager {
 impl VrmComponentManager {
     pub fn new(
         adc_id: AdcId,
-        vrm_components_set: HashSet<Box<dyn VrmComponent>>,
+        vrm_components_list: Vec<VrmComponentProxy>,
         simulator: Arc<dyn SystemSimulator>,
         reservation_store: ReservationStore,
         number_of_real_slots: i64,
         slot_width: i64,
     ) -> Self {
-        let mut vrm_components = HashMap::with_capacity(vrm_components_set.len());
+        let mut vrm_components = HashMap::with_capacity(vrm_components_list.len());
         let mut registration_counter = 0;
         let mut manager_total_link_capacity = 0;
         let mut manager_link_resource_count = 0;
 
-        for vrm_component in vrm_components_set {
+        for vrm_component in vrm_components_list {
             let component_id = vrm_component.get_id().clone();
             let total_link_capacity = vrm_component.get_total_link_capacity();
             let link_resource_count = vrm_component.get_link_resource_count();
@@ -154,7 +157,7 @@ impl VrmComponentManager {
             manager_link_resource_count += link_resource_count;
 
             let container = VrmComponentContainer::new(
-                vrm_component,
+                Box::new(vrm_component),
                 simulator.clone_box().into(),
                 reservation_store.clone(),
                 registration_counter,
@@ -258,6 +261,70 @@ impl VrmComponentManager {
         }
     }
 
+    // TODO Rename, if all use this function
+    // Queues asks all child systems if they can handel request.
+    // Returns true if one child system can handel request otherwise this function returns false.
+    // pub fn can_handel(&self, reservation_id: ReservationId) -> bool {
+    //     for (_, container) in &self.vrm_components {
+    //         if let Some(res) = self.reservation_store.get_reservation_snapshot(reservation_id) {
+    //             if container.can_handel(res) {
+    //                 return true;
+    //             }
+    //         } else {
+    //             log::debug!(
+    //                 "ReservationSnapShotFailed: ADC {} requested can_handel request of reservation {:?}",
+    //                 self.adc_id,
+    //                 self.reservation_store.get_name_for_key(reservation_id)
+    //             );
+    //         }
+    //     }
+    //     return false;
+    // }
+
+    /// Get the total capacity of all connected VrmComponents
+    pub fn get_total_capacity(&self) -> i64 {
+        let mut total_capacity = 0;
+
+        for (_, container) in &self.vrm_components {
+            total_capacity += container.vrm_component.get_total_capacity()
+        }
+
+        total_capacity
+    }
+
+    /// Get the total link capacity of all connected VrmComponents
+    pub fn get_total_link_capacity(&self) -> i64 {
+        let mut total_link_capacity = 0;
+
+        for (_, container) in &self.vrm_components {
+            total_link_capacity += container.vrm_component.get_total_link_capacity()
+        }
+
+        total_link_capacity
+    }
+
+    /// Get the total node capacity of all connected VrmComponents
+    pub fn get_total_node_capacity(&self) -> i64 {
+        let mut total_node_capacity = 0;
+
+        for (_, container) in &self.vrm_components {
+            total_node_capacity += container.vrm_component.get_total_node_capacity()
+        }
+
+        total_node_capacity
+    }
+
+    /// Get the link resource_count of all connected VrmComponents
+    pub fn get_link_resource_count(&self) -> usize {
+        let mut link_resource_count = 0;
+
+        for (_, container) in &self.vrm_components {
+            link_resource_count += container.vrm_component.get_link_resource_count()
+        }
+
+        link_resource_count
+    }
+
     /// Increments and returns the next available registration counter.
     pub fn get_new_registration_counter(&mut self) -> usize {
         let current = self.registration_counter;
@@ -284,7 +351,7 @@ impl VrmComponentManager {
     /// * `false` - If the VrmComponent ID already exists or if an insertion error occurred (integrity compromised).
     pub fn add_vrm_component(
         &mut self,
-        vrm_component: Box<dyn VrmComponent>,
+        vrm_component: VrmComponentProxy,
         simulator: Arc<dyn SystemSimulator>,
         reservation_store: ReservationStore,
         number_of_real_slots: i64,
@@ -304,7 +371,7 @@ impl VrmComponentManager {
         let registration_index = self.get_new_registration_counter();
 
         let container = VrmComponentContainer::new(
-            vrm_component,
+            Box::new(vrm_component),
             simulator,
             reservation_store,
             registration_index,
@@ -598,6 +665,44 @@ impl VrmComponentManager {
                 return Reservations::new_empty(self.reservation_store.clone());
             }
         }
+    }
+
+    pub fn probe_all_components(&mut self, reservation_id: ReservationId) -> Reservations {
+        let mut probe_results = Reservations::new_empty(self.reservation_store.clone());
+
+        for (_, container) in &mut self.vrm_components {
+            let res_snapshot = self.reservation_store.get_reservation_snapshot(reservation_id).unwrap();
+
+            if container.can_handel(res_snapshot) {
+                let probe_reservations = container.vrm_component.probe(reservation_id, None);
+
+                // Do not trust answer of lower GridComponent
+                // Validation of probe answers
+                for prob_reservation_id in probe_reservations.iter() {
+                    if self.reservation_store.get_assigned_start(*prob_reservation_id)
+                        < self.reservation_store.get_booking_interval_start(*prob_reservation_id)
+                        || self.reservation_store.get_assigned_end(*prob_reservation_id)
+                            > self.reservation_store.get_booking_interval_end(*prob_reservation_id)
+                    {
+                        log::error!("Invalid Answer.");
+                    }
+                    probe_results.insert(*prob_reservation_id);
+                    log::error!(
+                        "ADC {} Reservation {:?} as assigned time {}, bookingstart {} reservation state {:?}",
+                        self.adc_id,
+                        self.reservation_store.get_name_for_key(prob_reservation_id.clone()),
+                        self.reservation_store.get_assigned_start(prob_reservation_id.clone()),
+                        self.reservation_store.get_booking_interval_start(prob_reservation_id.clone()),
+                        self.reservation_store.get_state(prob_reservation_id.clone())
+                    )
+                }
+            }
+        }
+
+        if probe_results.is_empty() {
+            self.reservation_store.update_state(reservation_id, ReservationState::Rejected);
+        }
+        return probe_results;
     }
 
     pub fn reserve(

@@ -3,6 +3,7 @@ use crate::domain::simulator::simulator::SystemSimulator;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationStore;
 use crate::domain::vrm_system_model::rms::advance_reservation_trait::AdvanceReservationRms;
 use crate::domain::vrm_system_model::rms::{null_broker::NullBroker, null_rms::NullRms, rms::Rms};
+use crate::domain::vrm_system_model::utils::id::AciId;
 use crate::error::ConversionError;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -18,19 +19,19 @@ impl RmsType {
     pub fn get_instance(
         dto: RMSSystemDto,
         simulator: Arc<dyn SystemSimulator>,
-        aci_name: String,
+        aci_id: AciId,
         reservation_store: ReservationStore,
     ) -> Result<Box<dyn AdvanceReservationRms>, ConversionError> {
         let rms_type: RmsType = RmsType::from_str(&dto.typ)?;
 
         match rms_type {
             RmsType::NullRms => {
-                let rms_instance = NullRms::try_from((dto, simulator, aci_name, reservation_store))?;
+                let rms_instance = NullRms::try_from((dto, simulator, aci_id, reservation_store))?;
                 Ok(Box::new(rms_instance))
             }
 
             RmsType::NullBroker => {
-                let broker_instance = NullBroker::try_from((dto, simulator, aci_name, reservation_store))?;
+                let broker_instance = NullBroker::try_from((dto, simulator, aci_id, reservation_store))?;
                 Ok(Box::new(broker_instance))
             }
             RmsType::Slurm => {

@@ -6,4 +6,5 @@ pub mod scheduler;
 pub mod scheduler_comparator;
 pub mod vrm_component_manager;
 pub mod vrm_component_order;
+pub mod vrm_component_registry;
 pub mod vrm_component_trait;

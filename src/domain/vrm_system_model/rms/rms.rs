@@ -7,7 +7,7 @@ use crate::domain::vrm_system_model::resource::resource_trait::Resource;
 use crate::domain::vrm_system_model::resource::resources::Resources;
 use crate::domain::vrm_system_model::scheduler_trait::Schedule;
 use crate::domain::vrm_system_model::scheduler_type::SchedulerType;
-use crate::domain::vrm_system_model::utils::id::{NodeResourceId, RmsId, RouterId, ShadowScheduleId, SlottedScheduleId};
+use crate::domain::vrm_system_model::utils::id::{AciId, NodeResourceId, RmsId, RouterId, ShadowScheduleId, SlottedScheduleId};
 use crate::error::ConversionError;
 
 use std::any::Any;
@@ -68,12 +68,12 @@ pub struct RmsBase {
     pub reservation_store: ReservationStore,
 }
 
-impl TryFrom<(RMSSystemDto, Arc<dyn SystemSimulator>, String, ReservationStore)> for RmsBase {
+impl TryFrom<(RMSSystemDto, Arc<dyn SystemSimulator>, AciId, ReservationStore)> for RmsBase {
     type Error = ConversionError;
-    fn try_from(args: (RMSSystemDto, Arc<dyn SystemSimulator>, String, ReservationStore)) -> Result<Self, Self::Error> {
-        let (dto, simulator, aci_name, reservation_store) = args;
-        let rms_id: RmsId = RmsId::new(format!("AcI: {}, RmsType: {}", aci_name.clone(), &dto.typ));
-        let schedule_id: SlottedScheduleId = SlottedScheduleId::new(format!("AcI: {}, RmsType: {}", aci_name, &dto.scheduler_typ));
+    fn try_from(args: (RMSSystemDto, Arc<dyn SystemSimulator>, AciId, ReservationStore)) -> Result<Self, Self::Error> {
+        let (dto, simulator, aci_id, reservation_store) = args;
+        let rms_id: RmsId = RmsId::new(format!("AcI: {}, RmsType: {}", aci_id.clone(), &dto.typ));
+        let schedule_id: SlottedScheduleId = SlottedScheduleId::new(format!("AcI: {}, RmsType: {}", aci_id, &dto.scheduler_typ));
 
         let mut grid_nodes: Vec<Box<dyn Resource>> = Vec::new();
 

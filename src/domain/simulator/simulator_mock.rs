@@ -43,9 +43,3 @@ impl SystemSimulator for MockSimulator {
         SharedSimulator(Arc::new(self.clone()))
     }
 }
-
-impl MockSimulator {
-    fn set_current_time(&mut self, time: i64) {
-        self.time = time;
-    }
-}

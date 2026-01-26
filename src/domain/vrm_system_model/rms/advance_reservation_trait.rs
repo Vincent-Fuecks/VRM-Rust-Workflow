@@ -27,7 +27,7 @@ use std::cmp::Ordering;
 /// Operations performed on a shadow schedule (identified by a [`ShadowScheduleId`]) do not affect
 /// the live RMS until [commit_shadow_schedule](Self::commit_shadow_schedule) is called. This is critical
 /// for distributed transactions and "what-if" planning phases in the Grid/VRM system.
-pub trait AdvanceReservationRms: Rms {
+pub trait AdvanceReservationRms: Rms + Send {
     /// Creates a secondary **Shadow Schedule**.
     ///
     /// Initially, this schedule is an exact clone of the master schedule. It allows for
@@ -335,4 +335,4 @@ pub trait AdvanceReservationRms: Rms {
     }
 }
 
-impl<T: Rms> AdvanceReservationRms for T {}
+impl<T: Rms + Send> AdvanceReservationRms for T {}

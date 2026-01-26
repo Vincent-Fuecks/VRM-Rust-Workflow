@@ -5,7 +5,7 @@ use crate::domain::vrm_system_model::reservation::reservation_store::Reservation
 use crate::domain::vrm_system_model::resource::link_resource::LinkResource;
 use crate::domain::vrm_system_model::resource::resource_trait::{Resource, ResourceId};
 use crate::domain::vrm_system_model::schedule::slotted_schedule::SlottedSchedule;
-use crate::domain::vrm_system_model::utils::id::{LinkResourceId, RouterId, SlottedScheduleId};
+use crate::domain::vrm_system_model::utils::id::{AciId, LinkResourceId, RouterId, SlottedScheduleId};
 use crate::error::ConversionError;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
@@ -95,14 +95,14 @@ pub struct NetworkTopology {
     pub max_bandwidth_all_paths: i64,
 }
 
-impl TryFrom<(RMSSystemDto, Arc<dyn SystemSimulator>, String, ReservationStore)> for NetworkTopology {
+impl TryFrom<(RMSSystemDto, Arc<dyn SystemSimulator>, AciId, ReservationStore)> for NetworkTopology {
     type Error = ConversionError;
 
-    fn try_from(args: (RMSSystemDto, Arc<dyn SystemSimulator>, String, ReservationStore)) -> Result<Self, Self::Error> {
-        let (dto, simulator, _, reservation_store) = args;
+    fn try_from(args: (RMSSystemDto, Arc<dyn SystemSimulator>, AciId, ReservationStore)) -> Result<Self, Self::Error> {
+        let (dto, simulator, aci_id, reservation_store) = args;
 
         // 1.  Init physical links.
-        let (network_links, importance_database) = NetworkTopology::setup_network_links(&dto, simulator.clone(), reservation_store);
+        let (network_links, importance_database) = NetworkTopology::setup_network_links(&dto, aci_id, simulator.clone(), reservation_store);
 
         // 2.  Init router instances based on grid nodes and network link endpoints.
         let routers: HashMap<RouterId, Router> = NetworkTopology::setup_routers(&dto);
@@ -345,6 +345,7 @@ impl NetworkTopology {
     /// Initializes all `LinkResource` structs and the importance database.
     pub fn setup_network_links(
         dto: &RMSSystemDto,
+        aci_id: AciId,
         simulator: Arc<dyn SystemSimulator>,
         reservation_store: ReservationStore,
     ) -> (HashMap<LinkResourceId, LinkResource>, HashMap<LinkResourceId, f64>) {
@@ -380,7 +381,10 @@ impl NetworkTopology {
         }
 
         if network_links.is_empty() {
-            log::info!("Empty NullBroker Network: The newly created NullBroker contains no Network. NullRms should be utilized instead.");
+            log::info!(
+                "Empty NullBroker Network: The newly created NullBroker of AcI {} contains no Network. NullRms should be utilized instead.",
+                aci_id
+            );
         }
         return (network_links, importance_database);
     }

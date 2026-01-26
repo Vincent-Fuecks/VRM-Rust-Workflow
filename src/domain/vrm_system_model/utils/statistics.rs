@@ -1,10 +1,32 @@
 use serde::Serialize;
 use std::collections::HashMap;
+use std::fmt;
 use std::fs::File;
-use std::io::{self, Write};
-use std::sync::{OnceLock, mpsc};
-use std::thread;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::io::Write;
+use std::sync::Mutex;
+use tracing::field::{Field, Visit};
+use tracing::{Event, Subscriber};
+use tracing_subscriber::Layer;
+use tracing_subscriber::layer::Context;
+use tracing_subscriber::prelude::*;
+/// The target string to filter for analytics events.
+pub const ANALYTICS_TARGET: &str = "analytics";
+
+pub struct AnalyticsSystem;
+
+impl AnalyticsSystem {
+    pub fn init(log_file_path: String) {
+        let mut file = File::create(log_file_path.clone()).expect("Failed to create log file");
+
+        let header_line = StatParameter::headers().join(";") + "\n";
+        file.write_all(header_line.as_bytes()).expect("Failed to write headers");
+        let (non_blocking_writer, _guard) = tracing_appender::non_blocking(file);
+
+        _ = tracing_subscriber::registry().with(tracing_subscriber::fmt::layer()).with(AnalyticsLayer::new(non_blocking_writer)).try_init();
+
+        tracing::info!("Simulation started. Analytics writing to {}", log_file_path);
+    }
+}
 
 /// Each event consists of a set of key-value-pairs with the measured data or some meta data of the event.
 /// This enum specifies all allowed key values and thus the column in the output file.
@@ -29,7 +51,7 @@ pub enum StatParameter {
     /// Load of component
     ComponentUtilization,
 
-    /// Fragmentation of component */
+    /// Fragmentation of component
     ComponentFragmentation,
 
     // Reservation
@@ -72,9 +94,9 @@ pub enum StatParameter {
 }
 
 impl StatParameter {
-    /// Returns the defined order of columns for the CSV header
-    pub fn headers() -> Vec<&'static str> {
-        vec![
+    /// Returns the CSV headers in the exact order required.
+    pub fn headers() -> &'static [&'static str] {
+        &[
             "Time",
             "LogDescription",
             "ComponentType",
@@ -96,234 +118,136 @@ impl StatParameter {
             "NumberOfDataDependencies",
         ]
     }
-}
 
-/// store values in their native format, only format them when writing to the CSV.
-#[derive(Debug, Clone, Serialize)]
-#[serde(untagged)]
-pub enum StatValue {
-    Integer(i64),
-    Float(f64),
-    Text(String),
-    Bool(bool),
-}
-
-// Automatic conversion helpers
-impl From<i32> for StatValue {
-    fn from(v: i32) -> Self {
-        StatValue::Integer(v as i64)
-    }
-}
-
-impl From<i64> for StatValue {
-    fn from(v: i64) -> Self {
-        StatValue::Integer(v)
-    }
-}
-
-impl From<f64> for StatValue {
-    fn from(v: f64) -> Self {
-        StatValue::Float(v)
-    }
-}
-
-impl From<String> for StatValue {
-    fn from(v: String) -> Self {
-        StatValue::Text(v)
-    }
-}
-
-impl From<&str> for StatValue {
-    fn from(v: &str) -> Self {
-        StatValue::Text(v.to_string())
-    }
-}
-
-impl From<bool> for StatValue {
-    fn from(v: bool) -> Self {
-        StatValue::Bool(v)
-    }
-}
-
-// --- 2. The Event Object ---
-
-#[derive(Debug, Clone)]
-pub struct StatisticEvent {
-    data: HashMap<StatParameter, StatValue>,
-}
-
-impl StatisticEvent {
-    pub fn new() -> Self {
-        Self { data: HashMap::new() }
-    }
-
-    pub fn set<V: Into<StatValue>>(&mut self, param: StatParameter, value: V) -> &mut Self {
-        self.data.insert(param, value.into());
-        self
-    }
-
-    pub fn get(&self, param: StatParameter) -> Option<&StatValue> {
-        self.data.get(&param)
-    }
-}
-
-/// Messages sent from the simulation threads to the writer thread.
-enum StatsMessage {
-    Log(StatisticEvent),
-    Flush,
-    Shutdown,
-}
-
-/// The global handle that allows components to log events.
-/// It holds the "Sender" side of the channel.
-pub struct StatsCollector {
-    sender: mpsc::Sender<StatsMessage>,
-    start_time: u64,
-}
-
-impl StatsCollector {
-    /// Initialize the statistics system.
-    /// Spawns a background thread that manages the file writing.
-    pub fn init(filename: Option<String>) -> Self {
-        let (tx, rx) = mpsc::channel();
-
-        let start_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-
-        // Spawn the background writer thread
-        thread::spawn(move || {
-            Self::worker_loop(rx, filename);
-        });
-
-        StatsCollector { sender: tx, start_time }
-    }
-
-    /// The logic running in the background thread.
-    fn worker_loop(rx: mpsc::Receiver<StatsMessage>, filename: Option<String>) {
-        // Setup Output (File or Stdout)
-        let writer: Box<dyn Write> = match filename {
-            Some(f) => Box::new(File::create(f).expect("Could not create statistics file")),
-            None => Box::new(io::stdout()),
-        };
-
-        // Initialize CSV Writer
-        let mut csv_wtr = csv::WriterBuilder::new().delimiter(b';').from_writer(writer);
-
-        // Write Header
-        let headers = StatParameter::headers();
-        if let Err(e) = csv_wtr.write_record(&headers) {
-            log::error!("Stats Error: Failed to write headers: {}", e);
-        }
-
-        // Process incoming messages
-        for msg in rx {
-            match msg {
-                StatsMessage::Log(event) => {
-                    // Convert the Map into a Row based on Header order
-                    let row: Vec<String> = StatParameter::headers()
-                        .iter()
-                        .map(|header_str| {
-                            // Find the enum variant matching this header string
-                            // (In a real app, you might iterate the enum variants directly to avoid string matching overhead)
-                            let param = Self::str_to_param(header_str);
-
-                            match param {
-                                Some(p) => match event.data.get(&p) {
-                                    // Use Serde to format the value safely (handles quotes, etc)
-                                    Some(val) => match val {
-                                        StatValue::Text(t) => t.clone(),
-                                        StatValue::Integer(i) => i.to_string(),
-                                        StatValue::Float(f) => f.to_string(),
-                                        StatValue::Bool(b) => b.to_string(),
-                                    },
-                                    None => "NA".to_string(),
-                                },
-                                None => "ERROR".to_string(),
-                            }
-                        })
-                        .collect();
-
-                    if let Err(e) = csv_wtr.write_record(&row) {
-                        eprintln!("Stats Error: Failed to write record: {}", e);
-                    }
-                }
-                StatsMessage::Flush => {
-                    let _ = csv_wtr.flush();
-                }
-                StatsMessage::Shutdown => {
-                    let _ = csv_wtr.flush();
-                    break;
-                }
-            }
-        }
-    }
-
-    // Helper to map header strings back to Enums (simple lookup)
-    fn str_to_param(s: &str) -> Option<StatParameter> {
-        // In a production app, use `strum` crate for EnumString derivation
+    fn from_str(s: &str) -> Option<StatParameter> {
         match s {
-            "Time" => Some(StatParameter::Time),
-            "LogDescription" => Some(StatParameter::LogDescription),
-            "ComponentType" => Some(StatParameter::ComponentType),
-            "ComponentName" => Some(StatParameter::ComponentName),
-            "ComponentCapacity" => Some(StatParameter::ComponentCapacity),
-            "ComponentUtilization" => Some(StatParameter::ComponentUtilization),
-            "ComponentFragmentation" => Some(StatParameter::ComponentFragmentation),
-            "ReservationName" => Some(StatParameter::ReservationName),
-            "ReservationCapacity" => Some(StatParameter::ReservationCapacity),
-            "ReservationWorkload" => Some(StatParameter::ReservationWorkload),
-            "ReservationState" => Some(StatParameter::ReservationState),
-            "ReservationProceeding" => Some(StatParameter::ReservationProceeding),
-            "NumberOfJobs" => Some(StatParameter::NumberOfTasks),
-            "Command" => Some(StatParameter::Command),
-            "ProcessingTime" => Some(StatParameter::ProcessingTime),
-            "FragmentationBefore" => Some(StatParameter::FragmentationBefore),
-            "FragmentationAfter" => Some(StatParameter::FragmentationAfter),
-            "NumberOfCoAllocationDependencies" => Some(StatParameter::NumberOfCoAllocationDependencies),
-            "NumberOfDataDependencies" => Some(StatParameter::NumberOfDataDependencies),
+            "Time" => Some(Self::Time),
+            "LogDescription" => Some(Self::LogDescription),
+            "ComponentType" => Some(Self::ComponentType),
+            "ComponentName" => Some(Self::ComponentName),
+            "ComponentCapacity" => Some(Self::ComponentCapacity),
+            "ComponentUtilization" => Some(Self::ComponentUtilization),
+            "ComponentFragmentation" => Some(Self::ComponentFragmentation),
+            "ReservationName" => Some(Self::ReservationName),
+            "ReservationCapacity" => Some(Self::ReservationCapacity),
+            "ReservationWorkload" => Some(Self::ReservationWorkload),
+            "ReservationState" => Some(Self::ReservationState),
+            "ReservationProceeding" => Some(Self::ReservationProceeding),
+            "NumberOfTasks" => Some(Self::NumberOfTasks),
+            "Command" => Some(Self::Command),
+            "ProcessingTime" => Some(Self::ProcessingTime),
+            "FragmentationBefore" => Some(Self::FragmentationBefore),
+            "FragmentationAfter" => Some(Self::FragmentationAfter),
+            "NumberOfCoAllocationDependencies" => Some(Self::NumberOfCoAllocationDependencies),
+            "NumberOfDataDependencies" => Some(Self::NumberOfDataDependencies),
             _ => None,
         }
     }
+}
 
-    /// Public API to log an event.
-    /// This is non-blocking (just sends a message).
-    pub fn add_event(&self, mut event: StatisticEvent) {
-        // Inject timestamp automatically if not present
-        if event.get(StatParameter::Time).is_none() {
-            let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-            // Calculate relative time if needed, or just absolute
-            let relative = now.saturating_sub(self.start_time);
-            event.set(StatParameter::Time, relative as i64);
+/// Extracts values from a Tracing Event and maps them to StatParameters.
+struct AnalyticsVisitor {
+    values: HashMap<StatParameter, String>,
+}
+
+impl AnalyticsVisitor {
+    fn new() -> Self {
+        Self { values: HashMap::new() }
+    }
+}
+
+impl Visit for AnalyticsVisitor {
+    fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
+        if let Some(param) = StatParameter::from_str(field.name()) {
+            self.values.insert(param, format!("{:?}", value));
+        }
+    }
+
+    fn record_str(&mut self, field: &Field, value: &str) {
+        if let Some(param) = StatParameter::from_str(field.name()) {
+            self.values.insert(param, value.to_string());
+        }
+    }
+
+    fn record_i64(&mut self, field: &Field, value: i64) {
+        if let Some(param) = StatParameter::from_str(field.name()) {
+            self.values.insert(param, value.to_string());
+        }
+    }
+
+    fn record_u64(&mut self, field: &Field, value: u64) {
+        if let Some(param) = StatParameter::from_str(field.name()) {
+            self.values.insert(param, value.to_string());
+        }
+    }
+
+    fn record_f64(&mut self, field: &Field, value: f64) {
+        if let Some(param) = StatParameter::from_str(field.name()) {
+            self.values.insert(param, value.to_string());
+        }
+    }
+
+    fn record_bool(&mut self, field: &Field, value: bool) {
+        if let Some(param) = StatParameter::from_str(field.name()) {
+            self.values.insert(param, value.to_string());
+        }
+    }
+}
+
+/// A custom Tracing Layer that intercepts analytics events and writes them to a CSV writer.
+pub struct AnalyticsLayer<W: Write + 'static> {
+    writer: Mutex<W>,
+}
+
+impl<W: Write + 'static> AnalyticsLayer<W> {
+    pub fn new(writer: W) -> Self {
+        Self { writer: Mutex::new(writer) }
+    }
+
+    fn write_csv_row(&self, visitor: &AnalyticsVisitor) {
+        let headers = StatParameter::headers();
+        let mut row = String::with_capacity(256);
+
+        for (i, &header_name) in headers.iter().enumerate() {
+            if let Some(param) = StatParameter::from_str(header_name) {
+                let default_val = "NA".to_string(); // Default for missing columns
+                let val = visitor.values.get(&param).unwrap_or(&default_val);
+
+                row.push_str(val);
+            } else {
+                row.push_str("ERROR");
+            }
+
+            if i < headers.len() - 1 {
+                row.push(';');
+            }
+        }
+        row.push('\n');
+
+        if let Ok(mut w) = self.writer.lock() {
+            let _ = w.write_all(row.as_bytes());
+        }
+    }
+}
+
+impl<S, W> Layer<S> for AnalyticsLayer<W>
+where
+    S: Subscriber,
+    W: Write + 'static,
+{
+    fn enabled(&self, metadata: &tracing::Metadata<'_>, _ctx: Context<'_, S>) -> bool {
+        metadata.target() == ANALYTICS_TARGET
+    }
+
+    fn on_event(&self, event: &Event<'_>, _ctx: Context<'_, S>) {
+        let mut visitor = AnalyticsVisitor::new();
+        event.record(&mut visitor);
+
+        if !visitor.values.contains_key(&StatParameter::Time) {
+            let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
+            visitor.values.insert(StatParameter::Time, now.to_string());
         }
 
-        // Send to writer thread
-        // We ignore errors here (e.g., if writer thread crashed) to not crash the simulation
-        let _ = self.sender.send(StatsMessage::Log(event));
+        self.write_csv_row(&visitor);
     }
 }
-
-static GLOBAL_STATS: OnceLock<StatsCollector> = OnceLock::new();
-
-/// Initialize the global statistics collector.
-pub fn init_global(filename: Option<String>) {
-    let collector = StatsCollector::init(filename);
-    let _ = GLOBAL_STATS.set(collector);
-}
-
-/// Helper to log an event to the global collector.
-/// Safe to call from anywhere, from any thread.
-pub fn add_global_event(event: StatisticEvent) {
-    if let Some(collector) = GLOBAL_STATS.get() {
-        collector.add_event(event);
-    } else {
-        log::error!("Warning: Statistics event dropped. Call init_global() first.");
-    }
-}
-
-// fn main() {
-//     init_global(Some("vrm_stats.csv".to_string()));
-
-//     let mut component = MyVRMComponent { capacity: 100, load: 75.5 };
-//     let event = component.generate_statistics();
-
-//     add_global_event(event);
-// }

@@ -5,7 +5,15 @@ use serde::Deserialize;
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VrmDto {
-    pub adc_master: String,
+    pub simulator: SimulatorDto,
+    pub adc_master_id: String,
     pub adc: Vec<ADCDto>,
     pub aci: Vec<AcIDto>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SimulatorDto {
+    pub end_time: i64,
+    pub is_simulation: bool,
 }
