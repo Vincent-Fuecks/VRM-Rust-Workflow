@@ -1,5 +1,6 @@
 mod helpers;
 mod vrm_component;
+mod vrm_component_entry;
 
 use std::sync::Arc;
 
@@ -39,7 +40,7 @@ pub struct ADC {
     pub registry: RegistryClient,
 
     /// Logic for decomposing and scheduling workflows.
-    pub workflow_scheduler: Box<dyn WorkflowScheduler>,
+    pub workflow_scheduler: Option<Box<dyn WorkflowScheduler>>,
 
     /// Defines the ordering and selection priority for underlying VrmComponents.
     pub vrm_component_order: VrmComponentOrder,
@@ -60,7 +61,7 @@ impl ADC {
         vrm_components_list: Vec<VrmComponentProxy>,
         registry: RegistryClient,
         reservation_store: ReservationStore,
-        workflow_scheduler: Box<dyn WorkflowScheduler>,
+        workflow_scheduler: Option<Box<dyn WorkflowScheduler>>,
         vrm_component_order: VrmComponentOrder,
         commit_timeout: i64,
         simulator: Arc<dyn SystemSimulator>,

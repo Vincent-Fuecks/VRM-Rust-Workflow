@@ -47,7 +47,7 @@ impl VrmComponent for ADC {
 
     fn can_handel(&self, res: Reservation) -> bool {
         for component_id in self.manager.get_random_ordered_vrm_components() {
-            if self.manager.can_handel(component_id, res.clone()) {
+            if self.manager.can_component_handel(component_id, res.clone()) {
                 return true;
             }
         }
@@ -56,7 +56,7 @@ impl VrmComponent for ADC {
 
     fn commit(&mut self, reservation_id: ReservationId) -> bool {
         if self.reservation_store.is_workflow(reservation_id) {
-            let sub_ids = self.workflow_scheduler.get_sub_ids(reservation_id);
+            let sub_ids = self.workflow_scheduler.as_mut().unwrap().get_sub_ids(reservation_id);
 
             for res_id in sub_ids {
                 let component_answer = self.commit_at_component(res_id);
@@ -65,12 +65,12 @@ impl VrmComponent for ADC {
                 // Check if this specific sub-component succeeded
                 if state != ReservationState::Committed || !component_answer {
                     log::error!("Sub-task {:?} failed in workflow {:?}", res_id, reservation_id);
-                    self.workflow_scheduler.handle_failure(reservation_id);
+                    self.workflow_scheduler.as_mut().unwrap().handle_failure(reservation_id);
                     return false;
                 }
             }
 
-            self.workflow_scheduler.finalize_commit(reservation_id);
+            self.workflow_scheduler.as_mut().unwrap().finalize_commit(reservation_id);
             return true;
         } else {
             // Non-workflow atomic job
@@ -154,9 +154,35 @@ impl VrmComponent for ADC {
     }
 
     fn reserve(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> ReservationId {
+        log::debug!(
+            "Reserve: At VrmComponent {:?}, ReservationId {:?}, ShadowSchedule {:?}",
+            self.id,
+            self.reservation_store.get_name_for_key(reservation_id),
+            shadow_schedule_id
+        );
+
+        let arrival_time = self.simulator.get_current_time_in_ms();
+
+        // Can VrmComponent handle Request?
+        if !self.manager.can_handel(reservation_id) {
+            self.reservation_store.update_state(reservation_id, ReservationState::Rejected);
+
+            if shadow_schedule_id.is_none() {
+                self.log_stat("Reserve".to_string(), reservation_id, arrival_time);
+            }
+        }
+
+        // Perform Reserve
         if self.reservation_store.is_workflow(reservation_id) {
-            // TODO
-            todo!();
+            // "Option Dance" with WorkflowScheduler should work
+            if let Some(mut scheduler) = self.workflow_scheduler.take() {
+                scheduler.reserve(reservation_id, self);
+
+                self.workflow_scheduler = Some(scheduler);
+            } else {
+                log::error!("WorkflowScheduler is missing or currently in use (recursive call?) for ADC {:?}", self.id);
+                self.reservation_store.update_state(reservation_id, ReservationState::Rejected);
+            }
         } else {
             // Atomic Job
             let mut transaction_map = HashMap::new();
@@ -171,5 +197,6 @@ impl VrmComponent for ADC {
             }
             return res_id;
         }
+        todo!()
     }
 }

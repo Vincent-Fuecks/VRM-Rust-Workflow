@@ -21,18 +21,6 @@ pub mod error;
 pub mod loader;
 pub mod logger;
 
-pub fn get_clients(file_path: &str, reservation_store: ReservationStore) -> Result<Clients> {
-    log::info!("Starting ClientsDto construction.");
-
-    let root_dto: ClientsDto = parse_json_file::<ClientsDto>(file_path)?;
-    log::info!("JSON file parsed successfully.");
-
-    let system_model = Clients::from_dto(root_dto, reservation_store)?;
-    log::info!("Internal SystemModel was constructed successfully.");
-
-    Ok(system_model)
-}
-
 pub fn get_vrm_dto(file_path: &str) -> Result<VrmDto> {
     log::info!("Starting VrmDto construction.");
 
@@ -48,13 +36,13 @@ async fn main() {
     let log_file_path = "/home/vincent/Desktop/Repository/VRM-Rust-Workflow/statistics/analytics.csv".to_string();
     AnalyticsSystem::init(log_file_path);
 
-    let file_path_workflows: &str = "/home/vincent/Desktop/Repository/VRM-Rust-Workflow/src/data/test/test_workflow_loading_01.json";
+    let file_path_workflows: &str = "src/data/test/test_workflow_with_simple_co_allocation_graph.json";
     let file_path_vrm: &str = "/home/vincent/Desktop/Repository/VRM-Rust-Workflow/src/data/vrm.json";
     let reservation_store = ReservationStore::new(None);
 
     let vrm_dto = get_vrm_dto(file_path_vrm).expect("Failed to load VRM DTO");
     let simulator_dto = vrm_dto.simulator.clone();
-    let unprocessed_reservations = get_clients(file_path_workflows, reservation_store.clone()).expect("TODO").unprocessed_reservations;
+    let unprocessed_reservations = Clients::get_clients(file_path_workflows, reservation_store.clone()).expect("TODO").unprocessed_reservations;
 
     let registry = RegistryClient::new();
     let simulator: Arc<dyn SystemSimulator> = Arc::new(Simulator::new(simulator_dto));

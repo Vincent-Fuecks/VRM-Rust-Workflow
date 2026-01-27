@@ -82,11 +82,22 @@ impl Workflow {
         let (entry_nodes, exit_nodes, entry_co_allocation, exit_co_allocation) = Self::find_entry_exit_points(&nodes, &co_allocations);
 
         // Final-Step: Update all nodes with their final CoAllocation key
+        // Also update co_allocation_key in WorkflowNodes
         for (node_id, group_id) in node_to_co_allocation {
             if let Some(node) = nodes.get_mut(&node_id) {
-                node.co_allocation_key = Some(group_id);
+                node.co_allocation_key = Some(group_id.clone());
+                let reservation_id_opt = node.reservation_id;
+
+                if let Some(co_alloc) = co_allocations.get_mut(&group_id) {
+                    if let Some(rep) = &mut co_alloc.representative {
+                        if rep.reservation_id == reservation_id_opt {
+                            rep.co_allocation_key = Some(group_id);
+                        }
+                    }
+                }
             }
         }
+
         let workflow = Workflow {
             base,
             nodes,

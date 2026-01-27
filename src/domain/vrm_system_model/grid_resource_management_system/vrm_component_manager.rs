@@ -247,7 +247,7 @@ impl VrmComponentManager {
         self.vrm_components.get_mut(&component_id)
     }
 
-    pub fn can_handel(&self, component_id: ComponentId, res: Reservation) -> bool {
+    pub fn can_component_handel(&self, component_id: ComponentId, res: Reservation) -> bool {
         match self.vrm_components.get(&component_id) {
             Some(vrm_component) => vrm_component.vrm_component.can_handel(res),
 
@@ -265,22 +265,22 @@ impl VrmComponentManager {
     // TODO Rename, if all use this function
     // Queues asks all child systems if they can handel request.
     // Returns true if one child system can handel request otherwise this function returns false.
-    // pub fn can_handel(&self, reservation_id: ReservationId) -> bool {
-    //     for (_, container) in &self.vrm_components {
-    //         if let Some(res) = self.reservation_store.get_reservation_snapshot(reservation_id) {
-    //             if container.can_handel(res) {
-    //                 return true;
-    //             }
-    //         } else {
-    //             log::debug!(
-    //                 "ReservationSnapShotFailed: ADC {} requested can_handel request of reservation {:?}",
-    //                 self.adc_id,
-    //                 self.reservation_store.get_name_for_key(reservation_id)
-    //             );
-    //         }
-    //     }
-    //     return false;
-    // }
+    pub fn can_handel(&self, reservation_id: ReservationId) -> bool {
+        for (_, container) in &self.vrm_components {
+            if let Some(res) = self.reservation_store.get_reservation_snapshot(reservation_id) {
+                if container.can_handel(res) {
+                    return true;
+                }
+            } else {
+                log::debug!(
+                    "ReservationSnapShotFailed: ADC {} requested can_handel request of reservation {:?}",
+                    self.adc_id,
+                    self.reservation_store.get_name_for_key(reservation_id)
+                );
+            }
+        }
+        return false;
+    }
 
     /// Get the total capacity of all connected VrmComponents
     pub fn get_total_capacity(&self) -> i64 {

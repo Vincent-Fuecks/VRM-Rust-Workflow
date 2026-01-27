@@ -25,9 +25,9 @@ pub fn init() {
     let log_file_path = format!("{}/{}", LOG_DIR, LOG_FILE);
 
     // Get the log level from RUST_LOG, defaulting to "info" (RUST_LOG=debug or RUST_LOG=warn)
-    let log_level = std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string());
+    let log_level = std::env::var("RUST_LOG").unwrap_or_else(|_| "debug".to_string());
 
-    let log_level_filter = log_level.parse::<LevelFilter>().unwrap_or(LevelFilter::Info);
+    let log_level_filter = log_level.parse::<LevelFilter>().unwrap_or(LevelFilter::Debug);
 
     let base_config = Dispatch::new().level(log_level_filter).level_for("serde", LevelFilter::Warn).level_for("uuid", LevelFilter::Warn);
 

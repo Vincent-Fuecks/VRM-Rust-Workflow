@@ -93,7 +93,7 @@ impl VrmManager {
                         children_proxies,
                         registry.clone(),
                         reservation_store.clone(),
-                        workflow_scheduler,
+                        Some(workflow_scheduler),
                         vrm_component_order,
                         adc_dto.timeout,
                         simulator.clone(),
@@ -158,8 +158,10 @@ impl VrmManager {
     }
 
     async fn process_reservation(&mut self, process_res_id: ReservationId) {
+        let use_master_schedule = None;
+
         log::info!("Try to submit Reservation {:?} the the master Adc.", self.reservation_store.get_name_for_key(process_res_id));
-        let probe_reservations = self.adc_master.probe(process_res_id, None);
+        let probe_reservations = self.adc_master.probe(process_res_id, use_master_schedule.clone());
 
         // Step 1: Probe
         if probe_reservations.is_empty() {
@@ -174,10 +176,7 @@ impl VrmManager {
             return;
         }
 
-        self.reservation_store.dump_store_contents();
-
-        // let reserve_reservation = self.adc_master.reserve(process_res_id, None)
-
         // Step 2: Reserve
+        let reserve_id = self.adc_master.reserve(process_res_id, use_master_schedule.clone());
     }
 }

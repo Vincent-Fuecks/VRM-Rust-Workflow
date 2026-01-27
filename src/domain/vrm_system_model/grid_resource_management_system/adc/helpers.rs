@@ -106,7 +106,7 @@ impl ADC {
             // TODO Change, if communication with aci is over the network
             let res_snapshot = self.reservation_store.get_reservation_snapshot(reservation_id).unwrap();
 
-            if self.manager.can_handel(component_id.clone(), res_snapshot) {
+            if self.manager.can_component_handel(component_id.clone(), res_snapshot) {
                 let reserve_res_id = self.manager.reserve(component_id.clone(), reservation_id, shadow_schedule_id.clone());
 
                 if self.reservation_store.is_reservation_state_at_least(reserve_res_id, ReservationState::ReserveAnswer) {
@@ -157,7 +157,7 @@ impl ADC {
         for component_id in self.manager.get_random_ordered_vrm_components() {
             let res_snapshot = self.reservation_store.get_reservation_snapshot(reservation_id).unwrap();
 
-            if self.manager.can_handel(component_id.clone(), res_snapshot) {
+            if self.manager.can_component_handel(component_id.clone(), res_snapshot) {
                 let probe_reservations =
                     self.manager.get_component_mut(component_id.clone()).unwrap().vrm_component.probe(reservation_id, shadow_schedule_id.clone());
 
@@ -236,5 +236,61 @@ impl ADC {
             ProbeAnswers = num_of_answers,
             ProcessingTime = processing_time,
         );
+    }
+
+    pub fn log_stat(&mut self, command: String, reservation_id: ReservationId, arrival_time_at_aci: i64) {
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        let processing_time = self.simulator.get_current_time_in_ms() - arrival_time_at_aci;
+
+        if let Some(res_handle) = self.reservation_store.get(reservation_id) {
+            let (start, end, res_name, capacity, workload, state, proceeding, num_tasks) = {
+                let res = res_handle.read().unwrap();
+
+                let start = res.get_base_reservation().get_assigned_start();
+                let end = res.get_base_reservation().get_assigned_end();
+                let name = res.get_base_reservation().get_name().clone();
+                let cap = res.get_base_reservation().get_reserved_capacity();
+                let workload = res.get_base_reservation().get_task_duration() * cap;
+                let state = res.get_base_reservation().get_state();
+                let proceeding = res.get_base_reservation().get_reservation_proceeding();
+
+                // TODO Java implementation also proceeded workflows if so, num_task should not be always be 1 (implement get_task_count())
+                let tasks = 42;
+
+                (start, end, name, cap, workload, state, proceeding, tasks)
+            };
+
+            let load_metric = self.manager.get_load_metric(start, end, None);
+
+            tracing::info!(
+                target: ANALYTICS_TARGET,
+                Time = now,
+                LogDescription = "AcI Operation finished",
+                ComponentType = %self.id,
+                ComponentUtilization = load_metric.utilization,
+                ComponentCapacity = load_metric.possible_capacity,
+                ComponentFragmentation = self.manager.get_system_satisfaction(None),
+                ReservationName = %res_name,
+                ReservationCapacity = capacity,
+                ReservationWorkload = workload,
+                ReservationState = ?state,
+                ReservationProceeding = ?proceeding,
+                NumberOfTasks = num_tasks,
+                Command = command,
+                ProcessingTime = processing_time,
+            );
+        } else {
+            // Handling in case reservation is missing (e.g. deleted/cleaned up)
+
+            tracing::warn!(
+                target: ANALYTICS_TARGET,
+                Time = now,
+                LogDescription = "AcI Operation finished (Reservation Missing/Deleted)",
+                ComponentType = %self.id,
+                ReservationId = ?reservation_id,
+                Command = command,
+                ProcessingTime = processing_time,
+            );
+        }
     }
 }

@@ -3,6 +3,7 @@ use crate::domain::vrm_system_model::reservation::reservation_store::{Reservatio
 use crate::domain::vrm_system_model::utils::id::ClientId;
 use crate::domain::vrm_system_model::workflow::workflow::Workflow;
 use crate::error::Result;
+use crate::loader::parser::parse_json_file;
 
 #[derive(Debug)]
 pub struct Clients {
@@ -23,5 +24,17 @@ impl Clients {
         }
 
         Ok(Clients { unprocessed_reservations: unprocessed })
+    }
+
+    pub fn get_clients(file_path: &str, reservation_store: ReservationStore) -> Result<Clients> {
+        log::info!("Starting ClientsDto construction.");
+
+        let root_dto: ClientsDto = parse_json_file::<ClientsDto>(file_path)?;
+        log::info!("JSON file parsed successfully.");
+
+        let system_model = Clients::from_dto(root_dto, reservation_store)?;
+        log::info!("Internal SystemModel was constructed successfully.");
+
+        Ok(system_model)
     }
 }

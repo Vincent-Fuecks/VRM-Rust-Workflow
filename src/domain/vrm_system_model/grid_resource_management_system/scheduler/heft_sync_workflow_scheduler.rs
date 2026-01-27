@@ -98,7 +98,6 @@ impl WorkflowScheduler for HEFTSyncWorkflowScheduler {
                     }
                     // Access duration from Store
                     let task_duration = self.base.reservation_store.get_task_duration(workflow_node.reservation_id);
-                    let node_name = self.base.reservation_store.get_name_for_key(workflow_node.reservation_id).unwrap();
 
                     // Do not process workflow, where the deadline will be missed
                     if start + task_duration > workflow_booking_interval_end {
