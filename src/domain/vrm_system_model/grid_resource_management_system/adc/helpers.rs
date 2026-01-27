@@ -1,100 +1,22 @@
-use crate::api::vrm_system_model_dto::adc_dto::ADCDto;
-use crate::domain::simulator::simulator::SystemSimulator;
-use crate::domain::vrm_system_model::grid_resource_management_system::order_res_vrm_component_database::OrderResVrmComponentDatabase;
-use crate::domain::vrm_system_model::grid_resource_management_system::scheduler::workflow_scheduler::WorkflowScheduler;
-use crate::domain::vrm_system_model::grid_resource_management_system::vrm_component_manager::{DUMMY_COMPONENT_ID, VrmComponentManager};
-use crate::domain::vrm_system_model::grid_resource_management_system::vrm_component_order::VrmComponentOrder;
-use crate::domain::vrm_system_model::grid_resource_management_system::vrm_component_registry::registry_client::RegistryClient;
-use crate::domain::vrm_system_model::grid_resource_management_system::vrm_component_registry::vrm_component_proxy::VrmComponentProxy;
-use crate::domain::vrm_system_model::grid_resource_management_system::vrm_component_trait::VrmComponent;
-use crate::domain::vrm_system_model::reservation::probe_reservations::ProbeReservations;
-use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationState};
-use crate::domain::vrm_system_model::reservation::reservation_store::{ReservationId, ReservationStore};
-use crate::domain::vrm_system_model::reservation::reservations::Reservations;
-use crate::domain::vrm_system_model::utils::id::{AdcId, ComponentId, ReservationName, RouterId, ShadowScheduleId};
-use crate::domain::vrm_system_model::utils::load_buffer::LoadMetric;
-use crate::domain::vrm_system_model::utils::statistics::ANALYTICS_TARGET;
-use crate::error::Error;
+use std::{
+    cmp::Ordering,
+    collections::HashMap,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
-use std::cmp::Ordering;
-use std::collections::{HashMap, HashSet};
-use std::i64;
-use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
-
-/// The **Administrative Domain Controller (ADC)** acts as the central Grid Broker within the VRM system.
-///
-/// It operates in a dual capacity:
-/// 1. **Consumer**: Acts as a reservation submitter to underlying **VrmComponentManager**.
-/// 2. **Provider**: Functions as an `VrmComponent` for end-users or higher-level ADCs.
-///
-/// The ADC provides an abstracted view of all resources within its administrative domain. It handles
-/// **Atomic Jobs** by delegating them to the most suitable VrmComponent based on an optimization strategy,
-/// and **Complex Workflows** by decomposing them into sub-jobs via the `WorkflowScheduler`.
-#[derive(Debug)]
-pub struct ADC {
-    pub id: AdcId,
-    simulator: Arc<dyn SystemSimulator>,
-    pub reservation_store: ReservationStore,
-
-    /// Registry and management interface for all connected VrmComponents in the domain.
-    pub manager: VrmComponentManager,
-
-    /// Registry and management interface for all connected VrmComponents.
-    pub registry: RegistryClient,
-
-    /// Logic for decomposing and scheduling workflows.
-    pub workflow_scheduler: Box<dyn WorkflowScheduler>,
-
-    /// Defines the ordering and selection priority for underlying VrmComponents.
-    pub vrm_component_order: VrmComponentOrder,
-
-    /// The maximum duration (in seconds) allowed for a reservation to move from 'Reserved' to 'Committed'
-    pub commit_timeout: i64,
-
-    /// Total number of discrete scheduling slots available across the domain.
-    pub num_of_slots: i64,
-
-    /// The duration of a single resource slot.
-    pub slot_width: i64,
-}
+use crate::domain::vrm_system_model::{
+    grid_resource_management_system::{
+        adc::ADC, order_res_vrm_component_database::OrderResVrmComponentDatabase, vrm_component_manager::DUMMY_COMPONENT_ID,
+        vrm_component_registry::vrm_component_proxy::VrmComponentProxy, vrm_component_trait::VrmComponent,
+    },
+    reservation::{reservation::ReservationState, reservation_store::ReservationId},
+    utils::{
+        id::{ComponentId, ReservationName, ShadowScheduleId},
+        statistics::ANALYTICS_TARGET,
+    },
+};
 
 impl ADC {
-    pub fn new(
-        adc_id: AdcId,
-        vrm_components_list: Vec<VrmComponentProxy>,
-        registry: RegistryClient,
-        reservation_store: ReservationStore,
-        workflow_scheduler: Box<dyn WorkflowScheduler>,
-        vrm_component_order: VrmComponentOrder,
-        commit_timeout: i64,
-        simulator: Arc<dyn SystemSimulator>,
-        num_of_slots: i64,
-        slot_width: i64,
-    ) -> Self {
-        let vrm_component_manager = VrmComponentManager::new(
-            adc_id.clone(),
-            vrm_components_list,
-            simulator.clone_box().into(),
-            reservation_store.clone(),
-            num_of_slots,
-            slot_width,
-        );
-
-        ADC {
-            id: adc_id,
-            manager: vrm_component_manager,
-            registry: registry,
-            workflow_scheduler: workflow_scheduler,
-            reservation_store: reservation_store,
-            vrm_component_order: vrm_component_order,
-            commit_timeout: commit_timeout,
-            simulator: simulator,
-            num_of_slots: num_of_slots,
-            slot_width: slot_width,
-        }
-    }
-
     // TODO Should work with GridComponent
     /// Removes an VrmComponent from the registry based on its unique identifier.
     fn delete_vrm_component(&mut self, vrm_component: Box<dyn VrmComponent>) -> bool {
@@ -302,170 +224,7 @@ impl ADC {
     pub fn register_workflow_subtasks(&mut self, workflow_res_id: ReservationId, grid_component_res_database: &HashMap<ReservationId, ComponentId>) {
         self.manager.register_workflow_allocation(workflow_res_id, grid_component_res_database.clone());
     }
-}
 
-impl VrmComponent for ADC {
-    fn get_id(&self) -> ComponentId {
-        ComponentId::new(self.id.to_string())
-    }
-
-    fn get_total_capacity(&self) -> i64 {
-        self.manager.get_total_capacity()
-    }
-
-    fn get_total_link_capacity(&self) -> i64 {
-        self.manager.get_total_link_capacity()
-    }
-
-    fn get_total_node_capacity(&self) -> i64 {
-        self.manager.get_total_node_capacity()
-    }
-
-    fn get_link_resource_count(&self) -> usize {
-        self.manager.get_link_resource_count()
-    }
-
-    fn get_router_list(&self) -> Vec<RouterId> {
-        let component_router_list = self
-            .manager
-            .get_random_ordered_vrm_components()
-            .into_iter()
-            .flat_map(|component_id| self.manager.get_component_router_list(component_id))
-            .collect();
-
-        return component_router_list;
-    }
-
-    fn can_handel(&self, res: Reservation) -> bool {
-        for component_id in self.manager.get_random_ordered_vrm_components() {
-            if self.manager.can_handel(component_id, res.clone()) {
-                return true;
-            }
-        }
-        false
-    }
-
-    fn commit(&mut self, reservation_id: ReservationId) -> bool {
-        if self.reservation_store.is_workflow(reservation_id) {
-            let sub_ids = self.workflow_scheduler.get_sub_ids(reservation_id);
-
-            for res_id in sub_ids {
-                let component_answer = self.commit_at_component(res_id);
-                let state = self.reservation_store.get_state(res_id);
-
-                // Check if this specific sub-component succeeded
-                if state != ReservationState::Committed || !component_answer {
-                    log::error!("Sub-task {:?} failed in workflow {:?}", res_id, reservation_id);
-                    self.workflow_scheduler.handle_failure(reservation_id);
-                    return false;
-                }
-            }
-
-            self.workflow_scheduler.finalize_commit(reservation_id);
-            return true;
-        } else {
-            // Non-workflow atomic job
-            return self.commit_at_component(reservation_id);
-        }
-    }
-
-    fn commit_shadow_schedule(&mut self, shadow_schedule_id: ShadowScheduleId) -> bool {
-        todo!()
-    }
-
-    fn create_shadow_schedule(&mut self, shadow_schedule_id: ShadowScheduleId) -> bool {
-        todo!()
-    }
-
-    fn delete_shadow_schedule(&mut self, shadow_schedule_id: ShadowScheduleId) -> bool {
-        todo!()
-    }
-
-    fn delete_task(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> ReservationId {
-        if self.reservation_store.is_workflow(reservation_id) {
-            // TODO
-            todo!();
-        }
-
-        if let Some(component_id) = self.manager.get_handler_id(reservation_id) {
-            self.delete_task_at_component(component_id, reservation_id, shadow_schedule_id);
-            return reservation_id;
-        } else {
-            log::error!("ADC Delete: No handler found for reservation {:?}", reservation_id);
-            self.reservation_store.update_state(reservation_id, ReservationState::Rejected);
-            return reservation_id;
-        }
-    }
-
-    fn get_load_metric(&self, start: i64, end: i64, shadow_schedule_id: Option<ShadowScheduleId>) -> LoadMetric {
-        self.manager.get_load_metric(start, end, shadow_schedule_id)
-    }
-
-    fn get_load_metric_up_to_date(&mut self, start: i64, end: i64, shadow_schedule_id: Option<ShadowScheduleId>) -> LoadMetric {
-        self.manager.get_load_metric(start, end, shadow_schedule_id)
-    }
-
-    fn get_satisfaction(&mut self, start: i64, end: i64, shadow_schedule_id: Option<ShadowScheduleId>) -> f64 {
-        self.manager.get_satisfaction(start, end, shadow_schedule_id)
-    }
-
-    fn get_simulation_load_metric(&mut self, shadow_schedule_id: Option<ShadowScheduleId>) -> LoadMetric {
-        self.manager.get_simulation_load_metric(shadow_schedule_id)
-    }
-
-    fn get_system_satisfaction(&mut self, shadow_schedule_id: Option<ShadowScheduleId>) -> f64 {
-        self.manager.get_system_satisfaction(shadow_schedule_id)
-    }
-
-    fn probe(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> ProbeReservations {
-        let arrival_time = self.simulator.get_current_time_in_ms();
-        let probe_request_answer = self.manager.probe_all_components(reservation_id);
-
-        if probe_request_answer.is_empty() {
-            if shadow_schedule_id.is_none() {
-                self.log_state_probe(0, arrival_time);
-            }
-            return probe_request_answer;
-        }
-
-        if shadow_schedule_id.is_none() {
-            self.log_state_probe(probe_request_answer.len() as i64, arrival_time);
-        }
-
-        return probe_request_answer;
-    }
-
-    fn probe_best(
-        &mut self,
-        reservation_id: ReservationId,
-        shadow_schedule_id: Option<ShadowScheduleId>,
-        comparator: &mut dyn Fn(ReservationId, ReservationId) -> std::cmp::Ordering,
-    ) -> Option<ReservationId> {
-        todo!()
-    }
-
-    fn reserve(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> ReservationId {
-        if self.reservation_store.is_workflow(reservation_id) {
-            // TODO
-            todo!();
-        } else {
-            // Atomic Job
-            let mut transaction_map = HashMap::new();
-            // Try to reserve
-            let res_id = self.submit_task_at_first_grid_component(reservation_id, shadow_schedule_id, &mut transaction_map);
-
-            // If successful, register the allocation (Merge Transaction)
-            if self.reservation_store.is_reservation_state_at_least(res_id, ReservationState::ReserveAnswer) {
-                if let Some(comp_id) = transaction_map.get(&res_id) {
-                    self.manager.register_allocation(res_id, comp_id.clone());
-                }
-            }
-            return res_id;
-        }
-    }
-}
-
-impl ADC {
     pub fn log_state_probe(&mut self, num_of_answers: i64, arrival_time_at_aci: i64) {
         let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
         let processing_time = self.simulator.get_current_time_in_ms() - arrival_time_at_aci;
