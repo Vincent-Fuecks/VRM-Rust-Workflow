@@ -161,7 +161,6 @@ impl VrmManager {
         log::info!("Try to submit Reservation {:?} the the master Adc.", self.reservation_store.get_name_for_key(process_res_id));
         let probe_reservations = self.adc_master.probe(process_res_id, None);
 
-        probe_reservations.dump_reservation();
         // Step 1: Probe
         if probe_reservations.is_empty() {
             log::info!(
@@ -174,6 +173,8 @@ impl VrmManager {
             log::info!("Reservation {:?}, canceled by user after probe.", self.reservation_store.get_name_for_key(process_res_id));
             return;
         }
+
+        self.reservation_store.dump_store_contents();
 
         // let reserve_reservation = self.adc_master.reserve(process_res_id, None)
 

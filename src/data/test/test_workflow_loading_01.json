@@ -6,8 +6,8 @@
         {
           "id": "Simulation-Run-0",
           "arrivalTime": 0,
-          "bookingIntervalStart": 10,
-          "bookingIntervalEnd": 0,
+          "bookingIntervalStart": 2,
+          "bookingIntervalEnd": 25,
 
           "tasks": [
             {
@@ -20,7 +20,7 @@
                   "taskPath": "",
                   "outputPath": "/data/logs/sim.out",
                   "errorPath": "/data/logs/sim.err",
-                  "duration": 1800,
+                  "duration": 2,
                   "isMoldable": false, 
                   "cpus": 8,
                   "dependencies":
@@ -32,7 +32,7 @@
                     {
                       "name": "preprocessed_data",
                       "file": "preprocessed.h5",
-                      "size": 10000
+                      "size": 2
                     }
                   ],
                   "dataIn": [
@@ -47,8 +47,8 @@
                 {
                   "startPoint": "", 
                   "endPoint": "",
-                  "amount": 100,
-                  "bandwidth" : 10
+                  "amount": 2,
+                  "bandwidth" : 3
                 }
             },
                         {
@@ -61,7 +61,7 @@
                   "taskPath": "",
                   "outputPath": "/data/logs/sim.out",
                   "errorPath": "/data/logs/sim.err",
-                  "duration": 1800,
+                  "duration": 2,
                   "isMoldable": false, 
                   "cpus": 8,
                   "dependencies":
@@ -73,7 +73,7 @@
                     {
                       "name": "preprocessed_data",
                       "file": "preprocessed.h5",
-                      "size": 10000
+                      "size": 2
                     }
                   ],
                   "dataIn": [
@@ -88,8 +88,8 @@
                 {
                   "startPoint": "", 
                   "endPoint": "",
-                  "amount": 100,
-                  "bandwidth" : 10
+                  "amount": 2,
+                  "bandwidth" : 3
                 }
             },
             {
@@ -102,7 +102,7 @@
                   "taskPath": "",
                   "outputPath": "/data/logs/sim.out",
                   "errorPath": "/data/logs/sim.err",
-                  "duration": 1800,
+                  "duration": 2,
                   "isMoldable": false, 
                   "cpus": 8,
                   "dependencies":
@@ -114,7 +114,7 @@
                     {
                       "name": "preprocessed_data",
                       "file": "preprocessed.h5",
-                      "size": 10000
+                      "size": 3
                     }
                   ],
                   "dataIn": [
@@ -129,8 +129,8 @@
                 {
                   "startPoint": "", 
                   "endPoint": "",
-                  "amount": 100,
-                  "bandwidth" : 10
+                  "amount": 2,
+                  "bandwidth" : 3
                 }
             },
             {
@@ -143,7 +143,7 @@
                   "taskPath": "",
                   "outputPath": "/data/logs/sim.out",
                   "errorPath": "/data/logs/sim.err",
-                  "duration": 1800,
+                  "duration": 2,
                   "isMoldable": false, 
                   "cpus": 8,
                   "dependencies":
@@ -155,7 +155,7 @@
                     {
                       "name": "preprocessed_data",
                       "file": "preprocessed.h5",
-                      "size": 10000
+                      "size": 2
                     }
                   ],
                   "dataIn": [
@@ -170,8 +170,8 @@
                 {
                   "startPoint": "", 
                   "endPoint": "",
-                  "amount": 100,
-                  "bandwidth" : 10
+                  "amount": 2,
+                  "bandwidth" : 2
                 }
             }
           ]

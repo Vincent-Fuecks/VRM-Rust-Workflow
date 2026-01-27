@@ -2,6 +2,7 @@ use crate::domain::simulator::simulator::SystemSimulator;
 use crate::domain::vrm_system_model::grid_resource_management_system::vrm_component_order::VrmComponentOrder;
 use crate::domain::vrm_system_model::grid_resource_management_system::vrm_component_registry::vrm_component_proxy::VrmComponentProxy;
 use crate::domain::vrm_system_model::grid_resource_management_system::vrm_component_trait::VrmComponent;
+use crate::domain::vrm_system_model::reservation::probe_reservations::ProbeReservations;
 use crate::domain::vrm_system_model::reservation::reservation::Reservation;
 use crate::domain::vrm_system_model::reservation::reservation::ReservationState;
 use crate::domain::vrm_system_model::reservation::reservation_store;
@@ -650,7 +651,12 @@ impl VrmComponentManager {
         }
     }
 
-    pub fn probe(&mut self, component_id: ComponentId, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> Reservations {
+    pub fn probe(
+        &mut self,
+        component_id: ComponentId,
+        reservation_id: ReservationId,
+        shadow_schedule_id: Option<ShadowScheduleId>,
+    ) -> ProbeReservations {
         match self.vrm_components.get_mut(&component_id) {
             Some(container) => container.vrm_component.probe(reservation_id, shadow_schedule_id),
             None => {
@@ -662,40 +668,32 @@ impl VrmComponentManager {
                     shadow_schedule_id
                 );
 
-                return Reservations::new_empty(self.reservation_store.clone());
+                return ProbeReservations::new(reservation_id, self.reservation_store.clone());
             }
         }
     }
 
-    pub fn probe_all_components(&mut self, reservation_id: ReservationId) -> Reservations {
-        let mut probe_results = Reservations::new_empty(self.reservation_store.clone());
+    pub fn probe_all_components(&mut self, reservation_id: ReservationId) -> ProbeReservations {
+        let mut probe_results = ProbeReservations::new(reservation_id, self.reservation_store.clone());
 
         for (_, container) in &mut self.vrm_components {
             let res_snapshot = self.reservation_store.get_reservation_snapshot(reservation_id).unwrap();
 
             if container.can_handel(res_snapshot) {
-                let probe_reservations = container.vrm_component.probe(reservation_id, None);
+                let mut probe_reservations = container.vrm_component.probe(reservation_id, None);
 
                 // Do not trust answer of lower GridComponent
                 // Validation of probe answers
-                for prob_reservation_id in probe_reservations.iter() {
-                    if self.reservation_store.get_assigned_start(*prob_reservation_id)
-                        < self.reservation_store.get_booking_interval_start(*prob_reservation_id)
-                        || self.reservation_store.get_assigned_end(*prob_reservation_id)
-                            > self.reservation_store.get_booking_interval_end(*prob_reservation_id)
+                for probe_res_id in probe_reservations.get_ids() {
+                    if self.reservation_store.get_assigned_start(probe_res_id) < self.reservation_store.get_booking_interval_start(probe_res_id)
+                        || self.reservation_store.get_assigned_end(probe_res_id) > self.reservation_store.get_booking_interval_end(probe_res_id)
                     {
+                        probe_reservations.delete_reservation(probe_res_id);
                         log::error!("Invalid Answer.");
                     }
-                    probe_results.insert(*prob_reservation_id);
-                    log::error!(
-                        "ADC {} Reservation {:?} as assigned time {}, bookingstart {} reservation state {:?}",
-                        self.adc_id,
-                        self.reservation_store.get_name_for_key(prob_reservation_id.clone()),
-                        self.reservation_store.get_assigned_start(prob_reservation_id.clone()),
-                        self.reservation_store.get_booking_interval_start(prob_reservation_id.clone()),
-                        self.reservation_store.get_state(prob_reservation_id.clone())
-                    )
                 }
+
+                probe_results.add_probe_reservations(probe_reservations);
             }
         }
 

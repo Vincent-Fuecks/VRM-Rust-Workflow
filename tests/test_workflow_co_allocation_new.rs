@@ -4,12 +4,18 @@
 //         reservation_dto::{DataInDto, DataOutDto, LinkReservationDto, NodeReservationDto, ReservationProceedingDto, ReservationStateDto},
 //         workflow_dto::{TaskDto, WorkflowDto},
 //     },
-//     domain::simulator::{simulator::SystemSimulator, simulator_mock::MockSimulator},
-//     domain::vrm_system_model::reservation::reservation::{ReservationProceeding, ReservationState},
-//     domain::vrm_system_model::utils::id::{
-//         ClientId, CoAllocationId, DataDependencyId, ReservationName, SyncDependencyId, WorkflowId, WorkflowNodeId,
+//     domain::{
+//         simulator::{simulator::SystemSimulator, simulator_mock::MockSimulator},
+//         vrm_system_model::{
+//             reservation::{
+//                 node_reservation::NodeReservation,
+//                 reservation::{Reservation, ReservationProceeding, ReservationState},
+//                 reservation_store::ReservationStore,
+//             },
+//             utils::id::{ClientId, CoAllocationId, DataDependencyId, ReservationName, SyncDependencyId, WorkflowId, WorkflowNodeId},
+//             workflow::workflow::Workflow,
+//         },
 //     },
-//     domain::vrm_system_model::workflow::workflow::Workflow,
 //     error::Error,
 //     generate_system_model,
 // };
@@ -25,7 +31,8 @@
 // fn test_co_allocation_graph_creation() {
 //     let file_path: &str = "src/data/test/test_workflow_with_simple_co_allocation_graph.json";
 //     let simulator: Arc<dyn SystemSimulator> = Arc::new(MockSimulator::new(0));
-//     let vrm = generate_system_model(file_path, simulator);
+//     let store = ReservationStore::new(None);
+//     let vrm = generate_system_model(file_path, simulator, store.clone());
 
 //     if let Ok(system_model) = vrm {
 //         let clients_map = system_model.clients;
@@ -34,10 +41,31 @@
 //         let client_id = ClientId::new("7209cffb-259f-404b-ac91-4795b4ad39e7");
 //         assert!(clients_map.contains_key(&client_id));
 
-//         let client = clients_map.get(&client_id).expect("System Model should contain client with this Id!");
+//         // Retrieve Workflow by searching Client's reservations
+//         // This avoids potential panics from get_key_for_name if the exact name key is missing or formatted differently
+//         let client_res_ids = store.get_client_reservations(&client_id);
 
-//         let workflow_id = WorkflowId::new("Simulation-Run-0");
-//         let workflow = client.workflows.get(&workflow_id).expect("Clients should contain workflow with this Id!");
+//         let workflow_rid = client_res_ids
+//             .iter()
+//             .find(|&&rid| {
+//                 if let Some(res_lock) = store.get(rid) {
+//                     let res = res_lock.read().unwrap();
+//                     if let Reservation::Workflow(w) = &*res {
+//                         // Check if this is the workflow we are looking for
+//                         return w.base.name.to_string() == "Simulation-Run-0";
+//                     }
+//                 }
+//                 false
+//             })
+//             .cloned()
+//             .expect("Workflow 'Simulation-Run-0' not found in client reservations");
+
+//         let workflow_lock = store.get(workflow_rid).expect("Workflow not found in store");
+//         let workflow_guard = workflow_lock.read().unwrap();
+//         let workflow = match &*workflow_guard {
+//             Reservation::Workflow(w) => w,
+//             _ => panic!("Expected Workflow reservation"),
+//         };
 
 //         // Test CoAllocation Graph is correctly constructed
 //         // A, B, C should be in one group. D, E in another.
@@ -86,7 +114,8 @@
 // fn test_workflow_node_creation_for_system_model() {
 //     let file_path: &str = "src/data/test/test_workflow_loading_01.json";
 //     let simulator: Arc<dyn SystemSimulator> = Arc::new(MockSimulator::new(0));
-//     let result = generate_system_model(file_path, simulator);
+//     let store = ReservationStore::new(None);
+//     let result = generate_system_model(file_path, simulator, store.clone());
 
 //     if let Ok(system_model) = result {
 //         let clients_map = system_model.clients;
@@ -95,19 +124,41 @@
 //         let client_id = ClientId::new("7209cffb-259f-404b-ac91-4795b4ad39e7");
 //         assert!(clients_map.contains_key(&client_id));
 
-//         let client = clients_map.get(&client_id).unwrap();
-//         let workflows = &client.workflows;
-//         assert_eq!(workflows.len(), 1);
+//         // Retrieve Workflow via Client Reservations
+//         let client_res_ids = store.get_client_reservations(&client_id);
 
-//         let workflow_id = WorkflowId::new("Simulation-Run-0");
-//         assert!(workflows.contains_key(&workflow_id));
-//         let workflow = workflows.get(&workflow_id).unwrap();
+//         let workflow_rid = client_res_ids
+//             .iter()
+//             .find(|&&rid| {
+//                 if let Some(res_lock) = store.get(rid) {
+//                     let res = res_lock.read().unwrap();
+//                     if let Reservation::Workflow(w) = &*res {
+//                         return w.base.name.to_string() == "Simulation-Run-0";
+//                     }
+//                 }
+//                 false
+//             })
+//             .cloned()
+//             .expect("Workflow 'Simulation-Run-0' not found in client reservations");
+
+//         let workflow_lock = store.get(workflow_rid).unwrap();
+//         let workflow_guard = workflow_lock.read().unwrap();
+//         let workflow = match &*workflow_guard {
+//             Reservation::Workflow(w) => w,
+//             _ => panic!("Expected Workflow"),
+//         };
 
 //         let node_id = WorkflowNodeId::new("Data-Preprocessing-3");
 //         assert!(workflow.nodes.contains_key(&node_id));
 //         let node = workflow.nodes.get(&node_id).unwrap();
 
-//         let reservation = &node.reservation;
+//         // Access Reservation via Store
+//         let res_lock = store.get(node.reservation_id).unwrap();
+//         let res_guard = res_lock.read().unwrap();
+//         let reservation = match &*res_guard {
+//             Reservation::Node(n) => n,
+//             _ => panic!("Expected Node Reservation"),
+//         };
 
 //         assert_eq!(reservation.base.name, ReservationName::new("Data-Preprocessing-3"));
 //         assert_eq!(reservation.base.state, ReservationState::Open);
@@ -158,7 +209,8 @@
 //     let non_existent_file = "non_existent_file.json";
 
 //     let simulator: Arc<dyn SystemSimulator> = Arc::new(MockSimulator::new(0));
-//     let result = generate_system_model(non_existent_file, simulator);
+//     let store = ReservationStore::new(None);
+//     let result = generate_system_model(non_existent_file, simulator, store);
 
 //     assert!(result.is_err());
 
@@ -256,26 +308,39 @@
 // #[test]
 // fn test_stage_1_generate_workflow_nodes() {
 //     let (dto, client_id) = create_dummy_workflow_dto();
-//     let nodes = Workflow::generate_workflow_nodes(&dto, client_id);
+//     let store = ReservationStore::new(None);
+//     let nodes = Workflow::generate_workflow_nodes(&dto, client_id, store.clone());
 
 //     assert_eq!(nodes.len(), 3);
 //     assert!(nodes.contains_key(&WorkflowNodeId::new("A")));
 //     assert!(nodes.contains_key(&WorkflowNodeId::new("B")));
 //     assert!(nodes.contains_key(&WorkflowNodeId::new("C")));
 
+//     // Helper to get node reservation
+//     let get_res = |node_id: &str| -> NodeReservation {
+//         let node = nodes.get(&WorkflowNodeId::new(node_id)).unwrap();
+//         let lock = store.get(node.reservation_id).unwrap();
+//         let guard = lock.read().unwrap();
+//         match &*guard {
+//             Reservation::Node(n) => n.clone(),
+//             _ => panic!("Expected node"),
+//         }
+//     };
+
 //     // Verify Node A
-//     let node_a = nodes.get(&WorkflowNodeId::new("A")).unwrap();
-//     assert_eq!(node_a.reservation.task_path, Some("/bin/task_a".to_string()));
+//     let node_a_res = get_res("A");
+//     assert_eq!(node_a_res.task_path, Some("/bin/task_a".to_string()));
 
 //     // Verify Node B
-//     let node_b = nodes.get(&WorkflowNodeId::new("B")).unwrap();
-//     assert_eq!(node_b.reservation.base.task_duration, 15);
-//     assert_eq!(node_b.reservation.base.is_moldable, true);
+//     let node_b_res = get_res("B");
+//     assert_eq!(node_b_res.base.task_duration, 15);
+//     assert_eq!(node_b_res.base.is_moldable, true);
 
 //     // Verify Node C
+//     let node_c_res = get_res("C");
 //     let node_c = nodes.get(&WorkflowNodeId::new("C")).unwrap();
-//     assert_eq!(node_c.reservation.base.state, ReservationState::Committed);
-//     assert_eq!(node_c.reservation.base.request_proceeding, ReservationProceeding::Reserve);
+//     assert_eq!(node_c_res.base.state, ReservationState::Committed);
+//     assert_eq!(node_c_res.base.request_proceeding, ReservationProceeding::Reserve);
 //     assert_eq!(node_c.incoming_sync.len(), 0, "Should be empty before linking");
 //     assert!(node_c.co_allocation_key.is_none(), "Should be None before Phase 4");
 // }
@@ -283,7 +348,8 @@
 // #[test]
 // fn test_stage_2_build_dependencies() {
 //     let (dto, client_id) = create_dummy_workflow_dto();
-//     let (data_deps, sync_deps) = Workflow::build_all_dependencies(&dto, client_id).expect("Should build deps");
+//     let store = ReservationStore::new(None);
+//     let (data_deps, sync_deps) = Workflow::build_all_dependencies(&dto, client_id, store.clone()).expect("Should build deps");
 
 //     // A->B is Data, B->C is Sync
 //     assert_eq!(data_deps.len(), 1);
@@ -307,8 +373,9 @@
 // #[test]
 // fn test_stage_3_populate_adjacency() {
 //     let (dto, client_id) = create_dummy_workflow_dto();
-//     let mut nodes = Workflow::generate_workflow_nodes(&dto, client_id.clone());
-//     let (data_deps, sync_deps) = Workflow::build_all_dependencies(&dto, client_id).unwrap();
+//     let store = ReservationStore::new(None);
+//     let mut nodes = Workflow::generate_workflow_nodes(&dto, client_id.clone(), store.clone());
+//     let (data_deps, sync_deps) = Workflow::build_all_dependencies(&dto, client_id, store.clone()).unwrap();
 
 //     Workflow::populate_node_adjacency_lists(&mut nodes, &data_deps, &sync_deps);
 
@@ -328,8 +395,9 @@
 // #[test]
 // fn test_stage_4_co_allocations() {
 //     let (dto, client_id) = create_dummy_workflow_dto();
-//     let mut nodes = Workflow::generate_workflow_nodes(&dto, client_id.clone());
-//     let (data_deps, sync_deps) = Workflow::build_all_dependencies(&dto, client_id).unwrap();
+//     let store = ReservationStore::new(None);
+//     let mut nodes = Workflow::generate_workflow_nodes(&dto, client_id.clone(), store.clone());
+//     let (data_deps, sync_deps) = Workflow::build_all_dependencies(&dto, client_id, store.clone()).unwrap();
 
 //     // We must populate adjacency first or CoAllocation building might miss context (though it relies mostly on sync_deps map)
 //     Workflow::populate_node_adjacency_lists(&mut nodes, &data_deps, &sync_deps);
@@ -356,8 +424,9 @@
 // #[test]
 // fn test_stage_5_co_allocation_dependencies() {
 //     let (dto, client_id) = create_dummy_workflow_dto();
-//     let mut nodes = Workflow::generate_workflow_nodes(&dto, client_id.clone());
-//     let (data_deps, sync_deps) = Workflow::build_all_dependencies(&dto, client_id).unwrap();
+//     let store = ReservationStore::new(None);
+//     let mut nodes = Workflow::generate_workflow_nodes(&dto, client_id.clone(), store.clone());
+//     let (data_deps, sync_deps) = Workflow::build_all_dependencies(&dto, client_id, store.clone()).unwrap();
 //     Workflow::populate_node_adjacency_lists(&mut nodes, &data_deps, &sync_deps);
 //     let (mut co_allocs, node_map) = Workflow::build_co_allocations(&nodes, &sync_deps).unwrap();
 
@@ -380,8 +449,9 @@
 // #[test]
 // fn test_stage_6_entry_exit_points() {
 //     let (dto, client_id) = create_dummy_workflow_dto();
-//     let mut nodes = Workflow::generate_workflow_nodes(&dto, client_id.clone());
-//     let (data_deps, sync_deps) = Workflow::build_all_dependencies(&dto, client_id).unwrap();
+//     let store = ReservationStore::new(None);
+//     let mut nodes = Workflow::generate_workflow_nodes(&dto, client_id.clone(), store.clone());
+//     let (data_deps, sync_deps) = Workflow::build_all_dependencies(&dto, client_id, store.clone()).unwrap();
 //     Workflow::populate_node_adjacency_lists(&mut nodes, &data_deps, &sync_deps);
 //     let (mut co_allocs, node_map) = Workflow::build_co_allocations(&nodes, &sync_deps).unwrap();
 //     let _ = Workflow::build_co_allocation_dependencies(&data_deps, &node_map, &mut co_allocs).unwrap();

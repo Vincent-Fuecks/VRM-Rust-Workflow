@@ -1,3 +1,4 @@
+use crate::domain::vrm_system_model::reservation::probe_reservations::ProbeReservations;
 use crate::domain::vrm_system_model::reservation::{reservation::ReservationState, reservation_store::ReservationId, reservations::Reservations};
 use crate::domain::vrm_system_model::scheduler_trait::Schedule;
 use crate::domain::vrm_system_model::utils::load_buffer::{LoadMetric, SLOTS_TO_DROP_ON_END, SLOTS_TO_DROP_ON_START};
@@ -31,15 +32,14 @@ impl Schedule for super::SlottedSchedule {
     fn reserve(&mut self, reservation_id: ReservationId) -> Option<ReservationId> {
         self.update();
 
-        let search_results = self.calculate_schedule(reservation_id);
+        let probe_reservations = self.calculate_schedule(reservation_id);
 
-        match search_results.get_id_with_first_start_slot() {
-            Some(reservation_id_with_first_start_slot) => {
+        match probe_reservations.get_res_id_with_first_start_slot(reservation_id) {
+            Some(res_id) => {
                 self.is_frag_cache_up_to_date = false;
-                self.reserve_without_check(reservation_id_with_first_start_slot);
+                self.reserve_without_check(res_id);
                 return None;
             }
-
             None => {
                 self.active_reservations.set_state(&reservation_id, ReservationState::Rejected);
                 return Some(reservation_id);
@@ -234,19 +234,19 @@ impl Schedule for super::SlottedSchedule {
         return self.fragmentation_cache;
     }
 
-    // TODO Function probe is self.update() in worst case 2N + 1 called --> bottleneck.
-    fn probe(&mut self, id: ReservationId) -> Reservations {
+    // TODO Function probe utilizes self.update() in worst case 2N + 1 times --> potential optimization.
+    fn probe(&mut self, id: ReservationId) -> ProbeReservations {
         self.update();
 
-        let mut candidates = self.calculate_schedule(id);
+        let candidates = self.calculate_schedule(id);
         let frag_before: f64 = self.get_system_fragmentation();
 
         if self.is_frag_needed {
-            for candidate_id in candidates.clone().iter() {
-                let reserve_answer: Option<ReservationId> = self.reserve(candidate_id.clone());
+            for candidate_id in candidates.get_ids() {
+                let reserve_answer: Option<ReservationId> = self.reserve(candidate_id);
                 let frag_delta: f64 = self.get_system_fragmentation() - frag_before;
 
-                candidates.set_frag_delta(candidate_id, frag_delta);
+                self.reservation_store.set_frag_delta(candidate_id, frag_delta);
 
                 match reserve_answer {
                     Some(_) => {}
@@ -265,16 +265,15 @@ impl Schedule for super::SlottedSchedule {
         request_key: ReservationId,
         comparator: &mut dyn FnMut(ReservationId, ReservationId) -> Ordering,
     ) -> Option<ReservationId> {
-        let possible_reservations: Reservations = self.probe(request_key);
-        if possible_reservations.is_empty() {
+        let probe_reservations = self.probe(request_key);
+        if probe_reservations.is_empty() {
             return None;
         }
 
-        let mut best_candidate: ReservationId =
-            possible_reservations.get_id_with_first_start_slot().expect("Error getting random reservation.").clone();
+        let mut best_candidate = probe_reservations.get_res_id_with_first_start_slot(request_key).expect("Error getting random reservation.").clone();
 
-        for candidate_id in possible_reservations.iter() {
-            if comparator(best_candidate.clone(), *candidate_id) == Ordering::Greater {
+        for candidate_id in probe_reservations.get_ids() {
+            if comparator(best_candidate.clone(), candidate_id) == Ordering::Greater {
                 best_candidate = candidate_id.clone();
             }
         }

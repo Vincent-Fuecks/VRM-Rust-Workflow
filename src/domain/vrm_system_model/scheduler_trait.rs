@@ -2,6 +2,7 @@ use std::any::Any;
 use std::cmp::Ordering;
 use std::fmt::Debug;
 
+use crate::domain::vrm_system_model::reservation::probe_reservations::ProbeReservations;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationId;
 use crate::domain::vrm_system_model::reservation::reservations::Reservations;
 use crate::domain::vrm_system_model::utils::load_buffer::LoadMetric;
@@ -73,7 +74,7 @@ pub trait Schedule: Debug + Send + Sync + Any {
     /// # Returns
     ///
     /// A `Reservations` collection containing all feasible candidates.
-    fn probe(&mut self, id: ReservationId) -> Reservations;
+    fn probe(&mut self, id: ReservationId) -> ProbeReservations;
 
     /// Selects the **single best-fitting reservation candidate** from the feasible set,
     /// determined by a custom comparator function.

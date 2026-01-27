@@ -59,6 +59,8 @@ pub struct SlottedSchedule {
     is_frag_needed: bool,
 
     simulator: Arc<dyn SystemSimulator>,
+
+    reservation_store: ReservationStore,
 }
 
 impl SlottedSchedule {
@@ -88,13 +90,14 @@ impl SlottedSchedule {
             scheduling_window_start_time: 0,
             scheduling_window_end_time: -1,
             load_buffer: LoadBuffer::new(Arc::new(GlobalLoadContext::new())),
-            active_reservations: Reservations::new_empty(reservation_store),
+            active_reservations: Reservations::new_empty(reservation_store.clone()),
             is_frag_cache_up_to_date: true,
             fragmentation_cache: 0.0,
             use_quadratic_mean_fragmentation: use_quadratic_mean_fragmentation,
             // TODO Always false
             is_frag_needed: false,
             simulator: simulator,
+            reservation_store: reservation_store,
         };
 
         slotted_schedule.update();

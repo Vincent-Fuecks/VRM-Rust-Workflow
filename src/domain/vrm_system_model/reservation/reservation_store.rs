@@ -469,6 +469,38 @@ impl ReservationStore {
         }
     }
 
+    /// Replaces a Reservation of the provided ReservationId with the provided Reservation.
+    /// ReservationName, ClientId and HandlerId must be the same of the replacement Reservation.
+    /// Return the true, if the replacement was a success otherwise false.
+    pub fn replace_reservation(&mut self, reservation_id: ReservationId, new_reservation: Reservation) -> bool {
+        let guard = self.inner.read().unwrap();
+        let arc = guard.slots.get(reservation_id).unwrap();
+        let mut current_res = arc.write().unwrap();
+
+        if current_res.get_name() != new_reservation.get_name() {
+            log::error!("FailedReservationReplacement: Cannot replace: ReservationName mismatch");
+            return false;
+        }
+        if current_res.get_client_id() != new_reservation.get_client_id() {
+            log::error!("FailedReservationReplacement: Cannot replace: ClientId mismatch");
+            return false;
+        }
+        if current_res.get_handler_id() != new_reservation.get_handler_id() {
+            log::error!("FailedReservationReplacement: Cannot replace: HandlerId mismatch");
+            return false;
+        }
+
+        *current_res = new_reservation;
+
+        log::info!(
+            "ReservationReplacementWasSuccessful: ReservationId {:?} with Name {:?} was replaced.",
+            reservation_id,
+            self.get_name_for_key(reservation_id)
+        );
+
+        return true;
+    }
+
     /// Update the state of a reservation.
     /// Triggers the notification listener.
     pub fn update_state(&self, id: ReservationId, new_state: ReservationState) {
@@ -544,7 +576,7 @@ impl ReservationStore {
             // We attempt to read the reservation name directly from the object
             match res_handle.read() {
                 Ok(res) => {
-                    log::error!("  -> ID: {:?} | Name: {:?}", id, res.get_name());
+                    log::error!("  -> ID: {:?} | Name: {:?} | State: {:?}", id, res.get_name(), res.get_state());
                 }
                 Err(_) => {
                     log::error!("  -> ID: {:?} | [Lock Poisoned]", id);

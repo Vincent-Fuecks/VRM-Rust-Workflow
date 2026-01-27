@@ -1,4 +1,4 @@
-use crate::domain::vrm_system_model::reservation::reservation::ReservationState;
+use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationState};
 use crate::domain::vrm_system_model::reservation::reservation_store::{ReservationId, ReservationStore};
 use rand::seq::IndexedRandom;
 use std::collections::hash_set;
@@ -136,5 +136,9 @@ impl Reservations {
 
     pub fn adjust_capacity(&self, id: &ReservationId, capacity: i64) {
         self.reservation_store.adjust_capacity(id.clone(), capacity);
+    }
+
+    pub fn get_reservation_snapshot(&mut self, id: &ReservationId) -> Reservation {
+        self.reservation_store.get_reservation_snapshot(*id).unwrap()
     }
 }

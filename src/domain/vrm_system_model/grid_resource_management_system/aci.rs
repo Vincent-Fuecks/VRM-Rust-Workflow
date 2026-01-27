@@ -1,6 +1,7 @@
 use crate::api::vrm_system_model_dto::aci_dto::AcIDto;
 use crate::domain::simulator::simulator::SystemSimulator;
 use crate::domain::vrm_system_model::grid_resource_management_system::vrm_component_trait::VrmComponent;
+use crate::domain::vrm_system_model::reservation::probe_reservations::{self, ProbeReservations};
 use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationState};
 use crate::domain::vrm_system_model::reservation::reservation_store::{ReservationId, ReservationStore};
 use crate::domain::vrm_system_model::reservation::reservations::Reservations;
@@ -349,7 +350,7 @@ impl VrmComponent for AcI {
         self.rms_system.get_system_fragmentation(shadow_schedule_id)
     }
 
-    fn probe(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> Reservations {
+    fn probe(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> ProbeReservations {
         let arrival_time = self.simulator.get_current_time_in_ms();
 
         // Can Rms handle request in general?
@@ -357,17 +358,18 @@ impl VrmComponent for AcI {
             if shadow_schedule_id.is_none() {
                 self.log_state_probe(-1, arrival_time);
             }
-            return Reservations::new_empty(self.reservation_store.clone());
+            return ProbeReservations::new(reservation_id, self.reservation_store.clone());
         }
 
-        let prob_request_answer = self.rms_system.probe(reservation_id, shadow_schedule_id.clone());
+        let mut prob_request_answer = self.rms_system.probe(reservation_id, shadow_schedule_id.clone());
+        prob_request_answer.update_origin_information(reservation_id, self.id.clone().cast(), shadow_schedule_id.clone());
 
         if prob_request_answer.is_empty() {
             if shadow_schedule_id.is_none() {
                 self.log_state_probe(0, arrival_time);
             }
 
-            return Reservations::new_empty(self.reservation_store.clone());
+            return prob_request_answer;
         }
 
         if shadow_schedule_id.is_none() {

@@ -1,3 +1,5 @@
+use crate::domain::vrm_system_model::reservation::probe_reservations::ProbeReservations;
+use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationTrait};
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationId;
 use crate::domain::vrm_system_model::reservation::{reservation::ReservationState, reservations::Reservations};
 use crate::domain::vrm_system_model::schedule::slot::Slot;
@@ -175,7 +177,7 @@ impl super::SlottedSchedule {
     /// # Returns
     /// Returns a `Reservations` object containing a map of all feasible reservations (candidates) found.
     /// Each candidate represents a valid assignment time within the schedule's constraints.
-    pub fn calculate_schedule(&mut self, id: ReservationId) -> Reservations {
+    pub fn calculate_schedule(&mut self, id: ReservationId) -> ProbeReservations {
         let mut request_start_boundary: i64 = self.active_reservations.get_booking_interval_start(&id);
         let mut request_end_boundary: i64 = self.active_reservations.get_booking_interval_end(&id);
         let initial_duration: i64 = self.active_reservations.get_task_duration(&id);
@@ -188,9 +190,7 @@ impl super::SlottedSchedule {
             request_end_boundary = i64::MAX;
         }
 
-        // "Create" new Reservations object, where the search results are stored.
-        let mut search_results = self.active_reservations.clone();
-        search_results.clear();
+        let mut search_results = ProbeReservations::new(id, self.reservation_store.clone());
 
         if !self.active_reservations.get_is_moldable(&id) && self.capacity > 0 && self.capacity < self.active_reservations.get_reserved_capacity(&id)
         {
@@ -204,14 +204,15 @@ impl super::SlottedSchedule {
         latest_start_index = self.get_effective_slot_index(latest_start_index);
 
         for slot_start_index in earliest_start_index..=latest_start_index {
-            if let Some(candidate_id) = self.try_fit_reservation(id, slot_start_index, request_end_boundary) {
-                search_results.insert(candidate_id);
+            if let Some(res_candidate) = self.try_fit_reservation(id, slot_start_index, request_end_boundary) {
+                search_results.add_only_reservation(res_candidate);
             }
         }
         return search_results;
     }
 
-    fn try_fit_reservation(&mut self, candidate_id: ReservationId, slot_start_index: i64, request_end_boundary: i64) -> Option<ReservationId> {
+    // TODO False implementation should not update the self.active_reservations
+    fn try_fit_reservation(&mut self, candidate_id: ReservationId, slot_start_index: i64, request_end_boundary: i64) -> Option<Reservation> {
         // TODO Should be not need, because res is a clone and unlike in the java implementation not the same object.
         // candidate.adjust_capacity(candidate.get_reserved_capacity());
 
@@ -263,12 +264,14 @@ impl super::SlottedSchedule {
         }
 
         if is_feasible {
-            self.active_reservations.set_booking_interval_start(&candidate_id, start_time);
-            self.active_reservations.set_booking_interval_end(&candidate_id, end_time);
-            self.active_reservations.set_assigned_start(&candidate_id, start_time);
-            self.active_reservations.set_assigned_end(&candidate_id, end_time);
-            self.active_reservations.set_state(&candidate_id, ReservationState::ProbeAnswer);
-            return Some(candidate_id);
+            let mut res_candidate_clone = self.active_reservations.get_reservation_snapshot(&candidate_id);
+
+            res_candidate_clone.set_booking_interval_start(start_time);
+            res_candidate_clone.set_booking_interval_end(end_time);
+            res_candidate_clone.set_assigned_start(start_time);
+            res_candidate_clone.set_assigned_end(end_time);
+            res_candidate_clone.set_state(ReservationState::ProbeAnswer);
+            return Some(res_candidate_clone);
         }
 
         return None;

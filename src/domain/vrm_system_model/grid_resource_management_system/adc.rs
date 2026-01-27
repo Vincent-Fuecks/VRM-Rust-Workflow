@@ -7,6 +7,7 @@ use crate::domain::vrm_system_model::grid_resource_management_system::vrm_compon
 use crate::domain::vrm_system_model::grid_resource_management_system::vrm_component_registry::registry_client::RegistryClient;
 use crate::domain::vrm_system_model::grid_resource_management_system::vrm_component_registry::vrm_component_proxy::VrmComponentProxy;
 use crate::domain::vrm_system_model::grid_resource_management_system::vrm_component_trait::VrmComponent;
+use crate::domain::vrm_system_model::reservation::probe_reservations::ProbeReservations;
 use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationState};
 use crate::domain::vrm_system_model::reservation::reservation_store::{ReservationId, ReservationStore};
 use crate::domain::vrm_system_model::reservation::reservations::Reservations;
@@ -218,6 +219,7 @@ impl ADC {
     ///
     /// This implements a "Best Fit" strategy, useful for optimizing resource utilization or
     /// meeting Earliest Finish Time (EFT) constraints.
+    /// TODO should be moved to VrmComponentManager
     pub fn submit_task_at_best_vrm_component<F>(
         &mut self,
         reservation_id: ReservationId,
@@ -239,17 +241,17 @@ impl ADC {
 
                 // Do not trust answer of lower GridComponent
                 // Validation of probe answers
-                for prob_reservation_id in probe_reservations.iter() {
-                    if self.reservation_store.get_assigned_start(*prob_reservation_id)
-                        < self.reservation_store.get_booking_interval_start(*prob_reservation_id)
-                        || self.reservation_store.get_assigned_end(*prob_reservation_id)
-                            > self.reservation_store.get_booking_interval_end(*prob_reservation_id)
+                for prob_reservation_id in probe_reservations.get_ids() {
+                    if self.reservation_store.get_assigned_start(prob_reservation_id)
+                        < self.reservation_store.get_booking_interval_start(prob_reservation_id)
+                        || self.reservation_store.get_assigned_end(prob_reservation_id)
+                            > self.reservation_store.get_booking_interval_end(prob_reservation_id)
                     {
                         log::error!("Invalid Answer.");
                     }
                 }
 
-                order_grid_component_res_database.put_all(probe_reservations, component_id.clone());
+                order_grid_component_res_database.put_all(probe_reservations);
             }
         }
 
@@ -415,7 +417,7 @@ impl VrmComponent for ADC {
         self.manager.get_system_satisfaction(shadow_schedule_id)
     }
 
-    fn probe(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> Reservations {
+    fn probe(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> ProbeReservations {
         let arrival_time = self.simulator.get_current_time_in_ms();
         let probe_request_answer = self.manager.probe_all_components(reservation_id);
 

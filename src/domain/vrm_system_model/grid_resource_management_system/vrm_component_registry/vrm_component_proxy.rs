@@ -5,6 +5,7 @@ use std::thread;
 
 use crate::domain::vrm_system_model::grid_resource_management_system::vrm_component_registry::vrm_message::VrmMessage;
 use crate::domain::vrm_system_model::grid_resource_management_system::vrm_component_trait::VrmComponent;
+use crate::domain::vrm_system_model::reservation::probe_reservations::ProbeReservations;
 use crate::domain::vrm_system_model::reservation::reservation::Reservation;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationId;
 use crate::domain::vrm_system_model::reservation::reservations::Reservations;
@@ -62,7 +63,7 @@ impl VrmComponent for VrmComponentProxy {
         self.call(|tx| VrmMessage::CanHandel { reservation: res, reply_to: tx })
     }
 
-    fn probe(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> Reservations {
+    fn probe(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> ProbeReservations {
         self.call(|tx| VrmMessage::Probe { reservation_id, shadow_schedule_id, reply_to: tx })
     }
 
@@ -74,13 +75,13 @@ impl VrmComponent for VrmComponentProxy {
         comparator: &mut dyn Fn(ReservationId, ReservationId) -> Ordering,
     ) -> Option<ReservationId> {
         // 1. Get all candidates from the remote component
-        let reservations = self.probe(reservation_id, shadow_schedule_id);
+        let probe_reservations = self.probe(reservation_id, shadow_schedule_id);
 
-        if reservations.is_empty() {
+        if probe_reservations.is_empty() {
             return None;
         }
 
-        let mut candidates: Vec<ReservationId> = reservations.iter().cloned().collect();
+        let mut candidates: Vec<ReservationId> = probe_reservations.get_ids();
         candidates.sort_by(|a, b| comparator(*a, *b));
         candidates.first().cloned()
     }

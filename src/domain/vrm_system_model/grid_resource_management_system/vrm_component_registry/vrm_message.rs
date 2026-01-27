@@ -1,3 +1,4 @@
+use crate::domain::vrm_system_model::reservation::probe_reservations::ProbeReservations;
 use crate::domain::vrm_system_model::reservation::reservation::Reservation;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationId;
 use crate::domain::vrm_system_model::reservation::reservations::Reservations;
@@ -18,7 +19,7 @@ pub enum VrmMessage {
 
     CanHandel { reservation: Reservation, reply_to: mpsc::Sender<bool> },
 
-    Probe { reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>, reply_to: mpsc::Sender<Reservations> },
+    Probe { reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>, reply_to: mpsc::Sender<ProbeReservations> },
 
     // TODO not possible in this form
     Reserve { reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>, reply_to: mpsc::Sender<ReservationId> },
