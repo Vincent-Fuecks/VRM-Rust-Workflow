@@ -1,6 +1,5 @@
 mod helpers;
 mod vrm_component;
-mod vrm_component_entry;
 
 use std::sync::Arc;
 

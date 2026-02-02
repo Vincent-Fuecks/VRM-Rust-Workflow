@@ -1,4 +1,7 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::{Arc, RwLock},
+};
 use tokio::time::{Duration, sleep};
 
 use crate::{
@@ -15,8 +18,9 @@ use crate::{
                 vrm_component_trait::VrmComponent,
             },
             reservation::{
-                reservation::ReservationProceeding,
-                reservation_store::{self, ReservationId, ReservationStore},
+                reservation::{ReservationProceeding, ReservationState},
+                reservation_store::{ReservationId, ReservationStore},
+                vrm_state_listener::VrmStateListener,
             },
             utils::id::{AdcId, ComponentId},
         },
@@ -26,7 +30,7 @@ use crate::{
 pub struct VrmManager {
     pub adc_master: VrmComponentProxy,
     pub unprocessed_reservations: Vec<(ReservationId, i64)>,
-    pub open_reservations: Vec<ReservationId>,
+    pub open_reservations: Arc<RwLock<HashSet<ReservationId>>>,
 
     pub reservation_store: ReservationStore,
     pub simulator: Arc<dyn SystemSimulator>,
@@ -39,7 +43,7 @@ impl VrmManager {
         reservation_store: ReservationStore,
         simulator: Arc<dyn SystemSimulator>,
     ) -> Self {
-        VrmManager { adc_master, unprocessed_reservations, open_reservations: Vec::new(), reservation_store, simulator }
+        VrmManager { adc_master, unprocessed_reservations, open_reservations: Arc::new(RwLock::new(HashSet::new())), reservation_store, simulator }
     }
 
     pub fn init_vrm_system(
@@ -49,6 +53,10 @@ impl VrmManager {
         registry: RegistryClient,
         reservation_store: ReservationStore,
     ) -> Self {
+        let open_reservations = Arc::new(RwLock::new(HashSet::new()));
+        let listener = Arc::new(VrmStateListener::new(open_reservations.clone()));
+        reservation_store.add_listener(listener);
+
         let mut proxies: HashMap<ComponentId, VrmComponentProxy> = HashMap::new();
 
         // Setup AcI Proxies (spawn all in own thread)
@@ -177,6 +185,43 @@ impl VrmManager {
         }
 
         // Step 2: Reserve
-        let reserve_id = self.adc_master.reserve(process_res_id, use_master_schedule.clone());
+        self.adc_master.reserve(process_res_id, use_master_schedule.clone());
+
+        if self.reservation_store.get_state(process_res_id) != ReservationState::ReserveAnswer {
+            log::info!("Reservation {:?} could not be reserved. ", self.reservation_store.get_name_for_key(process_res_id));
+            return;
+        }
+
+        if self.reservation_store.is_reservation_proceeding(process_res_id, ReservationProceeding::Reserve) {
+            log::info!("Reservation {:?} canceled by user after reserve.", self.reservation_store.get_name_for_key(process_res_id));
+            return;
+        }
+
+        // Step 3: Commit or Delete Reservation
+        if self.reservation_store.is_reservation_proceeding(process_res_id, ReservationProceeding::Commit) {
+            self.adc_master.commit(process_res_id);
+
+            if self.reservation_store.get_state(process_res_id) == ReservationState::Committed {
+                // Manually add to open reservations on success
+                let mut guard = self.open_reservations.write().unwrap();
+                guard.insert(process_res_id);
+                log::info!("Reservation {:?} was committed successful.", self.reservation_store.get_name_for_key(process_res_id));
+            } else {
+                log::info!("Reservation {:?} could not be committed.", self.reservation_store.get_name_for_key(process_res_id));
+            }
+        } else if self.reservation_store.is_reservation_proceeding(process_res_id, ReservationProceeding::Delete) {
+            self.adc_master.delete(process_res_id, None);
+            if self.reservation_store.get_state(process_res_id) == ReservationState::Deleted {
+                log::info!("Reservation {:?} was successfully deleted by the user.", self.reservation_store.get_name_for_key(process_res_id));
+            } else {
+                log::info!("Reservation {:?} could not be deleted.", self.reservation_store.get_name_for_key(process_res_id));
+            }
+        } else {
+            log::error!(
+                "Unknown Request ProceedingState {:?} for Reservation {:?}.",
+                self.reservation_store.get_reservation_proceeding(process_res_id),
+                self.reservation_store.get_name_for_key(process_res_id)
+            );
+        }
     }
 }

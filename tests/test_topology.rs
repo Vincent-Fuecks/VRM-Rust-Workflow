@@ -91,7 +91,7 @@ fn test_setup_routers() {
 fn test_setup_network_links() {
     let dto = create_vrm_test_dto();
     let simulator: Arc<dyn SystemSimulator> = Arc::new(MockSimulator::new(0));
-    let reservation_store = ReservationStore::new(None);
+    let reservation_store = ReservationStore::new();
     let aci_id = AciId::new("Test_setup_network_links_id");
     let (links, importance_db) = NetworkTopology::setup_network_links(&dto, aci_id, simulator, reservation_store);
 
@@ -116,7 +116,7 @@ fn test_setup_network_links() {
 fn test_setup_adjacency_matrix() {
     let dto = create_vrm_test_dto();
     let simulator: Arc<dyn SystemSimulator> = Arc::new(MockSimulator::new(0));
-    let reservation_store = ReservationStore::new(None);
+    let reservation_store = ReservationStore::new();
     let aci_id = AciId::new("test_setup_adjacency_matrix");
 
     let (links, _) = NetworkTopology::setup_network_links(&dto, aci_id, simulator, reservation_store);
@@ -151,7 +151,7 @@ fn test_setup_adjacency_matrix() {
 fn test_full_topology_creation_integration() {
     let dto = create_vrm_test_dto();
     let simulator: Arc<dyn SystemSimulator> = Arc::new(MockSimulator::new(0));
-    let reservation_store = ReservationStore::new(None);
+    let reservation_store = ReservationStore::new();
     let rms_id = AciId::new("test_rms");
     let result = NetworkTopology::try_from((dto, simulator, rms_id, reservation_store));
 

@@ -51,20 +51,26 @@ struct StoreInner {
 
     // TODO Probably rework of mechanism is needed.
     /// Listener for changes
-    listener: Arc<dyn NotificationListener>,
+    listeners: Vec<Arc<dyn NotificationListener>>,
 }
 
 impl ReservationStore {
-    pub fn new(listener: Option<Arc<dyn NotificationListener>>) -> Self {
+    pub fn new() -> Self {
         Self {
             inner: Arc::new(RwLock::new(StoreInner {
                 slots: SlotMap::with_key(),
                 name_index: HashMap::new(),
                 client_index: HashMap::new(),
                 handler_index: HashMap::new(),
-                listener: listener.unwrap_or_else(|| Arc::new(NoOpenListener)),
+                listeners: Vec::new(),
             })),
         }
+    }
+
+    /// This allows multiple components to subscribe to state changes.
+    pub fn add_listener(&self, listener: Arc<dyn NotificationListener>) {
+        let mut guard = self.inner.write().expect("RwLock poisoned");
+        guard.listeners.push(listener);
     }
 
     /// Adds Reservation to ReservationStore.
@@ -502,10 +508,9 @@ impl ReservationStore {
     }
 
     /// Update the state of a reservation.
-    /// Triggers the notification listener.
+    /// Triggers the notification listeners.
     pub fn update_state(&self, id: ReservationId, new_state: ReservationState) {
-        // We scope the lock to be as short as possible
-        let notify = {
+        let should_notify = {
             let guard = self.inner.read().unwrap();
             if let Some(res_lock) = guard.slots.get(id) {
                 let mut res = res_lock.write().unwrap();
@@ -516,9 +521,15 @@ impl ReservationStore {
             }
         };
 
-        if notify {
-            let guard = self.inner.read().unwrap();
-            guard.listener.on_reservation_change(id, new_state);
+        if should_notify {
+            let listeners = {
+                let guard = self.inner.read().unwrap();
+                guard.listeners.clone()
+            };
+
+            for listener in listeners {
+                listener.on_reservation_change(id, new_state);
+            }
         }
     }
 
@@ -551,6 +562,7 @@ impl ReservationStore {
     /// This creates a deep copy of all reservations.
     /// This means a Scheduler can work on the Shadow Store using the same Keys
     /// as the Master Store, but changes will not affect the Master.
+    /// Note: ReservationStore snapshot has no active Listeners
     pub fn snapshot(&self) -> ReservationStore {
         let guard = self.inner.read().unwrap();
 
@@ -561,7 +573,7 @@ impl ReservationStore {
             name_index: guard.name_index.clone(),
             client_index: guard.client_index.clone(),
             handler_index: guard.handler_index.clone(),
-            listener: Arc::new(NoOpenListener), // TODO Shadows SlottedSchedule should not notify anyone or?
+            listeners: guard.listeners.clone(),
         };
 
         ReservationStore { inner: Arc::new(RwLock::new(new_inner)) }

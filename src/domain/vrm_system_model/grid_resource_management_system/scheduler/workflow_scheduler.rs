@@ -69,11 +69,6 @@ pub trait WorkflowScheduler: std::fmt::Debug + Any + Send {
         store.update_state(workflow_id, ReservationState::Committed);
     }
 
-    /// Transitions a workflow to a `ReservationState::Rejected` state following a scheduling or resource failure.
-    fn handle_failure(&mut self, workflow_id: ReservationId) {
-        self.get_reservation_store().update_state(workflow_id, ReservationState::Rejected);
-    }
-
     /// Deletes a previously submitted workflow from all booked resource providers and sets all reservations in to `ReservationState::Deleted.
     fn delete(&mut self, workflow: &mut Workflow, adc: &mut ADC) {
         for reservation_in in workflow.get_all_reservation_ids() {

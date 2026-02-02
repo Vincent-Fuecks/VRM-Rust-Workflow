@@ -1,10 +1,9 @@
 use crate::api::vrm_system_model_dto::aci_dto::AcIDto;
 use crate::domain::simulator::simulator::SystemSimulator;
 use crate::domain::vrm_system_model::grid_resource_management_system::vrm_component_trait::VrmComponent;
-use crate::domain::vrm_system_model::reservation::probe_reservations::{self, ProbeReservations};
+use crate::domain::vrm_system_model::reservation::probe_reservations::ProbeReservations;
 use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationState};
 use crate::domain::vrm_system_model::reservation::reservation_store::{ReservationId, ReservationStore};
-use crate::domain::vrm_system_model::reservation::reservations::Reservations;
 use crate::domain::vrm_system_model::rms::advance_reservation_trait::AdvanceReservationRms;
 use crate::domain::vrm_system_model::rms::rms_type::RmsType;
 use crate::domain::vrm_system_model::utils::id::{AciId, AdcId, ClientId, ComponentId, RouterId, ShadowScheduleId};
@@ -184,7 +183,6 @@ impl VrmComponent for AcI {
                 log::info!("No prior reserve for commit of {:?}. Attempting instant allocation.", reservation_id);
 
                 // Check if RMS can handle it
-
                 if !self.rms_system.can_handle_aci_request(self.reservation_store.clone(), reservation_id) {
                     self.reservation_store.update_state(reservation_id, ReservationState::Rejected);
                     self.log_stat("Commit".to_string(), reservation_id, arrival_time);
@@ -235,6 +233,7 @@ impl VrmComponent for AcI {
     }
 
     fn commit_shadow_schedule(&mut self, shadow_schedule_id: ShadowScheduleId) -> bool {
+        // TODO Add ReservationStore Listener
         let shadow_schedule_committed_reservations =
             self.shadow_schedule_reservations.get_mut(&shadow_schedule_id).expect("Committed Reservations where not found.").clone();
 
@@ -272,7 +271,7 @@ impl VrmComponent for AcI {
         return false;
     }
 
-    fn delete_task(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> ReservationId {
+    fn delete(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> ReservationId {
         let arrival_time = self.simulator.get_current_time_in_ms();
         let container;
 

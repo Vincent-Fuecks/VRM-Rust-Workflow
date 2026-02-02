@@ -48,49 +48,6 @@ impl ADC {
         todo!()
     }
 
-    /// Performs the commit operation at the specific underlying component.
-    ///
-    /// This is used internally for both atomic tasks and sub-tasks within a workflow.
-    /// If the component is a dummy/internal component, the state is updated locally.
-    /// Returns `true` if the component successfully committed the reservation.
-    pub fn commit_at_component(&mut self, reservation_id: ReservationId) -> bool {
-        // Find responsible component
-        let Some(component_id) = self.manager.get_handler_id(reservation_id) else {
-            let name = self.reservation_store.get_name_for_key(reservation_id).unwrap_or(ReservationName::new("Does not exist!"));
-            log::error!(
-                "ReservationHasNoHandlerId: Committing reservation {name} by ADC: {} failed, \
-             because reservation has no assigned handler_id.",
-                self.id
-            );
-            return false;
-        };
-
-        // Is dummy task/ "Internal task"
-        if component_id == *DUMMY_COMPONENT_ID {
-            self.reservation_store.update_state(reservation_id, ReservationState::Committed);
-            return true;
-        }
-
-        match self.manager.get_component_mut(component_id.clone()) {
-            Some(container) => {
-                if container.vrm_component.commit(reservation_id) {
-                    return true;
-                } else {
-                    // If commit fails, clean up local schedule and global mapping
-                    container.schedule.delete_reservation(reservation_id);
-                    self.reservation_store.update_state(reservation_id, ReservationState::Rejected);
-                    // TODO Also remove from VrmComponentManager tracking?
-                    return false;
-                }
-            }
-
-            None => {
-                log::error!("Component: {component_id} was not found in the ComponentManager.");
-                return false;
-            }
-        }
-    }
-
     /// Submits a task to the first VrmComponent that accepts the reservation based on the defined `VrmComponentOrder`.
     ///
     /// Updates the `TODO` to maintain the mapping between the
@@ -158,8 +115,7 @@ impl ADC {
             let res_snapshot = self.reservation_store.get_reservation_snapshot(reservation_id).unwrap();
 
             if self.manager.can_component_handel(component_id.clone(), res_snapshot) {
-                let probe_reservations =
-                    self.manager.get_component_mut(component_id.clone()).unwrap().vrm_component.probe(reservation_id, shadow_schedule_id.clone());
+                let probe_reservations = self.manager.get_vrm_component_mut(component_id.clone()).probe(reservation_id, shadow_schedule_id.clone());
 
                 // Do not trust answer of lower GridComponent
                 // Validation of probe answers
@@ -217,12 +173,6 @@ impl ADC {
         shadow_schedule_id: Option<ShadowScheduleId>,
     ) {
         todo!()
-    }
-    /// Finalizes the allocation of subtasks for a completed workflow scheduling process.
-    ///
-    /// This merges the temporary transaction map created by teh scheduler into the global system state.
-    pub fn register_workflow_subtasks(&mut self, workflow_res_id: ReservationId, grid_component_res_database: &HashMap<ReservationId, ComponentId>) {
-        self.manager.register_workflow_allocation(workflow_res_id, grid_component_res_database.clone());
     }
 
     pub fn log_state_probe(&mut self, num_of_answers: i64, arrival_time_at_aci: i64) {

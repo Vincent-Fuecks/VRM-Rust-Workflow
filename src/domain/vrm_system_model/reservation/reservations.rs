@@ -23,7 +23,12 @@ impl Reservations {
     // TODO maybe insert Real Reservation into store?
     // TODO Change handler_id?
     pub fn insert(&mut self, id: ReservationId) {
-        self.reservations.insert(id);
+        if self.reservations.insert(id) {
+            panic!(
+                "ErrorSchedulerReservationWasSubmittedMultipleTimes: The Reservation {:?} was already present in the schedule.",
+                self.reservation_store.get_name_for_key(id)
+            )
+        }
     }
 
     // TODO maybe del Real Reservation into store?

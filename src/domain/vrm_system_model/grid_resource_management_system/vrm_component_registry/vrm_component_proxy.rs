@@ -94,7 +94,7 @@ impl VrmComponent for VrmComponentProxy {
         self.call(|tx| VrmMessage::Commit { reservation_id, reply_to: tx })
     }
 
-    fn delete_task(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> ReservationId {
+    fn delete(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> ReservationId {
         self.call(|tx| VrmMessage::DeleteTask { reservation_id, shadow_schedule_id, reply_to: tx })
     }
 

@@ -11,7 +11,7 @@ fn test_complex_fragmentation_scenario() {
     // Create schedule with enough slots (indices 0 to 3 require 4 slots)
 
     let simulator: Arc<dyn SystemSimulator> = Arc::new(MockSimulator::new(0));
-    let reservation_store: ReservationStore = ReservationStore::new(None);
+    let reservation_store: ReservationStore = ReservationStore::new();
 
     let mut schedule = SlottedSchedule::new(SlottedScheduleId::new("Test-SlottedSchedule"), 4, 2, capacity, true, simulator, reservation_store);
 
@@ -43,7 +43,7 @@ fn test_complex_fragmentation_scenario() {
 fn test_zero_fragmentation_all_free() {
     let capacity = 5;
     let simulator: Arc<dyn SystemSimulator> = Arc::new(MockSimulator::new(0));
-    let reservation_store: ReservationStore = ReservationStore::new(None);
+    let reservation_store: ReservationStore = ReservationStore::new();
 
     // 10 slots
     let schedule = SlottedSchedule::new(SlottedScheduleId::new("Test-SlottedSchedule-02"), 10, 2, capacity, true, simulator, reservation_store);
@@ -58,7 +58,7 @@ fn test_zero_fragmentation_all_free() {
 fn test_zero_fragmentation_full_load() {
     let capacity = 4;
     let simulator: Arc<dyn SystemSimulator> = Arc::new(MockSimulator::new(0));
-    let reservation_store: ReservationStore = ReservationStore::new(None);
+    let reservation_store: ReservationStore = ReservationStore::new();
 
     let mut schedule = SlottedSchedule::new(SlottedScheduleId::new("Test-SlottedSchedule-02"), 5, 2, capacity, true, simulator, reservation_store);
 

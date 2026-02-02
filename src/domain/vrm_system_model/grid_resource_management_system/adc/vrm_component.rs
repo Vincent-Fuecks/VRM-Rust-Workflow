@@ -55,42 +55,108 @@ impl VrmComponent for ADC {
     }
 
     fn commit(&mut self, reservation_id: ReservationId) -> bool {
+        let arrival_time = self.simulator.get_current_time_in_ms();
+        log::info!("ADC {} commits reservation {:?}.", self.id, self.reservation_store.get_name_for_key(reservation_id));
+
+        // Get ComponentId where Reservation is reserved
+        // Most like likely happen before if not reserve now.
+        if !self.manager.is_reservation_reserved(reservation_id) {
+            log::info!(
+                "There was no reserve performed for the commit of reservation {:?}, try to reserve reservation now.",
+                self.reservation_store.get_name_for_key(reservation_id)
+            );
+
+            // Can VrmManagerHandel request
+            if !self.manager.can_handel(reservation_id) {
+                self.reservation_store.update_state(reservation_id, ReservationState::Rejected);
+                log::debug!(
+                    "Commit at ADC {} failed of Reservation {:?} was rejected, because VrmComponents can not handel reservation and no reservation was done prior.",
+                    self.id,
+                    self.reservation_store.get_name_for_key(reservation_id)
+                );
+                self.log_stat("Commit".to_string(), reservation_id, arrival_time);
+                return false;
+            }
+
+            // Reserve now reservation
+            self.reserve(reservation_id, None);
+
+            if !self.reservation_store.is_reservation_state_at_least(reservation_id, ReservationState::ReserveAnswer) {
+                log::debug!(
+                    "Commit at ADC {} failed of Reservation {:?} was rejected, because VrmComponents can not handel reservation and no reservation was done prior.",
+                    self.id,
+                    self.reservation_store.get_name_for_key(reservation_id)
+                );
+
+                self.log_stat("Commit".to_string(), reservation_id, arrival_time);
+                return false;
+            }
+        }
+
+        // Get ComponentId where Reservation was reserved
+        let component_id = if self.manager.is_reservation_reserved(reservation_id) {
+            self.manager.get_reserved_component(reservation_id).unwrap()
+        } else {
+            self.reservation_store.update_state(reservation_id, ReservationState::Rejected);
+            log::error!(
+                "ErrorInReservationProcess: Commit at ADC {} failed of Reservation {:?}. There was no reserve at a 
+                    VrmComponent for the reservation found. Should happen before.",
+                self.id,
+                self.reservation_store.get_name_for_key(reservation_id)
+            );
+            return false;
+        };
+
+        // Perform Commit at VrmComponentManager (Single or Workflow Reservation?)
         if self.reservation_store.is_workflow(reservation_id) {
             let sub_ids = self.workflow_scheduler.as_mut().unwrap().get_sub_ids(reservation_id);
 
-            for res_id in sub_ids {
-                let component_answer = self.commit_at_component(res_id);
-                let state = self.reservation_store.get_state(res_id);
+            for sub_res_id in sub_ids.clone() {
+                let component_answer = self.manager.commit_at_component(sub_res_id, component_id.clone());
+                let state = self.reservation_store.get_state(sub_res_id);
 
                 // Check if this specific sub-component succeeded
                 if state != ReservationState::Committed || !component_answer {
-                    log::error!("Sub-task {:?} failed in workflow {:?}", res_id, reservation_id);
-                    self.workflow_scheduler.as_mut().unwrap().handle_failure(reservation_id);
+                    log::error!("Sub-task {:?} failed in workflow {:?}", sub_res_id, reservation_id);
+                    let mut clean_vrm_of_res_ids = sub_ids.clone();
+                    clean_vrm_of_res_ids.push(reservation_id);
+
+                    self.manager.handle_commit_failure(clean_vrm_of_res_ids);
                     return false;
                 }
             }
 
             self.workflow_scheduler.as_mut().unwrap().finalize_commit(reservation_id);
-            return true;
         } else {
             // Non-workflow atomic job
-            return self.commit_at_component(reservation_id);
+            let is_committed = self.manager.commit_at_component(reservation_id, component_id);
+            if !is_committed {
+                return false;
+            }
         }
+
+        log::debug!("Committed at ADC {} Reservation {:?}.", self.id, self.reservation_store.get_name_for_key(reservation_id));
+
+        self.log_stat("Commit".to_string(), reservation_id, arrival_time);
+        return true;
     }
 
     fn commit_shadow_schedule(&mut self, shadow_schedule_id: ShadowScheduleId) -> bool {
-        todo!()
+        self.manager.commit_shadow_schedule(shadow_schedule_id)
     }
 
     fn create_shadow_schedule(&mut self, shadow_schedule_id: ShadowScheduleId) -> bool {
-        todo!()
+        self.manager.create_shadow_schedule(shadow_schedule_id)
     }
 
     fn delete_shadow_schedule(&mut self, shadow_schedule_id: ShadowScheduleId) -> bool {
         todo!()
     }
 
-    fn delete_task(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> ReservationId {
+    fn delete(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> ReservationId {
+        let arrival_time = self.simulator.get_current_time_in_ms();
+        log::info!("ADC Delete: Delete on ADC {} the Reservation {:?}", self.id, self.reservation_store.get_name_for_key(reservation_id));
+
         if self.reservation_store.is_workflow(reservation_id) {
             // TODO
             todo!();
@@ -154,6 +220,7 @@ impl VrmComponent for ADC {
     }
 
     fn reserve(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> ReservationId {
+        let arrival_time = self.simulator.get_current_time_in_ms();
         log::debug!(
             "Reserve: At VrmComponent {:?}, ReservationId {:?}, ShadowSchedule {:?}",
             self.id,
@@ -161,21 +228,21 @@ impl VrmComponent for ADC {
             shadow_schedule_id
         );
 
-        let arrival_time = self.simulator.get_current_time_in_ms();
-
-        // Can VrmComponent handle Request?
+        // Can VrmComponents handle Request?
         if !self.manager.can_handel(reservation_id) {
             self.reservation_store.update_state(reservation_id, ReservationState::Rejected);
 
             if shadow_schedule_id.is_none() {
                 self.log_stat("Reserve".to_string(), reservation_id, arrival_time);
             }
+            return reservation_id;
         }
 
         // Perform Reserve
         if self.reservation_store.is_workflow(reservation_id) {
-            // "Option Dance" with WorkflowScheduler should work
+            // "Option Dance" with WorkflowScheduler
             if let Some(mut scheduler) = self.workflow_scheduler.take() {
+                // Performs all reservation tracking like self.manager.not_committed_reservations
                 scheduler.reserve(reservation_id, self);
 
                 self.workflow_scheduler = Some(scheduler);
@@ -185,18 +252,23 @@ impl VrmComponent for ADC {
             }
         } else {
             // Atomic Job
-            let mut transaction_map = HashMap::new();
-            // Try to reserve
-            let res_id = self.submit_task_at_first_grid_component(reservation_id, shadow_schedule_id, &mut transaction_map);
-
-            // If successful, register the allocation (Merge Transaction)
-            if self.reservation_store.is_reservation_state_at_least(res_id, ReservationState::ReserveAnswer) {
-                if let Some(comp_id) = transaction_map.get(&res_id) {
-                    self.manager.register_allocation(res_id, comp_id.clone());
-                }
-            }
-            return res_id;
+            self.manager.reserve_task_at_first_grid_component(reservation_id, shadow_schedule_id.clone(), self.vrm_component_order);
         }
-        todo!()
+
+        // Check reservation
+        if self.reservation_store.is_reservation_state_at_least(reservation_id, ReservationState::ReserveAnswer) {
+            self.reservation_store.update_state(reservation_id, ReservationState::Rejected);
+
+            if shadow_schedule_id.is_none() {
+                self.log_stat("Reserve".to_string(), reservation_id, arrival_time);
+            }
+
+            return reservation_id;
+        }
+
+        if shadow_schedule_id.is_none() {
+            self.log_stat("Reserve".to_string(), reservation_id, arrival_time);
+        }
+        return reservation_id;
     }
 }

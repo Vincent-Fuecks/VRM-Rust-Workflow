@@ -128,7 +128,7 @@ pub trait VrmComponent: std::fmt::Debug {
     /// # Returns
     /// A `ReservationId` indicating the final status. Success is confirmed if
     /// the state of the corresponding reservation is `ReservationState::Deleted`.
-    fn delete_task(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> ReservationId;
+    fn delete(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> ReservationId;
 
     /// Calculates the **Satisfaction Index** for a specific time window.
     ///

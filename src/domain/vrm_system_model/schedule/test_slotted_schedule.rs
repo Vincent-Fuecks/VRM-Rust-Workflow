@@ -76,7 +76,7 @@ impl ReservationTrait for TestReservation {
 // --- Helper Functions ---
 
 fn create_schedule(capacity: i64, slots: i64, simulator: Arc<MockSimulator>) -> (SlottedSchedule, ReservationStore) {
-    let store = ReservationStore::new(None);
+    let store = ReservationStore::new();
 
     let schedule = SlottedSchedule::new(
         SlottedScheduleId::new("test_schedule"),
@@ -223,7 +223,7 @@ fn test_get_fragmentation() {
 #[test]
 fn test_update() {
     // Setup with simulator time 0
-    let store = ReservationStore::new(None);
+    let store = ReservationStore::new();
 
     let time_lock = Arc::new(RwLock::new(0));
     let sim = Arc::new(SharedMockSimulator { time: time_lock.clone() });

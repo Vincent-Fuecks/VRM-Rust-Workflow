@@ -69,7 +69,7 @@ fn test_topology_case_1_complex_dag() {
 
     let edges = vec![(1, 2), (1, 3), (1, 4), (5, 1), (2, 4), (2, 3), (3, 5), (4, 5)];
     let dto = create_custom_topology_dto(edges);
-    let reservation_store = ReservationStore::new(None);
+    let reservation_store = ReservationStore::new();
 
     let topology = NetworkTopology::try_from((dto, simulator, AciId::new("case_1"), reservation_store)).unwrap();
 
@@ -100,7 +100,7 @@ fn test_topology_case_2_linear_chain() {
     let edges = vec![(1, 2), (2, 3), (3, 4), (4, 5)];
     let dto = create_custom_topology_dto(edges);
     let simulator: Arc<dyn SystemSimulator> = Arc::new(MockSimulator::new(0));
-    let reservation_store = ReservationStore::new(None);
+    let reservation_store = ReservationStore::new();
 
     let topology = NetworkTopology::try_from((dto, simulator, AciId::new("case_2"), reservation_store)).unwrap();
 
@@ -126,7 +126,7 @@ fn test_topology_case_3_fully_connected() {
     }
     let dto = create_custom_topology_dto(edges);
     let simulator: Arc<dyn SystemSimulator> = Arc::new(MockSimulator::new(0));
-    let reservation_store = ReservationStore::new(None);
+    let reservation_store = ReservationStore::new();
 
     let topology = NetworkTopology::try_from((dto, simulator, AciId::new("case_3"), reservation_store)).unwrap();
 
@@ -166,7 +166,7 @@ fn test_topology_case_4_disconnected_groups() {
 
     let dto = create_custom_topology_dto(edges);
     let simulator: Arc<dyn SystemSimulator> = Arc::new(MockSimulator::new(0));
-    let reservation_store = ReservationStore::new(None);
+    let reservation_store = ReservationStore::new();
 
     let topology = NetworkTopology::try_from((dto, simulator, AciId::new("case_4"), reservation_store)).unwrap();
 
@@ -187,7 +187,7 @@ fn test_topology_case_5_empty_network() {
     let edges = vec![];
     let dto = create_custom_topology_dto(edges);
     let simulator: Arc<dyn SystemSimulator> = Arc::new(MockSimulator::new(0));
-    let reservation_store = ReservationStore::new(None);
+    let reservation_store = ReservationStore::new();
 
     // Should not panic, but create an empty topology
     let topology = NetworkTopology::try_from((dto, simulator, AciId::new("case_5"), reservation_store)).unwrap();
@@ -212,7 +212,7 @@ fn test_topology_case_6_single_node_no_links() {
     };
 
     let simulator: Arc<dyn SystemSimulator> = Arc::new(MockSimulator::new(0));
-    let reservation_store = ReservationStore::new(None);
+    let reservation_store = ReservationStore::new();
 
     let topology = NetworkTopology::try_from((dto, simulator, AciId::new("case_6"), reservation_store)).unwrap();
 
@@ -226,7 +226,7 @@ fn test_topology_case_7_cycles() {
 
     let dto = create_custom_topology_dto(edges);
     let simulator: Arc<dyn SystemSimulator> = Arc::new(MockSimulator::new(0));
-    let reservation_store = ReservationStore::new(None);
+    let reservation_store = ReservationStore::new();
 
     let topology = NetworkTopology::try_from((dto, simulator, AciId::new("case_7"), reservation_store)).unwrap();
 

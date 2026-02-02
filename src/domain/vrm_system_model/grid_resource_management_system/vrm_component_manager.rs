@@ -5,20 +5,21 @@ use crate::domain::vrm_system_model::grid_resource_management_system::vrm_compon
 use crate::domain::vrm_system_model::reservation::probe_reservations::ProbeReservations;
 use crate::domain::vrm_system_model::reservation::reservation::Reservation;
 use crate::domain::vrm_system_model::reservation::reservation::ReservationState;
-use crate::domain::vrm_system_model::reservation::reservation_store;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationId;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationStore;
-use crate::domain::vrm_system_model::reservation::reservations::Reservations;
 use crate::domain::vrm_system_model::schedule::slotted_schedule::SlottedSchedule;
 use crate::domain::vrm_system_model::scheduler_trait::Schedule;
 use crate::domain::vrm_system_model::utils::id::RouterId;
 use crate::domain::vrm_system_model::utils::id::{AdcId, ComponentId, ShadowScheduleId, SlottedScheduleId};
 use crate::domain::vrm_system_model::utils::load_buffer::LoadMetric;
+use crate::domain::vrm_system_model::utils::statistics::ANALYTICS_TARGET;
 use lazy_static::lazy_static;
 use rand::rng;
 use rand::seq::SliceRandom;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 lazy_static! {
     pub static ref DUMMY_COMPONENT_ID: ComponentId = ComponentId::new("ADC INTERNAL JOB");
@@ -107,7 +108,7 @@ impl VrmComponentContainer {
 #[derive(Debug)]
 pub struct VrmComponentManager {
     /// The ID of the ADC owning this manager.
-    adc_id: AdcId,
+    pub adc_id: AdcId,
 
     /// Map of `VrmComponentId` to their container wrappers.
     pub vrm_components: HashMap<ComponentId, VrmComponentContainer>,
@@ -115,6 +116,12 @@ pub struct VrmComponentManager {
     // --- Reservation Tracking (The "Who has What") ---
     /// Maps a `ReservationId` (Atomic Job or Workflow Subtask) to the `VrmComponentId` that handles it.
     pub res_to_vrm_component: HashMap<ReservationId, ComponentId>,
+
+    pub committed_reservations: HashMap<ReservationId, ComponentId>,
+
+    pub not_committed_reservations: HashMap<ReservationId, ComponentId>,
+
+    pub shadow_schedule_reservations: HashMap<ShadowScheduleId, (HashMap<ReservationId, ComponentId>, ReservationStore)>,
 
     /// Maps a `WorkflowId` (Parent) to a list of its sub-reservations (Nodes and Links).
     pub workflow_subtasks: HashMap<ReservationId, Vec<ReservationId>>,
@@ -132,7 +139,9 @@ pub struct VrmComponentManager {
     registration_counter: usize,
 
     /// Is used to create an empty Reservations struct as return value for an unsuccessful probe request
-    reservation_store: ReservationStore,
+    pub reservation_store: ReservationStore,
+
+    pub simulator: Arc<dyn SystemSimulator>,
 }
 
 impl VrmComponentManager {
@@ -176,35 +185,89 @@ impl VrmComponentManager {
             adc_id,
             vrm_components,
             res_to_vrm_component: HashMap::new(),
+            committed_reservations: HashMap::new(),
+            not_committed_reservations: HashMap::new(),
+            shadow_schedule_reservations: HashMap::new(),
             workflow_subtasks: HashMap::new(),
             reverse_workflow_subtasks: HashMap::new(),
             total_link_capacity: manager_total_link_capacity,
             link_resource_count: manager_link_resource_count,
             registration_counter,
             reservation_store: reservation_store.clone(),
+            simulator: simulator.clone(),
         }
+    }
+
+    pub fn get_vrm_component_container_mut(&mut self, component_id: ComponentId) -> &mut VrmComponentContainer {
+        match self.vrm_components.get_mut(&component_id) {
+            Some(container) => container,
+            None => panic!(
+                "ErrorFailedToGetVrmComponentContainer: In the VrmComponentManager of ADC {}, was the ComponentId {} not found.",
+                self.adc_id,
+                component_id.clone()
+            ),
+        }
+    }
+
+    pub fn get_vrm_component_mut(&mut self, component_id: ComponentId) -> &mut Box<dyn VrmComponent + Send + 'static> {
+        match self.vrm_components.get_mut(&component_id) {
+            Some(container) => &mut container.vrm_component,
+            None => panic!(
+                "ErrorFailedToGetVrmComponentContainer: In the VrmComponentManager of ADC {}, was the ComponentId {} not found.",
+                self.adc_id,
+                component_id.clone()
+            ),
+        }
+    }
+
+    pub fn is_reservation_reserved(&self, reservation_id: ReservationId) -> bool {
+        self.not_committed_reservations.contains_key(&reservation_id)
+    }
+
+    pub fn get_reserved_component(&self, reservation_id: ReservationId) -> Option<ComponentId> {
+        self.not_committed_reservations.get(&reservation_id).cloned()
     }
 
     // --- Tracking Methods ---
     /// Registers a mapping for a single reservation (Atomic Job).
-    pub fn register_allocation(&mut self, reservation_id: ReservationId, component_id: ComponentId) {
-        self.res_to_vrm_component.insert(reservation_id, component_id);
+    pub fn register_allocation(&mut self, reservation_id: ReservationId, component_id: ComponentId) -> Option<ComponentId> {
+        self.res_to_vrm_component.insert(reservation_id, component_id)
     }
 
     /// Merges a "transaction map" (from a Workflow Scheduler) into the global state.
-    /// This corresponds to `ADCcore.registerWorkflowSubjobs` in Java.
-    pub fn register_workflow_allocation(&mut self, workflow_id: ReservationId, allocations: HashMap<ReservationId, ComponentId>) {
+    pub fn register_workflow_subtasks(&mut self, workflow_id: ReservationId, allocations: &HashMap<ReservationId, ComponentId>) {
         let subtask_ids: Vec<ReservationId> = allocations.keys().cloned().collect();
 
         // 1. Merge the allocation map (Who has what)
-        self.res_to_vrm_component.extend(allocations);
+        self.res_to_vrm_component.extend(allocations.clone());
 
         // 2. Track relationship: Parent -> Children
         self.workflow_subtasks.insert(workflow_id.clone(), subtask_ids.clone());
 
         // 3. Track relationship: Child -> Parent
-        for subtask_id in subtask_ids {
+        for subtask_id in subtask_ids.clone() {
             self.reverse_workflow_subtasks.insert(subtask_id, workflow_id.clone());
+        }
+
+        // Check if reserve of all workflow subtask worked correctly
+        for res_id in &subtask_ids {
+            if !self.reservation_store.is_reservation_state_at_least(*res_id, ReservationState::ReserveAnswer) {
+                panic!(
+                    "ErrorVrmComponentManagerWorkflowSubtaskIsNotReserved: The registration of workflow {:?} for ADC {} failed, because workflow subtask {:?} was not successfully reserved (ReservationState is < ReserveAnswer). This suggests that there is an error during the reserve operation of the WorkflowScheduler or the VrmComponent reservation process.",
+                    self.reservation_store.get_name_for_key(workflow_id),
+                    self.adc_id,
+                    self.reservation_store.get_name_for_key(*res_id)
+                );
+            }
+
+            if !self.not_committed_reservations.contains_key(res_id) {
+                panic!(
+                    "ErrorVrmComponentManagerWorkflowSubtaskWasNotAddedToNotCommittedReservations: The registration of workflow {:?} for ADC {} failed, because workflow subtask {:?} was not successfully added to the not_committed_reservations. This suggests that there is an error during the reserve operation of the WorkflowScheduler or the VrmComponent reservation process.",
+                    self.reservation_store.get_name_for_key(workflow_id),
+                    self.adc_id,
+                    self.reservation_store.get_name_for_key(*res_id)
+                );
+            }
         }
     }
 
@@ -242,9 +305,6 @@ impl VrmComponentManager {
     pub fn get_component_router_list(&self, component_id: ComponentId) -> Vec<RouterId> {
         self.vrm_components.get(&component_id).unwrap();
         todo!()
-    }
-    pub fn get_component_mut(&mut self, component_id: ComponentId) -> Option<&mut VrmComponentContainer> {
-        self.vrm_components.get_mut(&component_id)
     }
 
     pub fn can_component_handel(&self, component_id: ComponentId, res: Reservation) -> bool {
@@ -710,7 +770,15 @@ impl VrmComponentManager {
         shadow_schedule_id: Option<ShadowScheduleId>,
     ) -> ReservationId {
         match self.vrm_components.get_mut(&component_id) {
-            Some(container) => container.vrm_component.reserve(reservation_id, shadow_schedule_id),
+            Some(container) => {
+                container.vrm_component.reserve(reservation_id, shadow_schedule_id);
+
+                if self.reservation_store.is_reservation_state_at_least(reservation_id, ReservationState::ReserveAnswer) {
+                    self.not_committed_reservations.insert(reservation_id, component_id);
+                }
+
+                return reservation_id;
+            }
             None => {
                 log::error!(
                     "ComponentManagerHasNotFoundGridComponent: ComponentManager of ADC {}, requested component {} for reserve request of reservation {:?} on shadow_schedule {:?}",
@@ -736,6 +804,64 @@ impl VrmComponentManager {
                     reservation_id,
                 );
             }
+        }
+    }
+}
+
+impl VrmComponentManager {
+    pub fn log_stat(&mut self, command: String, reservation_id: ReservationId, arrival_time_at_aci: i64) {
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        let processing_time = self.simulator.get_current_time_in_ms() - arrival_time_at_aci;
+
+        if let Some(res_handle) = self.reservation_store.get(reservation_id) {
+            let (start, end, res_name, capacity, workload, state, proceeding, num_tasks) = {
+                let res = res_handle.read().unwrap();
+
+                let start = res.get_base_reservation().get_assigned_start();
+                let end = res.get_base_reservation().get_assigned_end();
+                let name = res.get_base_reservation().get_name().clone();
+                let cap = res.get_base_reservation().get_reserved_capacity();
+                let workload = res.get_base_reservation().get_task_duration() * cap;
+                let state = res.get_base_reservation().get_state();
+                let proceeding = res.get_base_reservation().get_reservation_proceeding();
+
+                // TODO Java implementation also proceeded workflows if so, num_task should not be always be 1 (implement get_task_count())
+                let tasks = 42;
+
+                (start, end, name, cap, workload, state, proceeding, tasks)
+            };
+
+            let load_metric = self.get_load_metric(start, end, None);
+
+            tracing::info!(
+                target: ANALYTICS_TARGET,
+                Time = now,
+                LogDescription = "AcI Operation finished",
+                ComponentType = %self.adc_id.clone(),
+                ComponentUtilization = load_metric.utilization,
+                ComponentCapacity = load_metric.possible_capacity,
+                ComponentFragmentation = self.get_system_satisfaction(None),
+                ReservationName = %res_name,
+                ReservationCapacity = capacity,
+                ReservationWorkload = workload,
+                ReservationState = ?state,
+                ReservationProceeding = ?proceeding,
+                NumberOfTasks = num_tasks,
+                Command = command,
+                ProcessingTime = processing_time,
+            );
+        } else {
+            // Handling in case reservation is missing (e.g. deleted/cleaned up)
+
+            tracing::warn!(
+                target: ANALYTICS_TARGET,
+                Time = now,
+                LogDescription = "AcI Operation finished (Reservation Missing/Deleted)",
+                ComponentType = %self.adc_id,
+                ReservationId = ?reservation_id,
+                Command = command,
+                ProcessingTime = processing_time,
+            );
         }
     }
 }

@@ -132,7 +132,7 @@ impl WorkflowScheduler for HEFTSyncWorkflowScheduler {
                 }
 
                 // Success: Submit done reservations into global state ADC -> VrmComponentManager
-                adc.register_workflow_subtasks(workflow_res_id, &grid_component_res_database);
+                adc.manager.register_workflow_subtasks(workflow_res_id, &grid_component_res_database);
                 workflow.set_state(ReservationState::ReserveAnswer);
                 return true;
             }

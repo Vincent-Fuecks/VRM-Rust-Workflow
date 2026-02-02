@@ -75,7 +75,7 @@ impl RegistryClient {
                     let _ = reply_to.send(component.commit(reservation_id));
                 }
                 VrmMessage::DeleteTask { reservation_id, shadow_schedule_id, reply_to } => {
-                    let _ = reply_to.send(component.delete_task(reservation_id, shadow_schedule_id));
+                    let _ = reply_to.send(component.delete(reservation_id, shadow_schedule_id));
                 }
                 VrmMessage::GetSatisfaction { start, end, shadow_schedule_id, reply_to } => {
                     let _ = reply_to.send(component.get_satisfaction(start, end, shadow_schedule_id));

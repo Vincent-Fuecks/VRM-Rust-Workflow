@@ -1,3 +1,4 @@
+use crate::domain::vrm_system_model::reservation::vrm_state_listener::VrmStateListener;
 use crate::domain::vrm_system_model::utils::statistics::AnalyticsSystem;
 use crate::domain::vrm_system_model::vrm_manager::VrmManager;
 
@@ -38,7 +39,8 @@ async fn main() {
 
     let file_path_workflows: &str = "src/data/test/test_workflow_with_simple_co_allocation_graph.json";
     let file_path_vrm: &str = "/home/vincent/Desktop/Repository/VRM-Rust-Workflow/src/data/vrm.json";
-    let reservation_store = ReservationStore::new(None);
+    let reservation_store = ReservationStore::new();
+    reservation_store.add_listener(Arc::new(VrmStateListener::new_empty()));
 
     let vrm_dto = get_vrm_dto(file_path_vrm).expect("Failed to load VRM DTO");
     let simulator_dto = vrm_dto.simulator.clone();
