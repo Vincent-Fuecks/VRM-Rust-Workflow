@@ -63,41 +63,114 @@ impl VrmComponentManager {
     pub fn handle_commit_failure(&mut self, clean_vrm_of_res_ids: Vec<ReservationId>) {
         for reservation_id in &clean_vrm_of_res_ids {
             self.reservation_store.update_state(*reservation_id, ReservationState::Rejected);
-            if !self.delete_task_at_component(reservation_id.clone(), self.res_to_vrm_component.get(reservation_id).unwrap().clone(), None) {
+            if !self.delete_task_at_component(*reservation_id, None) {
                 panic!("Deletion of Committed task failed.");
             }
         }
     }
 
+    /// Creates a new Shadow Schedule environment.
+    ///
+    /// This snapshots the current ReservationStore and Component Mappings and propagates the creation
+    /// to all child components.
     pub fn create_shadow_schedule(&mut self, shadow_schedule_id: ShadowScheduleId) -> bool {
         if self.shadow_schedule_reservations.contains_key(&shadow_schedule_id) {
-            log::error!("VrmComponentManagerShadowScheduleWithIdExistsAlready: The process of creating a new shadow Schedule for the ADC {} with ShadowScheduleId {:?} failed, because the provided ShadowScheduleId already exists, please first delete the other ShadowScheduleId.", self.adc_id, shadow_schedule_id);   
-            return false; 
+            log::error!(
+                "VrmComponentManagerShadowScheduleWithIdExistsAlready: The process of creating a new shadow Schedule for the ADC {} with ShadowScheduleId {:?} failed, because the provided ShadowScheduleId already exists, please first delete the other ShadowScheduleId.",
+                self.adc_id,
+                shadow_schedule_id
+            );
+            return false;
         }
 
-        self.shadow_schedule_reservations.insert(shadow_schedule_id, (HashMap::new(), self.reservation_store.snapshot()));
-        
-        todo!()
+        // 1. Snapshot the local state (ReservationStore and Allocation Map)
+        let shadow_store = self.reservation_store.snapshot();
+        // We clone the current allocation map (Who handles what) to serve as the baseline for the shadow schedule
+        let shadow_map = self.res_to_vrm_component.clone();
+
+        // 2. Propagate creation to all children (VrmComponents)
+        for container in self.vrm_components.values_mut() {
+            if !container.vrm_component.create_shadow_schedule(shadow_schedule_id.clone()) {
+                log::error!("Failed to create shadow schedule on child component {:?}", container.vrm_component.get_id());
+                // In a robust system, we would trigger a rollback here
+                return false;
+            }
+        }
+
+        // 3. Store the shadow context
+        self.shadow_schedule_reservations.insert(shadow_schedule_id, (shadow_map, shadow_store));
+
+        return true;
     }
 
-    pub fn rollback_shadow_schedule(&mut self, shadow_schedule_id: ShadowScheduleId) -> bool {
-        todo!()
-    }
-
-    pub fn commit_shadow_schedule(&mut self, shadow_schedule_id: ShadowScheduleId) -> bool {
-        // TODO Add ReservationStore Listener
-        todo!()
-    }
-
+    /// Discards a Shadow Schedule without applying changes (Rollback).
     pub fn delete_shadow_schedule(&mut self, shadow_schedule_id: ShadowScheduleId) -> bool {
-        todo!()
+        if !self.shadow_schedule_reservations.contains_key(&shadow_schedule_id) {
+            return false;
+        }
+
+        // 1. Propagate deletion to all children
+        for container in self.vrm_components.values_mut() {
+            container.vrm_component.delete_shadow_schedule(shadow_schedule_id.clone());
+        }
+
+        // 2. Remove local shadow context
+        self.shadow_schedule_reservations.remove(&shadow_schedule_id);
+
+        return true;
+    }
+
+    /// Commits the Shadow Schedule to be the new Master Schedule.
+    ///
+    /// This replaces the live state with the shadow state.
+    pub fn commit_shadow_schedule(&mut self, shadow_schedule_id: ShadowScheduleId) -> bool {
+        if !self.shadow_schedule_reservations.contains_key(&shadow_schedule_id) {
+            log::error!("Cannot commit shadow schedule {:?} as it does not exist.", shadow_schedule_id);
+            return false;
+        }
+
+        // 1. Propagate commit to all children first
+        for container in self.vrm_components.values_mut() {
+            if !container.vrm_component.commit_shadow_schedule(shadow_schedule_id.clone()) {
+                log::error!("Child component {:?} failed to commit shadow schedule.", container.vrm_component.get_id());
+                return false;
+            }
+        }
+
+        // 2. Atomic Switch: Replace Master State with Shadow State
+        let (shadow_map, shadow_store) = self.shadow_schedule_reservations.remove(&shadow_schedule_id).unwrap();
+
+        // Update the component mapping (Who handles what)
+        self.res_to_vrm_component = shadow_map;
+
+        // Update the reservation store (The source of truth for reservation states)
+        self.reservation_store = shadow_store;
+
+        // Rebuild derived mappings (committed/not_committed) based on the new store state
+        // This ensures internal consistency after the swap
+        self.committed_reservations.clear();
+        self.not_committed_reservations.clear();
+
+        for (res_id, component_id) in &self.res_to_vrm_component {
+            let state = self.reservation_store.get_state(*res_id);
+            match state {
+                ReservationState::Committed => {
+                    self.committed_reservations.insert(*res_id, component_id.clone());
+                }
+                ReservationState::ReserveAnswer => {
+                    self.not_committed_reservations.insert(*res_id, component_id.clone());
+                }
+                _ => {} // Ignore others or log warning
+            }
+        }
+
+        return true;
     }
 
     /// Probes all available VrmComponents and selects the best candidate based on the provided comparison function.
     ///
     /// This implements a "Best Fit" strategy, useful for optimizing resource utilization or
     /// meeting Earliest Finish Time (EFT) constraints.
-    /// TODO should be moved to VrmComponentManager
     pub fn reserve_task_at_best_vrm_component<F>(
         &mut self,
         reservation_id: ReservationId,
@@ -112,52 +185,80 @@ impl VrmComponentManager {
         let mut order_grid_component_res_database = OrderResVrmComponentDatabase::new(reservation_order, vrm_component_order.get_comparator());
 
         for component_id in self.get_random_ordered_vrm_components() {
-            let res_snapshot = self.reservation_store.get_reservation_snapshot(reservation_id).unwrap();
+            // NOTE: Must access store via shadow context if ID is present,
+            // but for probing we usually assume the store reference in manager is correct
+            // IF we are inside manager. However, manager has 'reservation_store'.
+            // If shadow_schedule is active, we should theoretically use the shadow store for the snapshot.
 
-            if self.can_component_handel(component_id.clone(), res_snapshot) {
-                let probe_reservations = self.get_vrm_component_mut(component_id.clone()).probe(reservation_id, shadow_schedule_id.clone());
-
-                // Do not trust answer of lower GridComponent
-                // Validation of probe answers
-                for prob_reservation_id in probe_reservations.get_ids() {
-                    if self.reservation_store.get_assigned_start(prob_reservation_id)
-                        < self.reservation_store.get_booking_interval_start(prob_reservation_id)
-                        || self.reservation_store.get_assigned_end(prob_reservation_id)
-                            > self.reservation_store.get_booking_interval_end(prob_reservation_id)
-                    {
-                        log::error!("Invalid Answer.");
-                    }
+            let res_snapshot = if let Some(sid) = &shadow_schedule_id {
+                if let Some((_, store)) = self.shadow_schedule_reservations.get(sid) {
+                    store.get_reservation_snapshot(reservation_id)
+                } else {
+                    self.reservation_store.get_reservation_snapshot(reservation_id)
                 }
+            } else {
+                self.reservation_store.get_reservation_snapshot(reservation_id)
+            };
 
-                order_grid_component_res_database.put_all(probe_reservations);
+            if let Some(res) = res_snapshot {
+                if self.can_component_handel(component_id.clone(), res) {
+                    let probe_reservations = self.get_vrm_component_mut(component_id.clone()).probe(reservation_id, shadow_schedule_id.clone());
+
+                    // Validation of probe answers
+                    for prob_reservation_id in probe_reservations.get_ids() {
+                        let (start, end, booking_start, booking_end) = if let Some(sid) = &shadow_schedule_id {
+                            if let Some((_, store)) = self.shadow_schedule_reservations.get(sid) {
+                                (
+                                    store.get_assigned_start(prob_reservation_id),
+                                    store.get_assigned_end(prob_reservation_id),
+                                    store.get_booking_interval_start(prob_reservation_id),
+                                    store.get_booking_interval_end(prob_reservation_id),
+                                )
+                            } else {
+                                (0, 0, 0, 0)
+                            }
+                        } else {
+                            (
+                                self.reservation_store.get_assigned_start(prob_reservation_id),
+                                self.reservation_store.get_assigned_end(prob_reservation_id),
+                                self.reservation_store.get_booking_interval_start(prob_reservation_id),
+                                self.reservation_store.get_booking_interval_end(prob_reservation_id),
+                            )
+                        };
+
+                        if start < booking_start || end > booking_end {
+                            log::error!("Invalid Answer.");
+                        }
+                    }
+
+                    order_grid_component_res_database.put_all(probe_reservations);
+                }
             }
         }
 
         // Choose reservation candidate with EFT and reserve it
+        // Note: sorted_key_set needs a reference to store. The DB uses the one passed.
+        // We might need to adjust the database to accept a store reference if logic requires checking shadow store.
         for reservation_id in order_grid_component_res_database.sorted_key_set(&self) {
             let component_id = order_grid_component_res_database.store.get(&reservation_id).unwrap();
 
-            let candidate_id = self.reserve(component_id.clone(), reservation_id, None);
+            let candidate_id = self.reserve(component_id.clone(), reservation_id, shadow_schedule_id.clone());
 
-            if self.reservation_store.is_reservation_state_at_least(candidate_id, ReservationState::ReserveAnswer) {
-                // Register new schedule Sub-Task
-                // Update grid_component_res_database for rollback and for ADC to keep track
-                // Update Transaction Log
-                if grid_component_res_database.contains_key(&candidate_id) {
-                    log::error!(
-                        "ErrorReservationWasReservedInMultipleGridComponents: The reservation {:?} was multiple times to the GirdComponent {} submitted.",
-                        self.reservation_store.get_name_for_key(candidate_id),
-                        component_id
-                    );
+            let is_reserved = if let Some(sid) = &shadow_schedule_id {
+                if let Some((_, store)) = self.shadow_schedule_reservations.get(sid) {
+                    store.is_reservation_state_at_least(candidate_id, ReservationState::ReserveAnswer)
+                } else {
+                    false
                 }
+            } else {
+                self.reservation_store.is_reservation_state_at_least(candidate_id, ReservationState::ReserveAnswer)
+            };
+
+            if is_reserved {
                 grid_component_res_database.insert(candidate_id, component_id.clone());
 
                 // Update local schedule
                 self.reserve_without_check(component_id.clone(), candidate_id);
-
-                if self.reservation_store.is_reservation_state_at_least(candidate_id, ReservationState::ReserveAnswer) {
-                    log::error!("Reserve of reservation {:?} in local schedule of GridComponent {:?} failed.", candidate_id, component_id);
-                }
                 return Some(candidate_id);
             }
         }
@@ -179,7 +280,17 @@ impl VrmComponentManager {
             if self.can_component_handel(component_id.clone(), res_snapshot) {
                 let reserve_res_id = self.reserve(component_id.clone(), reservation_id, shadow_schedule_id.clone());
 
-                if self.reservation_store.is_reservation_state_at_least(reserve_res_id, ReservationState::ReserveAnswer) {
+                let is_reserved = if let Some(sid) = &shadow_schedule_id {
+                    if let Some((_, store)) = self.shadow_schedule_reservations.get(sid) {
+                        store.is_reservation_state_at_least(reserve_res_id, ReservationState::ReserveAnswer)
+                    } else {
+                        false
+                    }
+                } else {
+                    self.reservation_store.is_reservation_state_at_least(reserve_res_id, ReservationState::ReserveAnswer)
+                };
+
+                if is_reserved {
                     self.update_reserve_tracking(reserve_res_id, component_id.clone(), shadow_schedule_id);
 
                     // Update VrmComponent's local view (schedule) of the underlying VrmComponents
@@ -189,7 +300,15 @@ impl VrmComponentManager {
             }
         }
 
-        self.reservation_store.update_state(reservation_id, ReservationState::Rejected);
+        // Update failure state in appropriate store
+        if let Some(sid) = &shadow_schedule_id {
+            if let Some((_, store)) = self.shadow_schedule_reservations.get(sid) {
+                store.update_state(reservation_id, ReservationState::Rejected);
+            }
+        } else {
+            self.reservation_store.update_state(reservation_id, ReservationState::Rejected);
+        }
+
         return reservation_id;
     }
 
@@ -238,6 +357,10 @@ impl VrmComponentManager {
             let (shadow_not_committed_reservations, shadow_reservation_store) =
                 self.shadow_schedule_reservations.get_mut(&shadow_schedule_id.clone().unwrap()).expect("ErrorVrmManagerShadowScheduleWasNotFound");
 
+            // TODO: In shadow mode, we often use `res_to_vrm_component` (shadow_map) to track everything.
+            // `not_committed_reservations` is technically derived from state.
+            // Here we update the map directly.
+
             let old_value = shadow_not_committed_reservations.insert(reservation_id, component_id.clone());
 
             if !old_value.is_none() {
@@ -251,61 +374,90 @@ impl VrmComponentManager {
                 );
             }
 
-            if !self.reservation_store.is_reservation_state_at_least(reservation_id, ReservationState::ReserveAnswer) {
+            if !shadow_reservation_store.is_reservation_state_at_least(reservation_id, ReservationState::ReserveAnswer) {
                 panic!(
                     "ErrorVrmManagerReservationStateIsNotAtLeastReserveAnswer: The tracking update of a reserved reservation of ADC {} on ShadowSchedule {:?} failed. The Reservation {:?} reserved on VrmComponent {} must have at least ReservationState::ReservedAnswer, but as only state {:?}.",
                     self.adc_id,
                     shadow_schedule_id,
                     shadow_reservation_store.get_name_for_key(reservation_id),
                     component_id,
-                    self.reservation_store.get_state(reservation_id)
+                    shadow_reservation_store.get_state(reservation_id)
                 );
             }
-
-            // TODO Add Reservation to res_to_vrm_component
         }
     }
 
-    pub fn delete_task_at_component(
-        &mut self,
-        reservation_id: ReservationId,
-        shadow_schedule_id: Option<ShadowScheduleId>,
-    ) -> bool {
-        let mut component_id; 
+    pub fn delete_task_at_component(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> bool {
+        let mut target_component = None;
 
-        if shadow_schedule_id.is_none() {
-            let (res_id_to_component_id, shadow_reservation_store) = self.shadow_schedule_reservations.get_mut(&shadow_schedule_id.unwrap()).unwrap();
+        if let Some(sid) = &shadow_schedule_id {
+            if let Some((shadow_map, _)) = self.shadow_schedule_reservations.get(&sid) {
+                target_component = shadow_map.get(&reservation_id).cloned();
+            }
+        } else {
+            target_component = self.res_to_vrm_component.get(&reservation_id).cloned();
         }
 
-
-        match self.res_to_vrm_component.remove(&reservation_id) {
+        match target_component {
             Some(component_id) => {
                 // No Real Task
                 if component_id == *DUMMY_COMPONENT_ID {
-                    self.reservation_store.update_state(reservation_id, ReservationState::Deleted);
+                    if let Some(sid) = &shadow_schedule_id {
+                        if let Some((_, store)) = self.shadow_schedule_reservations.get(&sid) {
+                            store.update_state(reservation_id, ReservationState::Deleted);
+                        }
+                    } else {
+                        self.reservation_store.update_state(reservation_id, ReservationState::Deleted);
+                    }
                     return true;
                 }
 
-                let mut container = self.get_vrm_component_container_mut(component_id);
+                let container = self.get_vrm_component_container_mut(component_id.clone());
 
-                container.vrm_component.delete(reservation_id, shadow_schedule_id)
+                container.vrm_component.delete(reservation_id, shadow_schedule_id.clone());
 
-                if self.reservation_store.get_state(reservation_id) == ReservationState::Deleted {
-                    // Update Local view 
+                // Note: We check the store to verify deletion.
+                // If shadow, we check the shadow store
+                let is_deleted = if let Some(sid) = &shadow_schedule_id {
+                    // Check shadow store state
+                    if let Some((_, store)) = self.shadow_schedule_reservations.get(&sid) {
+                        store.get_state(reservation_id) == ReservationState::Deleted
+                    } else {
+                        false
+                    }
+                } else {
+                    self.reservation_store.get_state(reservation_id) == ReservationState::Deleted
+                };
+
+                if is_deleted {
+                    // Update Local view
+                    let container = self.get_vrm_component_container_mut(component_id);
                     container.schedule.delete_reservation(reservation_id);
-                    // TODO Update Globe View 
+
+                    // Cleanup Mapping
+                    if let Some(sid) = &shadow_schedule_id {
+                        if let Some((shadow_map, _)) = self.shadow_schedule_reservations.get_mut(&sid) {
+                            shadow_map.remove(&reservation_id);
+                        }
+                    } else {
+                        self.res_to_vrm_component.remove(&reservation_id);
+                    }
+
                     return true;
                 }
 
                 self.reservation_store.update_state(reservation_id, ReservationState::Rejected);
                 return false;
-
             }
             None => {
-                log::error!("ReservationForDeletionWasNotFound: In ADC {} ShadowSchedule {:?} was Reservation {:?} not found.", self.adc_id, shadow_schedule_id, self.reservation_store.get_name_for_key(reservation_id));
+                log::error!(
+                    "ReservationForDeletionWasNotFound: In ADC {} ShadowSchedule {:?} was Reservation {:?} not found.",
+                    self.adc_id,
+                    shadow_schedule_id,
+                    self.reservation_store.get_name_for_key(reservation_id)
+                );
                 return false;
             }
         }
-        if self.reservation
     }
 }

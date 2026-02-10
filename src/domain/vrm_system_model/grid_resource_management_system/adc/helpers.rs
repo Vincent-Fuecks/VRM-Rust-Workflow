@@ -7,7 +7,7 @@ use std::{
 use crate::domain::vrm_system_model::{
     grid_resource_management_system::{
         adc::ADC, order_res_vrm_component_database::OrderResVrmComponentDatabase, vrm_component_manager::DUMMY_COMPONENT_ID,
-        vrm_component_registry::vrm_component_proxy::VrmComponentProxy, vrm_component_trait::VrmComponent,
+        vrm_component_order::VrmComponentOrder, vrm_component_registry::vrm_component_proxy::VrmComponentProxy, vrm_component_trait::VrmComponent,
     },
     reservation::{reservation::ReservationState, reservation_store::ReservationId},
     utils::{
@@ -17,6 +17,79 @@ use crate::domain::vrm_system_model::{
 };
 
 impl ADC {
+    /// Orchestrates the Shadow Scheduling process to optimize system utilization.
+    ///
+    /// This function performs the 4-step process requested:
+    /// 1. Check satisfaction.
+    /// 2. Create shadow schedule.
+    /// 3. Reschedule reservations (Delete & Re-Reserve in Shadow).
+    /// 4. Commit if better.
+    pub fn optimize_schedule(&mut self) {
+        // (1) Init shadow scheduling if system satisfaction is worse than threshold
+        // Satisfaction Index: 0.0 (Optimal) -> 1.0 (Fragmented)
+        // If fragmentation is high (> 0.5), we try to optimize.
+        let current_satisfaction = self.manager.get_system_satisfaction(None);
+        if current_satisfaction > 0.5 {
+            let shadow_id = ShadowScheduleId::new("optimization_run".to_string());
+
+            // (2) Create shadow schedule
+            if self.manager.create_shadow_schedule(shadow_id.clone()) {
+                // (3) Reschedule all reserved Reservation
+                // Strategy: Clear the shadow schedule and re-insert tasks sorted by duration (Longest Task First).
+
+                // A. Collect all active reservation IDs currently managed
+                let active_ids: Vec<ReservationId> = self.manager.res_to_vrm_component.keys().cloned().collect();
+
+                // B. Sort them by duration (Longest First Heuristic)
+                let mut sorted_ids = active_ids.clone();
+                sorted_ids.sort_by(|a, b| {
+                    let dur_a = self.reservation_store.get_task_duration(*a);
+                    let dur_b = self.reservation_store.get_task_duration(*b);
+                    dur_b.cmp(&dur_a) // Descending
+                });
+
+                // C. Delete them from the Shadow Schedule context
+                for res_id in &active_ids {
+                    // This removes them from the underlying components in the shadow world
+                    self.manager.delete_task_at_component(*res_id, Some(shadow_id.clone()));
+
+                    // Reset the state in the shadow store to 'Open' so they can be reserved again.
+                    // Accessing the shadow store via the manager.
+                    if let Some((_, store)) = self.manager.shadow_schedule_reservations.get_mut(&shadow_id) {
+                        store.update_state(*res_id, ReservationState::Open);
+                    }
+                }
+
+                // D. Re-reserve them in the Shadow Schedule context
+                for res_id in sorted_ids {
+                    self.manager.reserve_task_at_best_vrm_component(
+                        res_id,
+                        Some(shadow_id.clone()),
+                        &mut HashMap::new(), // dummy db for internal tracking
+                        VrmComponentOrder::OrderStartFirst,
+                        |_, _| Ordering::Equal,
+                    );
+                }
+
+                // (4) Commit ShadowSchedule as the new master schedule if better
+                let new_satisfaction = self.manager.get_system_satisfaction(Some(shadow_id.clone()));
+
+                // Lower satisfaction index means less fragmentation/better schedule
+                if new_satisfaction < current_satisfaction {
+                    log::info!(
+                        "Shadow Optimization Successful: Improved satisfaction from {} to {}. Committing.",
+                        current_satisfaction,
+                        new_satisfaction
+                    );
+                    self.manager.commit_shadow_schedule(shadow_id);
+                } else {
+                    log::info!("Shadow Optimization Discarded: No improvement ({} vs {}). Rolling back.", new_satisfaction, current_satisfaction);
+                    self.manager.delete_shadow_schedule(shadow_id);
+                }
+            }
+        }
+    }
+
     // TODO Should work with GridComponent
     /// Removes an VrmComponent from the registry based on its unique identifier.
     fn delete_vrm_component(&mut self, vrm_component: Box<dyn VrmComponent>) -> bool {

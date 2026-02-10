@@ -559,14 +559,20 @@ impl ReservationStore {
 
     /// Creates a "Shadow" copy of the store.
     ///
-    /// This creates a deep copy of all reservations.
+    /// This creates a deep copy of all reservations to allow isolated modification.
     /// This means a Scheduler can work on the Shadow Store using the same Keys
     /// as the Master Store, but changes will not affect the Master.
-    /// Note: ReservationStore snapshot has no active Listeners
+    /// Note: ReservationStore snapshot has no active Listeners.
     pub fn snapshot(&self) -> ReservationStore {
         let guard = self.inner.read().unwrap();
 
-        let new_slots = guard.slots.clone();
+        let mut new_slots = SlotMap::with_key();
+        new_slots = guard.slots.clone();
+
+        for (key, arc_lock) in new_slots.iter_mut() {
+            let original_res = arc_lock.read().expect("Lock poisoned during snapshot").clone();
+            *arc_lock = Arc::new(RwLock::new(original_res));
+        }
 
         let new_inner = StoreInner {
             slots: new_slots,

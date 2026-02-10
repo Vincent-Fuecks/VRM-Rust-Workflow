@@ -1,4 +1,5 @@
 use vrm_rust_workflow::api::vrm_system_model_dto::aci_dto::{GridNodeDto, NetworkLinkDto, RMSSystemDto};
+use vrm_rust_workflow::domain::vrm_system_model::schedule::slotted_schedule::network_slotted_schedule::topology::NetworkTopology;
 use vrm_rust_workflow::domain::vrm_system_model::utils::id::AciId;
 use vrm_rust_workflow::domain::{
     simulator::{
@@ -9,7 +10,6 @@ use vrm_rust_workflow::domain::{
         grid_resource_management_system::aci::AcI,
         reservation::reservation_store::{ReservationId, ReservationStore},
         resource::resource_trait::Resource,
-        schedule::topology::NetworkTopology,
         utils::id::{LinkResourceId, RouterId},
     },
 };

@@ -121,4 +121,19 @@ impl ProbeReservations {
         let idx = self.reservation_ids.get(&reservation_id).unwrap();
         self.origin_information[*idx].clone()
     }
+
+    pub fn reject_all_probe_reservations_except(&mut self, keep_reservation_id: ReservationId) {
+        for reservation_id in self.get_ids() {
+            if reservation_id == keep_reservation_id {
+                continue;
+            }
+            self.delete_reservation(reservation_id);
+        }
+    }
+
+    pub fn reject_all_probe_reservations(&mut self) {
+        for reservation_id in self.get_ids() {
+            self.delete_reservation(reservation_id);
+        }
+    }
 }

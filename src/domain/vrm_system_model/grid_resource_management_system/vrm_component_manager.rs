@@ -7,7 +7,8 @@ use crate::domain::vrm_system_model::reservation::reservation::Reservation;
 use crate::domain::vrm_system_model::reservation::reservation::ReservationState;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationId;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationStore;
-use crate::domain::vrm_system_model::schedule::slotted_schedule::SlottedSchedule;
+use crate::domain::vrm_system_model::schedule::slotted_schedule::slotted_schedule::SlottedSchedule;
+use crate::domain::vrm_system_model::schedule::slotted_schedule::slotted_schedule::schedule_context::SlottedScheduleContext;
 use crate::domain::vrm_system_model::scheduler_trait::Schedule;
 use crate::domain::vrm_system_model::utils::id::RouterId;
 use crate::domain::vrm_system_model::utils::id::{AdcId, ComponentId, ShadowScheduleId, SlottedScheduleId};
@@ -70,15 +71,17 @@ impl VrmComponentContainer {
 
         let total_capacity = vrm_component.get_total_capacity();
 
-        let schedule = Box::new(SlottedSchedule::new(
+        let slotted_schedule_ctx = SlottedScheduleContext::new(
             scheduler_id,
+            simulator.get_current_time_in_s(),
             number_of_real_slots,
             slot_width,
             total_capacity,
             false,
-            simulator,
             reservation_store.clone(),
-        ));
+        );
+
+        let schedule = Box::new(SlottedSchedule::new(slotted_schedule_ctx, total_capacity, reservation_store.clone(), simulator));
 
         Self { vrm_component, reservation_store, schedule, registration_index, total_link_capacity, link_resource_count, failures: 0 }
     }
@@ -200,6 +203,17 @@ impl VrmComponentManager {
 
     pub fn get_vrm_component_container_mut(&mut self, component_id: ComponentId) -> &mut VrmComponentContainer {
         match self.vrm_components.get_mut(&component_id) {
+            Some(container) => container,
+            None => panic!(
+                "ErrorFailedToGetVrmComponentContainer: In the VrmComponentManager of ADC {}, was the ComponentId {} not found.",
+                self.adc_id,
+                component_id.clone()
+            ),
+        }
+    }
+
+    pub fn get_vrm_component_container(&mut self, component_id: ComponentId) -> &VrmComponentContainer {
+        match self.vrm_components.get(&component_id) {
             Some(container) => container,
             None => panic!(
                 "ErrorFailedToGetVrmComponentContainer: In the VrmComponentManager of ADC {}, was the ComponentId {} not found.",

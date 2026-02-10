@@ -2,7 +2,7 @@ use crate::api::vrm_system_model_dto::aci_dto::RMSSystemDto;
 use crate::domain::simulator::simulator::SystemSimulator;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationStore;
 use crate::domain::vrm_system_model::rms::advance_reservation_trait::AdvanceReservationRms;
-use crate::domain::vrm_system_model::rms::{null_broker::NullBroker, null_rms::NullRms, rms::Rms};
+use crate::domain::vrm_system_model::rms::{null_broker::NullBroker, null_rms::NullRms};
 use crate::domain::vrm_system_model::utils::id::AciId;
 use crate::error::ConversionError;
 use std::str::FromStr;

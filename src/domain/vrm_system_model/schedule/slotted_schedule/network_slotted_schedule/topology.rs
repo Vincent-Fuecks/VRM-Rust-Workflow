@@ -1,10 +1,11 @@
 use crate::api::vrm_system_model_dto::aci_dto::RMSSystemDto;
 use crate::domain::simulator::simulator::SystemSimulator;
-use crate::domain::vrm_system_model::reservation;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationStore;
 use crate::domain::vrm_system_model::resource::link_resource::LinkResource;
 use crate::domain::vrm_system_model::resource::resource_trait::{Resource, ResourceId};
-use crate::domain::vrm_system_model::schedule::slotted_schedule::SlottedSchedule;
+use crate::domain::vrm_system_model::schedule::slotted_schedule::slotted_schedule::SlottedSchedule;
+use crate::domain::vrm_system_model::schedule::slotted_schedule::slotted_schedule::schedule_context::SlottedScheduleContext;
+use crate::domain::vrm_system_model::scheduler_type::SchedulerType;
 use crate::domain::vrm_system_model::utils::id::{AciId, LinkResourceId, RouterId, SlottedScheduleId};
 use crate::error::ConversionError;
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -69,13 +70,13 @@ pub struct VirtualLinkResource {
 /// * **Connectivity**: Adjacency matrices defining how routers connect.
 /// * **Routing Logic**: Caching of K-shortest paths and calculation of virtual resources.
 /// * **Heuristics**: Importance databases for link weighting.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct NetworkTopology {
     /// A map of all routers in the system, indexed by their ID.
     routers: HashMap<RouterId, Router>,
 
     /// A map of all physical network links, indexed by their ID.
-    network_links: HashMap<LinkResourceId, LinkResource>,
+    pub network_links: HashMap<LinkResourceId, LinkResource>,
 
     /// The adjacency list representing the graph structure.
     /// Maps a `RouterId` to a set of outgoing `LinkResourceId`s, enabling efficient graph traversal.
@@ -354,15 +355,19 @@ impl NetworkTopology {
 
         for link in dto.network_links.iter() {
             let link_schedule_name = format!("Schedule LinkResource {} -> {}", link.start_point, link.end_point);
-            let link_schedule = SlottedSchedule::new(
+
+            let slotted_schedule_ctx = SlottedScheduleContext::new(
                 SlottedScheduleId::new(link_schedule_name),
+                simulator.get_current_time_in_s(),
                 dto.num_of_slots,
                 dto.slot_width,
                 link.capacity,
                 true,
-                simulator.clone_box().into(),
                 reservation_store.clone(),
             );
+
+            let link_schedule = SlottedSchedule::new(slotted_schedule_ctx, link.capacity, reservation_store.clone(), simulator.clone());
+
             let network_link_id: LinkResourceId = LinkResourceId::new(link.id.clone());
             network_links.insert(
                 network_link_id.clone(),
