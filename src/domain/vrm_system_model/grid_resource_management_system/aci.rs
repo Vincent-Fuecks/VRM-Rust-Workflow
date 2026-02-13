@@ -1,3 +1,4 @@
+use crate::api::rms_config_dto::rms_dto::RmsSystemWrapper;
 use crate::api::vrm_system_model_dto::aci_dto::AcIDto;
 use crate::domain::simulator::simulator::SystemSimulator;
 use crate::domain::vrm_system_model::grid_resource_management_system::vrm_component_trait::VrmComponent;
@@ -5,7 +6,6 @@ use crate::domain::vrm_system_model::reservation::probe_reservations::ProbeReser
 use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationState};
 use crate::domain::vrm_system_model::reservation::reservation_store::{ReservationId, ReservationStore};
 use crate::domain::vrm_system_model::rms::advance_reservation_trait::AdvanceReservationRms;
-use crate::domain::vrm_system_model::rms::rms_type::RmsType;
 use crate::domain::vrm_system_model::utils::id::{AciId, AdcId, ClientId, ComponentId, RouterId, ShadowScheduleId};
 use crate::domain::vrm_system_model::utils::load_buffer::LoadMetric;
 use crate::domain::vrm_system_model::utils::statistics::ANALYTICS_TARGET;
@@ -122,7 +122,7 @@ impl TryFrom<(AcIDto, Arc<dyn SystemSimulator>, ReservationStore)> for AcI {
         let aci_id = AciId::new(dto.id.clone());
         let adc_id: AdcId = AdcId::new(dto.adc_id);
 
-        let rms_system = RmsType::get_instance(dto.rms_system, simulator.clone(), aci_id.clone(), reservation_store.clone())?;
+        let rms_system = RmsSystemWrapper::get_instance(dto.rms_system, simulator.clone(), aci_id.clone(), reservation_store.clone())?;
 
         Ok(AcI {
             id: aci_id,

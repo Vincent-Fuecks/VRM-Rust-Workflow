@@ -1,4 +1,4 @@
-use crate::api::vrm_system_model_dto::aci_dto::RMSSystemDto;
+use crate::api::rms_config_dto::rms_dto::{DummyRmsDto, RmsSystemWrapper};
 use crate::domain::simulator::simulator::SystemSimulator;
 use crate::domain::vrm_system_model::reservation::reservation::ReservationState;
 use crate::domain::vrm_system_model::reservation::reservation_store::{ReservationId, ReservationStore};
@@ -67,9 +67,9 @@ pub struct RmsBase {
     pub reservation_store: ReservationStore,
 }
 
-impl TryFrom<(RMSSystemDto, Arc<dyn SystemSimulator>, AciId, ReservationStore, SchedulerType)> for RmsBase {
+impl TryFrom<(DummyRmsDto, Arc<dyn SystemSimulator>, AciId, ReservationStore, SchedulerType)> for RmsBase {
     type Error = ConversionError;
-    fn try_from(args: (RMSSystemDto, Arc<dyn SystemSimulator>, AciId, ReservationStore, SchedulerType)) -> Result<Self, Self::Error> {
+    fn try_from(args: (DummyRmsDto, Arc<dyn SystemSimulator>, AciId, ReservationStore, SchedulerType)) -> Result<Self, Self::Error> {
         let (dto, simulator, aci_id, reservation_store, schedule_type) = args;
         let rms_id: RmsId = RmsId::new(format!("AcI: {}, RmsType: {}", aci_id.clone(), &dto.typ));
         let schedule_id: SlottedScheduleId = SlottedScheduleId::new(format!("AcI: {}, RmsType: {}", aci_id, &dto.scheduler_typ));

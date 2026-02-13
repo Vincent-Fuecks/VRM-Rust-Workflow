@@ -1,11 +1,11 @@
-use crate::api::vrm_system_model_dto::aci_dto::RMSSystemDto;
+use crate::api::rms_config_dto::rms_dto::DummyRmsDto;
 use crate::domain::simulator::simulator::SystemSimulator;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationStore;
 use crate::domain::vrm_system_model::resource::link_resource::LinkResource;
 use crate::domain::vrm_system_model::resource::resource_trait::{Resource, ResourceId};
+use crate::domain::vrm_system_model::rms::rms_type::RmsDummyType;
 use crate::domain::vrm_system_model::schedule::slotted_schedule::slotted_schedule::SlottedSchedule;
 use crate::domain::vrm_system_model::schedule::slotted_schedule::slotted_schedule::schedule_context::SlottedScheduleContext;
-use crate::domain::vrm_system_model::scheduler_type::SchedulerType;
 use crate::domain::vrm_system_model::utils::id::{AciId, LinkResourceId, RouterId, SlottedScheduleId};
 use crate::error::ConversionError;
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -96,10 +96,10 @@ pub struct NetworkTopology {
     pub max_bandwidth_all_paths: i64,
 }
 
-impl TryFrom<(RMSSystemDto, Arc<dyn SystemSimulator>, AciId, ReservationStore)> for NetworkTopology {
+impl TryFrom<(DummyRmsDto, Arc<dyn SystemSimulator>, AciId, ReservationStore)> for NetworkTopology {
     type Error = ConversionError;
 
-    fn try_from(args: (RMSSystemDto, Arc<dyn SystemSimulator>, AciId, ReservationStore)) -> Result<Self, Self::Error> {
+    fn try_from(args: (DummyRmsDto, Arc<dyn SystemSimulator>, AciId, ReservationStore)) -> Result<Self, Self::Error> {
         let (dto, simulator, aci_id, reservation_store) = args;
 
         // 1.  Init physical links.
@@ -314,7 +314,7 @@ impl NetworkTopology {
     }
 
     /// Derives the set of all Routers from the DTO configurations (GirdNodes, LinkResources).
-    pub fn setup_routers(dto: &RMSSystemDto) -> HashMap<RouterId, Router> {
+    pub fn setup_routers(dto: &DummyRmsDto) -> HashMap<RouterId, Router> {
         let mut routers: HashMap<RouterId, Router> = HashMap::new();
 
         for grid_node in dto.grid_nodes.iter() {
@@ -345,7 +345,7 @@ impl NetworkTopology {
 
     /// Initializes all `LinkResource` structs and the importance database.
     pub fn setup_network_links(
-        dto: &RMSSystemDto,
+        dto: &DummyRmsDto,
         aci_id: AciId,
         simulator: Arc<dyn SystemSimulator>,
         reservation_store: ReservationStore,
