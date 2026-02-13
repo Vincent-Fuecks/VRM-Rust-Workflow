@@ -1,3 +1,6 @@
+# Note this is the VRM simulation system
+- ADCs and AcIs all run on the same system
+
 # Remarks: 
 - In the java program in  ../src/vrm/util/LoadBuffer.java exists a prototype implementation of a hiracical loadbuffer
 - In the java version was the Idea present of marking resources as up or down. However, the system was never utilized

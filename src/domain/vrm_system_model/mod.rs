@@ -1,4 +1,3 @@
-pub mod adc;
 pub mod client;
 pub mod grid_resource_management_system;
 pub mod reservation;
@@ -8,7 +7,6 @@ pub mod schedule;
 pub mod scheduler_trait;
 pub mod scheduler_type;
 pub mod utils;
-pub mod vrm;
-pub mod vrm_component;
+pub mod vrm_manager;
 pub mod vrm_system_model;
 pub mod workflow;

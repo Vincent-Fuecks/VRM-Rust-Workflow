@@ -1,5 +1,9 @@
 {
-    "masterAdc" : "ADC-001",
+    "adcMasterId" : "ADC-001",
+    "simulator": {
+        "endTime": 36000,
+        "isSimulation": true
+    },
     "adc": [
         {
             "id": "ADC-001",
@@ -39,7 +43,7 @@
     "aci": [
         {
             "id": "AcI-001",
-            "adcId": "Adc-002",
+            "adcId": "Adc-001",
             "commitTimeout": 256,
             "rmsSystem":
             {
@@ -99,6 +103,7 @@
         },
         {
             "id": "AcI-002",
+            "adcId": "Adc-002",
             "commitTimeout": 256,
             "rmsSystem":
             {
@@ -158,6 +163,7 @@
     },        
     {
         "id": "AcI-003",
+        "adcId":"Adc-002",
         "commitTimeout": 256,
         "rmsSystem":
             {
@@ -216,7 +222,8 @@
             }
         },
         {
-            "id": "AcI-004",
+            "id": "AcI-004",        
+            "adcId":"Adc-003",
             "commitTimeout": 256,
             "rmsSystem":
             {
@@ -276,6 +283,7 @@
     },     
     {
         "id": "AcI-005",
+        "adcId":"Adc-003",
         "commitTimeout": 256,
         "rmsSystem":
         {

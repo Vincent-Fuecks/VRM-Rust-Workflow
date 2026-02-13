@@ -2,8 +2,8 @@ use std::any::Any;
 use std::cmp::Ordering;
 use std::fmt::Debug;
 
+use crate::domain::vrm_system_model::reservation::probe_reservations::ProbeReservations;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationId;
-use crate::domain::vrm_system_model::reservation::reservations::Reservations;
 use crate::domain::vrm_system_model::utils::load_buffer::LoadMetric;
 
 // TODO Sync is potentially unsafe; if total struct Sync than this should be redundant
@@ -73,7 +73,7 @@ pub trait Schedule: Debug + Send + Sync + Any {
     /// # Returns
     ///
     /// A `Reservations` collection containing all feasible candidates.
-    fn probe(&mut self, id: ReservationId) -> Reservations;
+    fn probe(&mut self, id: ReservationId) -> ProbeReservations;
 
     /// Selects the **single best-fitting reservation candidate** from the feasible set,
     /// determined by a custom comparator function.
@@ -94,6 +94,7 @@ pub trait Schedule: Debug + Send + Sync + Any {
     /// # Returns
     ///
     /// An `Option` containing the single `ReservationId` that best fits the criteria, or `None` if no feasible candidates were found.
+    /// TODO Output must be changed to ProbeReservation, if System runs distributed --> because information of origen is lost, also deletion must be handled in a way.
     fn probe_best(
         &mut self,
         request_id: ReservationId,

@@ -16,7 +16,7 @@ use std::any::Any;
 /// probing for available resources across distributed nodes, and finalizing reservations.
 ///
 /// This trait provides the blueprint for various scheduling algorithms (e.g., HEFT, Exhaustive).
-pub trait WorkflowScheduler: std::fmt::Debug + Any {
+pub trait WorkflowScheduler: std::fmt::Debug + Any + Send {
     fn new(reservation: ReservationStore) -> Box<dyn WorkflowScheduler>
     where
         Self: Sized;
@@ -67,6 +67,13 @@ pub trait WorkflowScheduler: std::fmt::Debug + Any {
             }
         }
         store.update_state(workflow_id, ReservationState::Committed);
+    }
+
+    /// Deletes a previously submitted workflow from all booked resource providers and sets all reservations in to `ReservationState::Deleted.
+    fn delete(&mut self, workflow: &mut Workflow, adc: &mut ADC) {
+        for reservation_in in workflow.get_all_reservation_ids() {
+            todo!()
+        }
     }
 }
 

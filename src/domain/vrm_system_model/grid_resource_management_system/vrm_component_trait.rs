@@ -1,3 +1,4 @@
+use crate::domain::vrm_system_model::reservation::probe_reservations::ProbeReservations;
 use crate::domain::vrm_system_model::reservation::reservation::Reservation;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationId;
 use crate::domain::vrm_system_model::reservation::reservations::Reservations;
@@ -67,7 +68,7 @@ pub trait VrmComponent: std::fmt::Debug {
     /// # Returns
     /// A `Reservations` object, of which all contained reservation are set to the state
     /// `ReservationState::ProbeAnswer`.
-    fn probe(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> Reservations;
+    fn probe(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> ProbeReservations;
 
     /// Finds the optimal reservation configuration based on a custom comparison logic.
     ///
@@ -127,7 +128,7 @@ pub trait VrmComponent: std::fmt::Debug {
     /// # Returns
     /// A `ReservationId` indicating the final status. Success is confirmed if
     /// the state of the corresponding reservation is `ReservationState::Deleted`.
-    fn delete_task(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> ReservationId;
+    fn delete(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> ReservationId;
 
     /// Calculates the **Satisfaction Index** for a specific time window.
     ///

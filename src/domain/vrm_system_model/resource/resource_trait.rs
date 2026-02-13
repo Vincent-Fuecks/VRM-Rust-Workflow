@@ -11,7 +11,7 @@ pub enum ResourceId {
     Node(NodeResourceId),
 }
 
-pub trait Resource: std::fmt::Debug {
+pub trait Resource: std::fmt::Debug + Send {
     /// Returns true if this specific resource can handle the reservation
     fn can_handle_adc_capacity_request(&self, res: Reservation) -> bool;
 

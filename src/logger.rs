@@ -1,11 +1,11 @@
-use fern::Dispatch;
-use std::fs;
-use log::LevelFilter;
 use chrono::Local;
+use fern::Dispatch;
+use log::LevelFilter;
+use std::fs;
 
 // Define where to store logs
 const LOG_DIR: &str = "logs";
-const LOG_FILE: &str = "workflow_loader.log";
+const LOG_FILE: &str = "system.log";
 
 /// Initializes the global logger.
 ///
@@ -25,16 +25,11 @@ pub fn init() {
     let log_file_path = format!("{}/{}", LOG_DIR, LOG_FILE);
 
     // Get the log level from RUST_LOG, defaulting to "info" (RUST_LOG=debug or RUST_LOG=warn)
-    let log_level = std::env::var("RUST_LOG")
-        .unwrap_or_else(|_| "info".to_string());
-    
-    let log_level_filter = log_level.parse::<LevelFilter>()
-        .unwrap_or(LevelFilter::Info); 
+    let log_level = std::env::var("RUST_LOG").unwrap_or_else(|_| "debug".to_string());
 
-    let base_config = Dispatch::new()
-        .level(log_level_filter)
-        .level_for("serde", LevelFilter::Warn)
-        .level_for("uuid", LevelFilter::Warn);
+    let log_level_filter = log_level.parse::<LevelFilter>().unwrap_or(LevelFilter::Debug);
+
+    let base_config = Dispatch::new().level(log_level_filter).level_for("serde", LevelFilter::Warn).level_for("uuid", LevelFilter::Warn);
 
     let console_config = Dispatch::new()
         .format(|out, message, record| {
@@ -45,7 +40,7 @@ pub fn init() {
                 .info(fern::colors::Color::Green)
                 .debug(fern::colors::Color::Blue)
                 .trace(fern::colors::Color::BrightBlack);
-            
+
             out.finish(format_args!(
                 "[{} {} {}] {}",
                 Local::now().format("%Y-%m-%d %H:%M:%S"),
@@ -58,13 +53,7 @@ pub fn init() {
 
     let file_config = Dispatch::new()
         .format(|out, message, record| {
-            out.finish(format_args!(
-                "[{} {} {}] {}",
-                Local::now().format("%Y-%m-%d %H:%M:%S"),
-                record.level(),
-                record.target(),
-                message
-            ))
+            out.finish(format_args!("[{} {} {}] {}", Local::now().format("%Y-%m-%d %H:%M:%S"), record.level(), record.target(), message))
         })
         .chain(fern::log_file(&log_file_path).unwrap_or_else(|e| {
             eprintln!("Failed to open log file '{}': {}", log_file_path, e);
@@ -73,11 +62,11 @@ pub fn init() {
 
     base_config
         .chain(console_config) // Log to console
-        .chain(file_config)    // Log to file
+        .chain(file_config) // Log to file
         .apply()
         .unwrap_or_else(|e| {
             eprintln!("Failed to apply logger configuration: {}", e);
         });
-    
+
     log::info!("Logger initialized. Logging to console and '{}'.", log_file_path);
 }

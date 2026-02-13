@@ -1,17 +1,14 @@
 use std::any::Any;
 use std::collections::HashSet;
 
-use crate::domain::vrm_system_model::reservation::link_reservation::LinkReservation;
 use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationTrait};
-use crate::domain::vrm_system_model::reservation::reservation_store::{self, ReservationId, ReservationStore};
-use crate::domain::vrm_system_model::resource::{
-    resource_trait::{Resource, ResourceId},
-    resources::BaseResource,
-};
-use crate::domain::vrm_system_model::schedule::slotted_schedule::SlottedSchedule;
+use crate::domain::vrm_system_model::reservation::reservation_store::{ReservationId, ReservationStore};
+use crate::domain::vrm_system_model::resource::resource_trait::{Resource, ResourceId};
+use crate::domain::vrm_system_model::resource::resources::BaseResource;
+use crate::domain::vrm_system_model::schedule::slotted_schedule::slotted_schedule::SlottedSchedule;
 use crate::domain::vrm_system_model::utils::id::{LinkResourceId, RouterId};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LinkResource {
     base: BaseResource<LinkResourceId>,
     pub source: RouterId,

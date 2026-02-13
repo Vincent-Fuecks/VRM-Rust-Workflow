@@ -1,146 +1,252 @@
 use std::collections::HashMap;
+use std::fmt;
+use std::fs::File;
+use std::io::Write;
 use std::sync::Mutex;
-use tracing::{
-    Event, Subscriber,
-    field::{Field, Visit},
-};
-
-use tracing_appender::non_blocking::{NonBlocking, WorkerGuard};
-use tracing_appender::rolling;
-use tracing_subscriber::{Layer, layer::Context};
-
+use tracing::field::{Field, Visit};
+use tracing::{Event, Subscriber};
+use tracing_subscriber::Layer;
+use tracing_subscriber::layer::Context;
+use tracing_subscriber::prelude::*;
+/// The target string to filter for analytics events.
 pub const ANALYTICS_TARGET: &str = "analytics";
 
-const CSV_HEADERS: &[&str] = &[
-    "Time",
-    "LogDescription",
-    "ComponentType",
-    "ComponentName",
-    "ComponentCapacity",
-    "ComponentUtilization",
-    "ComponentFragmentation",
-    "ReservationName",
-    "ReservationCapacity",
-    "ReservationWorkload",
-    "ReservationState",
-    "ReservationProceeding",
-    "NumberOfTasks",
-    "Command",
-    "ProcessingTime",
-    "FragmentationBefore",
-    "FragmentationAfter",
-    "NumberOfCoAllocationDependencies",
-    "NumberOfDataDependencies",
-    "ProbeAnswers",
-];
+pub struct AnalyticsSystem;
 
-/// A custom Tracing Layer that writes analytics events to a CSV.
-pub struct CsvAnalyticsLayer {
-    /// Mutex is required because `Layer::on_event` is immutable (&self),
-    /// but writing to the CSV writer requires mutability.
-    /// We use `NonBlocking` writer here to ensure the application thread
-    /// never blocks on disk I/O.
-    writer: Mutex<csv::Writer<NonBlocking>>,
-}
+impl AnalyticsSystem {
+    pub fn init(log_file_path: String) {
+        let mut file = File::create(log_file_path.clone()).expect("Failed to create log file");
 
-impl CsvAnalyticsLayer {
-    pub fn new(writer: NonBlocking) -> Self {
-        // We do not wrap in BufWriter because tracing_appender::NonBlocking
-        // already buffers internally.
-        let mut wtr = csv::WriterBuilder::new().delimiter(b';').from_writer(writer);
+        let header_line = StatParameter::headers().join(";") + "\n";
+        file.write_all(header_line.as_bytes()).expect("Failed to write headers");
+        let (non_blocking_writer, _guard) = tracing_appender::non_blocking(file);
 
-        // Write the header row immediately.
-        // Note: In a rolling file scenario, this header writes every time the app starts,
-        // but new rolling files created while running might miss headers unless handled
-        // by a more complex custom appender.
-        // For a prototype, writing headers on startup is sufficient.
-        if let Err(e) = wtr.write_record(CSV_HEADERS) {
-            eprintln!("Failed to write CSV headers: {}", e);
-        }
-        let _ = wtr.flush();
+        _ = tracing_subscriber::registry().with(tracing_subscriber::fmt::layer()).with(AnalyticsLayer::new(non_blocking_writer)).try_init();
 
-        Self { writer: Mutex::new(wtr) }
+        tracing::info!("Simulation started. Analytics writing to {}", log_file_path);
     }
 }
 
-impl<S> Layer<S> for CsvAnalyticsLayer
-where
-    S: Subscriber,
-{
-    fn on_event(&self, event: &Event<'_>, _ctx: Context<'_, S>) {
-        // 1. Filter: Ignore standard logs, only process our "analytics" target
-        if event.metadata().target() != ANALYTICS_TARGET {
-            return;
-        }
+/// Each event consists of a set of key-value-pairs with the measured data or some meta data of the event.
+/// This enum specifies all allowed key values and thus the column in the output file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
+pub enum StatParameter {
+    /// Time in seconds since simulation start.
+    Time,
 
-        // 2. Extract: Use a Visitor to walk the fields of the event
-        let mut visitor = CsvVisitor::default();
-        event.record(&mut visitor);
+    /// Description why this entry was made
+    LogDescription,
 
-        // 3. Write: Lock the writer and output the row
-        // Because we use NonBlocking, this lock is held only for the duration
-        // of a memory copy, not a disk write.
-        if let Ok(mut wtr) = self.writer.lock() {
-            // Map the collected fields to the strict CSV_HEADERS order
-            let row: Vec<String> =
-                CSV_HEADERS.iter().map(|header| visitor.fields.get(*header).cloned().unwrap_or_else(|| "N/A".to_string())).collect();
+    // Component
+    /// Type of the component is "CLIENT", "ADC", "AI" or "SIMULATOR"
+    ComponentType,
 
-            if let Err(e) = wtr.write_record(&row) {
-                eprintln!("Failed to write analytics row: {}", e);
-            }
-            // No need to flush manually; the background worker handles it.
+    /// Name of component
+    ComponentName,
+
+    /// Overall or estimated capacity of the component
+    ComponentCapacity,
+
+    /// Load of component
+    ComponentUtilization,
+
+    /// Fragmentation of component
+    ComponentFragmentation,
+
+    // Reservation
+    /// Name of the reservation
+    ReservationName,
+
+    /// Size of Reservation (capacity)
+    ReservationCapacity,
+
+    /// Overall size of Reservation (capacity * duration)
+    ReservationWorkload,
+
+    /// ReservationState of Reservation
+    ReservationState,
+
+    /// ReservationProceeding of Reservation
+    ReservationProceeding,
+
+    /// Number of Tasks in Reservation. Is 1 if Reservation was not a Workflow
+    NumberOfTasks,
+
+    // Operation
+    /// Command send or answered
+    Command,
+
+    /// Time to process command in ms
+    ProcessingTime,
+
+    /// System fragmentation before reservation  
+    FragmentationBefore,
+
+    /// System fragmentation after reservation
+    FragmentationAfter,
+
+    /// Number of CoAllocation Dependencies (if the reservation is a Workflow)
+    NumberOfCoAllocationDependencies,
+
+    /// Number of DataDependencies (if the reservation is a Workflow)
+    NumberOfDataDependencies,
+}
+
+impl StatParameter {
+    /// Returns the CSV headers in the exact order required.
+    pub fn headers() -> &'static [&'static str] {
+        &[
+            "Time",
+            "LogDescription",
+            "ComponentType",
+            "ComponentName",
+            "ComponentCapacity",
+            "ComponentUtilization",
+            "ComponentFragmentation",
+            "ReservationName",
+            "ReservationCapacity",
+            "ReservationWorkload",
+            "ReservationState",
+            "ReservationProceeding",
+            "NumberOfTasks",
+            "Command",
+            "ProcessingTime",
+            "FragmentationBefore",
+            "FragmentationAfter",
+            "NumberOfCoAllocationDependencies",
+            "NumberOfDataDependencies",
+        ]
+    }
+
+    fn from_str(s: &str) -> Option<StatParameter> {
+        match s {
+            "Time" => Some(Self::Time),
+            "LogDescription" => Some(Self::LogDescription),
+            "ComponentType" => Some(Self::ComponentType),
+            "ComponentName" => Some(Self::ComponentName),
+            "ComponentCapacity" => Some(Self::ComponentCapacity),
+            "ComponentUtilization" => Some(Self::ComponentUtilization),
+            "ComponentFragmentation" => Some(Self::ComponentFragmentation),
+            "ReservationName" => Some(Self::ReservationName),
+            "ReservationCapacity" => Some(Self::ReservationCapacity),
+            "ReservationWorkload" => Some(Self::ReservationWorkload),
+            "ReservationState" => Some(Self::ReservationState),
+            "ReservationProceeding" => Some(Self::ReservationProceeding),
+            "NumberOfTasks" => Some(Self::NumberOfTasks),
+            "Command" => Some(Self::Command),
+            "ProcessingTime" => Some(Self::ProcessingTime),
+            "FragmentationBefore" => Some(Self::FragmentationBefore),
+            "FragmentationAfter" => Some(Self::FragmentationAfter),
+            "NumberOfCoAllocationDependencies" => Some(Self::NumberOfCoAllocationDependencies),
+            "NumberOfDataDependencies" => Some(Self::NumberOfDataDependencies),
+            _ => None,
         }
     }
 }
 
-/// A helper struct to "visit" (extract) values from a tracing Event.
-#[derive(Default)]
-struct CsvVisitor {
-    fields: HashMap<String, String>,
+/// Extracts values from a Tracing Event and maps them to StatParameters.
+struct AnalyticsVisitor {
+    values: HashMap<StatParameter, String>,
 }
 
-impl Visit for CsvVisitor {
-    fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
-        // Fallback for types not handled specifically below
-        self.fields.insert(field.name().to_string(), format!("{:?}", value));
+impl AnalyticsVisitor {
+    fn new() -> Self {
+        Self { values: HashMap::new() }
+    }
+}
+
+impl Visit for AnalyticsVisitor {
+    fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
+        if let Some(param) = StatParameter::from_str(field.name()) {
+            self.values.insert(param, format!("{:?}", value));
+        }
     }
 
     fn record_str(&mut self, field: &Field, value: &str) {
-        self.fields.insert(field.name().to_string(), value.to_string());
+        if let Some(param) = StatParameter::from_str(field.name()) {
+            self.values.insert(param, value.to_string());
+        }
     }
 
     fn record_i64(&mut self, field: &Field, value: i64) {
-        self.fields.insert(field.name().to_string(), value.to_string());
+        if let Some(param) = StatParameter::from_str(field.name()) {
+            self.values.insert(param, value.to_string());
+        }
+    }
+
+    fn record_u64(&mut self, field: &Field, value: u64) {
+        if let Some(param) = StatParameter::from_str(field.name()) {
+            self.values.insert(param, value.to_string());
+        }
     }
 
     fn record_f64(&mut self, field: &Field, value: f64) {
-        self.fields.insert(field.name().to_string(), value.to_string());
+        if let Some(param) = StatParameter::from_str(field.name()) {
+            self.values.insert(param, value.to_string());
+        }
     }
 
-    // Implement record_bool, record_u64, etc. as needed...
+    fn record_bool(&mut self, field: &Field, value: bool) {
+        if let Some(param) = StatParameter::from_str(field.name()) {
+            self.values.insert(param, value.to_string());
+        }
+    }
 }
 
-/// Initialize the global subscriber for high-throughput analytics.
-///
-/// # Returns
-/// Returns a `WorkerGuard`. This guard MUST be assigned to a variable in `main`
-/// (e.g. `let _guard = init_tracing(...)`). Dropping it will shut down the background writer.
-pub fn init_tracing(directory: &str, filename_prefix: &str) -> WorkerGuard {
-    use tracing_subscriber::prelude::*;
+/// A custom Tracing Layer that intercepts analytics events and writes them to a CSV writer.
+pub struct AnalyticsLayer<W: Write + 'static> {
+    writer: Mutex<W>,
+}
 
-    // Create a rolling file appender (e.g., logs/analytics.2023-10-27)
-    let file_appender = rolling::daily(directory, filename_prefix);
+impl<W: Write + 'static> AnalyticsLayer<W> {
+    pub fn new(writer: W) -> Self {
+        Self { writer: Mutex::new(writer) }
+    }
 
-    // Wrap it in a non-blocking writer.
-    // 'non_blocking' is the writer handle, 'guard' keeps the worker thread alive.
-    let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
+    fn write_csv_row(&self, visitor: &AnalyticsVisitor) {
+        let headers = StatParameter::headers();
+        let mut row = String::with_capacity(256);
 
-    let csv_layer = CsvAnalyticsLayer::new(non_blocking);
+        for (i, &header_name) in headers.iter().enumerate() {
+            if let Some(param) = StatParameter::from_str(header_name) {
+                let default_val = "NA".to_string(); // Default for missing columns
+                let val = visitor.values.get(&param).unwrap_or(&default_val);
 
-    tracing_subscriber::registry()
-        .with(csv_layer)
-        .with(tracing_subscriber::fmt::layer()) // Keep standard console logging
-        .init();
+                row.push_str(val);
+            } else {
+                row.push_str("ERROR");
+            }
 
-    guard
+            if i < headers.len() - 1 {
+                row.push(';');
+            }
+        }
+        row.push('\n');
+
+        if let Ok(mut w) = self.writer.lock() {
+            let _ = w.write_all(row.as_bytes());
+        }
+    }
+}
+
+impl<S, W> Layer<S> for AnalyticsLayer<W>
+where
+    S: Subscriber,
+    W: Write + 'static,
+{
+    fn enabled(&self, metadata: &tracing::Metadata<'_>, _ctx: Context<'_, S>) -> bool {
+        metadata.target() == ANALYTICS_TARGET
+    }
+
+    fn on_event(&self, event: &Event<'_>, _ctx: Context<'_, S>) {
+        let mut visitor = AnalyticsVisitor::new();
+        event.record(&mut visitor);
+
+        if !visitor.values.contains_key(&StatParameter::Time) {
+            let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
+            visitor.values.insert(StatParameter::Time, now.to_string());
+        }
+
+        self.write_csv_row(&visitor);
+    }
 }

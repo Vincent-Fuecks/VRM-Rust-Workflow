@@ -1,6 +1,6 @@
+use crate::domain::vrm_system_model::reservation::probe_reservations::ProbeReservations;
 use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationState};
-use crate::domain::vrm_system_model::reservation::reservation_store::{self, ReservationId, ReservationStore};
-use crate::domain::vrm_system_model::reservation::reservations::Reservations;
+use crate::domain::vrm_system_model::reservation::reservation_store::{ReservationId, ReservationStore};
 use crate::domain::vrm_system_model::rms::rms::Rms;
 use crate::domain::vrm_system_model::utils::id::{RouterId, ShadowScheduleId};
 use crate::domain::vrm_system_model::utils::load_buffer::LoadMetric;
@@ -27,7 +27,7 @@ use std::cmp::Ordering;
 /// Operations performed on a shadow schedule (identified by a [`ShadowScheduleId`]) do not affect
 /// the live RMS until [commit_shadow_schedule](Self::commit_shadow_schedule) is called. This is critical
 /// for distributed transactions and "what-if" planning phases in the Grid/VRM system.
-pub trait AdvanceReservationRms: Rms {
+pub trait AdvanceReservationRms: Rms + Send {
     /// Creates a secondary **Shadow Schedule**.
     ///
     /// Initially, this schedule is an exact clone of the master schedule. It allows for
@@ -193,7 +193,7 @@ pub trait AdvanceReservationRms: Rms {
     /// Each candidate will have its state set to `ReservationState::ProbeAnswer`.
     /// If no candidates are found, an empty list is returned.
     /// TODO is the state of all reservation changed in the ReservationStore?
-    fn probe(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> Reservations {
+    fn probe(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> ProbeReservations {
         match shadow_schedule_id {
             Some(id) => self.get_mut_shadow_schedule(id).probe(reservation_id),
             None => self.get_mut_master_schedule().probe(reservation_id),
@@ -335,4 +335,4 @@ pub trait AdvanceReservationRms: Rms {
     }
 }
 
-impl<T: Rms> AdvanceReservationRms for T {}
+impl<T: Rms + Send> AdvanceReservationRms for T {}

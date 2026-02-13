@@ -1,4 +1,4 @@
-use crate::api::vrm_system_model_dto::aci_dto::RMSSystemDto;
+use crate::api::rms_config_dto::rms_dto::{DummyRmsDto, RmsSystemWrapper};
 use crate::domain::simulator::simulator::SystemSimulator;
 use crate::domain::vrm_system_model::reservation::reservation::ReservationState;
 use crate::domain::vrm_system_model::reservation::reservation_store::{ReservationId, ReservationStore};
@@ -6,13 +6,12 @@ use crate::domain::vrm_system_model::resource::node_resource::NodeResource;
 use crate::domain::vrm_system_model::resource::resource_trait::Resource;
 use crate::domain::vrm_system_model::resource::resources::Resources;
 use crate::domain::vrm_system_model::scheduler_trait::Schedule;
-use crate::domain::vrm_system_model::scheduler_type::SchedulerType;
-use crate::domain::vrm_system_model::utils::id::{NodeResourceId, RmsId, RouterId, ShadowScheduleId, SlottedScheduleId};
+use crate::domain::vrm_system_model::scheduler_type::{ScheduleContext, SchedulerType};
+use crate::domain::vrm_system_model::utils::id::{AciId, NodeResourceId, RmsId, RouterId, ShadowScheduleId, SlottedScheduleId};
 use crate::error::ConversionError;
 
 use std::any::Any;
 use std::collections::{HashMap, HashSet};
-use std::str::FromStr;
 use std::sync::Arc;
 
 pub trait Rms: std::fmt::Debug + Any {
@@ -68,17 +67,17 @@ pub struct RmsBase {
     pub reservation_store: ReservationStore,
 }
 
-impl TryFrom<(RMSSystemDto, Arc<dyn SystemSimulator>, String, ReservationStore)> for RmsBase {
+impl TryFrom<(DummyRmsDto, Arc<dyn SystemSimulator>, AciId, ReservationStore, SchedulerType)> for RmsBase {
     type Error = ConversionError;
-    fn try_from(args: (RMSSystemDto, Arc<dyn SystemSimulator>, String, ReservationStore)) -> Result<Self, Self::Error> {
-        let (dto, simulator, aci_name, reservation_store) = args;
-        let rms_id: RmsId = RmsId::new(format!("AcI: {}, RmsType: {}", aci_name.clone(), &dto.typ));
-        let schedule_id: SlottedScheduleId = SlottedScheduleId::new(format!("AcI: {}, RmsType: {}", aci_name, &dto.scheduler_typ));
+    fn try_from(args: (DummyRmsDto, Arc<dyn SystemSimulator>, AciId, ReservationStore, SchedulerType)) -> Result<Self, Self::Error> {
+        let (dto, simulator, aci_id, reservation_store, schedule_type) = args;
+        let rms_id: RmsId = RmsId::new(format!("AcI: {}, RmsType: {}", aci_id.clone(), &dto.typ));
+        let schedule_id: SlottedScheduleId = SlottedScheduleId::new(format!("AcI: {}, RmsType: {}", aci_id, &dto.scheduler_typ));
 
         let mut grid_nodes: Vec<Box<dyn Resource>> = Vec::new();
 
         let mut schedule_capacity: i64 = 0;
-
+        // TODO What happen with the capacity of NetworkLinks?
         for node in dto.grid_nodes.iter() {
             let mut connected_to_router: HashSet<RouterId> = HashSet::new();
             let connected_to_router_vec: Vec<RouterId> = node.connected_to_router.iter().map(|router_id| RouterId::new(router_id.clone())).collect();
@@ -92,9 +91,16 @@ impl TryFrom<(RMSSystemDto, Arc<dyn SystemSimulator>, String, ReservationStore)>
 
         let resources: Resources = Resources::new(grid_nodes, Vec::new());
 
-        let schedule_type = SchedulerType::from_str(&dto.scheduler_typ)?;
-        let schedule =
-            schedule_type.get_instance(schedule_id, dto.num_of_slots, dto.slot_width, schedule_capacity, simulator, reservation_store.clone());
+        let schedule_context = ScheduleContext {
+            id: schedule_id,
+            number_of_slots: dto.num_of_slots,
+            slot_width: dto.slot_width,
+            capacity: schedule_capacity,
+            simulator,
+            reservation_store: reservation_store.clone(),
+        };
+
+        let schedule = schedule_type.get_instance(schedule_context);
 
         Ok(RmsBase {
             id: rms_id,

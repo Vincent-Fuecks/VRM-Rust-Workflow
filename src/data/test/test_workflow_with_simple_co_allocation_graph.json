@@ -7,7 +7,7 @@
           "id": "Simulation-Run-0",
           "arrivalTime": 0,
           "bookingIntervalStart": 10,
-          "bookingIntervalEnd": 0,
+          "bookingIntervalEnd": 1000000,
 
           "tasks": [
             {

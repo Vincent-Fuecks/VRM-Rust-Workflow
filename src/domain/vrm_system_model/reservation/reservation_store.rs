@@ -50,20 +50,26 @@ struct StoreInner {
 
     // TODO Probably rework of mechanism is needed.
     /// Listener for changes
-    listener: Arc<dyn NotificationListener>,
+    listeners: Vec<Arc<dyn NotificationListener>>,
 }
 
 impl ReservationStore {
-    pub fn new(listener: Option<Arc<dyn NotificationListener>>) -> Self {
+    pub fn new() -> Self {
         Self {
             inner: Arc::new(RwLock::new(StoreInner {
                 slots: SlotMap::with_key(),
                 name_index: HashMap::new(),
                 client_index: HashMap::new(),
                 handler_index: HashMap::new(),
-                listener: listener.unwrap_or_else(|| Arc::new(NoOpenListener)),
+                listeners: Vec::new(),
             })),
         }
+    }
+
+    /// This allows multiple components to subscribe to state changes.
+    pub fn add_listener(&self, listener: Arc<dyn NotificationListener>) {
+        let mut guard = self.inner.write().expect("RwLock poisoned");
+        guard.listeners.push(listener);
     }
 
     /// Adds Reservation to ReservationStore.
@@ -110,6 +116,14 @@ impl ReservationStore {
     pub fn get(&self, key: ReservationId) -> Option<Arc<RwLock<Reservation>>> {
         let guard = self.inner.read().expect("RwLock poisoned");
         guard.slots.get(key).cloned()
+    }
+
+    /// Returns true, if provided ReservationId is in store otherwise return false.
+    pub fn contains(&self, reservation_id: ReservationId) -> bool {
+        match self.get(reservation_id) {
+            Some(_) => true,
+            None => false,
+        }
     }
 
     pub fn get_reservation_snapshot(&self, reservation_id: ReservationId) -> Option<Reservation> {
@@ -274,6 +288,7 @@ impl ReservationStore {
             let res = handle.read().unwrap();
             return res.get_booking_interval_start();
         } else {
+            self.dump_store_contents();
             panic!("Reservation (id: {:?}) does not contain a booking interval start time.", reservation_id);
         }
     }
@@ -399,6 +414,16 @@ impl ReservationStore {
         }
     }
 
+    pub fn is_reservation_proceeding(&self, reservation_id: ReservationId, reservation_proceeding: ReservationProceeding) -> bool {
+        if let Some(handle) = self.get(reservation_id) {
+            let res = handle.read().unwrap();
+            return res.get_reservation_proceeding() == reservation_proceeding;
+        } else {
+            log::error!("Get reservation (id: {:?}) was not possible.", reservation_id);
+            return false;
+        }
+    }
+
     pub fn get_typ(&self, reservation_id: ReservationId) -> Option<ReservationTyp> {
         if let Some(handle) = self.get(reservation_id) {
             let res = handle.read().unwrap();
@@ -464,11 +489,42 @@ impl ReservationStore {
         }
     }
 
+    /// Replaces a Reservation of the provided ReservationId with the provided Reservation.
+    /// ReservationName, ClientId and HandlerId must be the same of the replacement Reservation.
+    /// Return the true, if the replacement was a success otherwise false.
+    pub fn replace_reservation(&mut self, reservation_id: ReservationId, new_reservation: Reservation) -> bool {
+        let guard = self.inner.read().unwrap();
+        let arc = guard.slots.get(reservation_id).unwrap();
+        let mut current_res = arc.write().unwrap();
+
+        if current_res.get_name() != new_reservation.get_name() {
+            log::error!("FailedReservationReplacement: Cannot replace: ReservationName mismatch");
+            return false;
+        }
+        if current_res.get_client_id() != new_reservation.get_client_id() {
+            log::error!("FailedReservationReplacement: Cannot replace: ClientId mismatch");
+            return false;
+        }
+        if current_res.get_handler_id() != new_reservation.get_handler_id() {
+            log::error!("FailedReservationReplacement: Cannot replace: HandlerId mismatch");
+            return false;
+        }
+
+        *current_res = new_reservation;
+
+        log::info!(
+            "ReservationReplacementWasSuccessful: ReservationId {:?} with Name {:?} was replaced.",
+            reservation_id,
+            self.get_name_for_key(reservation_id)
+        );
+
+        return true;
+    }
+
     /// Update the state of a reservation.
-    /// Triggers the notification listener.
+    /// Triggers the notification listeners.
     pub fn update_state(&self, id: ReservationId, new_state: ReservationState) {
-        // We scope the lock to be as short as possible
-        let notify = {
+        let should_notify = {
             let guard = self.inner.read().unwrap();
             if let Some(res_lock) = guard.slots.get(id) {
                 let mut res = res_lock.write().unwrap();
@@ -479,9 +535,15 @@ impl ReservationStore {
             }
         };
 
-        if notify {
-            let guard = self.inner.read().unwrap();
-            guard.listener.on_reservation_change(id, new_state);
+        if should_notify {
+            let listeners = {
+                let guard = self.inner.read().unwrap();
+                guard.listeners.clone()
+            };
+
+            for listener in listeners {
+                listener.on_reservation_change(id, new_state);
+            }
         }
     }
 
@@ -496,24 +558,63 @@ impl ReservationStore {
         guard.as_workflow_mut().map(f)
     }
 
+    /// Sorts the provided Reservation Ids by there arrival time (ascending)
+    pub fn get_sorted_res_ids_with_arrival_time(&self, reservation_ids: Vec<ReservationId>) -> Vec<(ReservationId, i64)> {
+        let guard = self.inner.read().unwrap();
+
+        let mut res_id_arrival_time_list = Vec::new();
+        for res_id in reservation_ids {
+            let res = guard.slots.get(res_id).expect("Reservation should exist in store.");
+            res_id_arrival_time_list.push((res_id, res.read().expect("Lock poisoned").get_arrival_time()));
+        }
+        res_id_arrival_time_list.iter().is_sorted_by(|a, b| a.1 <= b.1);
+        return res_id_arrival_time_list;
+    }
+
     /// Creates a "Shadow" copy of the store.
     ///
-    /// This creates a deep copy of all reservations.
+    /// This creates a deep copy of all reservations to allow isolated modification.
     /// This means a Scheduler can work on the Shadow Store using the same Keys
     /// as the Master Store, but changes will not affect the Master.
+    /// Note: ReservationStore snapshot has no active Listeners.
     pub fn snapshot(&self) -> ReservationStore {
         let guard = self.inner.read().unwrap();
 
-        let new_slots = guard.slots.clone();
+        let mut new_slots = SlotMap::with_key();
+        new_slots = guard.slots.clone();
+
+        for (key, arc_lock) in new_slots.iter_mut() {
+            let original_res = arc_lock.read().expect("Lock poisoned during snapshot").clone();
+            *arc_lock = Arc::new(RwLock::new(original_res));
+        }
 
         let new_inner = StoreInner {
             slots: new_slots,
             name_index: guard.name_index.clone(),
             client_index: guard.client_index.clone(),
             handler_index: guard.handler_index.clone(),
-            listener: Arc::new(NoOpenListener), // TODO Shadows SlottedSchedule should not notify anyone or?
+            listeners: guard.listeners.clone(),
         };
 
         ReservationStore { inner: Arc::new(RwLock::new(new_inner)) }
+    }
+
+    /// Iterates through all reservations and logs their ID and Name to the error log.
+    pub fn dump_store_contents(&self) {
+        let guard = self.inner.read().expect("RwLock poisoned");
+        log::error!("=== RESERVATION STORE DUMP ({} entries) ===", guard.slots.len());
+
+        for (id, res_handle) in &guard.slots {
+            // We attempt to read the reservation name directly from the object
+            match res_handle.read() {
+                Ok(res) => {
+                    log::error!("  -> ID: {:?} | Name: {:?} | State: {:?}", id, res.get_name(), res.get_state());
+                }
+                Err(_) => {
+                    log::error!("  -> ID: {:?} | [Lock Poisoned]", id);
+                }
+            }
+        }
+        log::error!("=== END OF DUMP ===");
     }
 }

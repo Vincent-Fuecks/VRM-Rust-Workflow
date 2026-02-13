@@ -1,11 +1,11 @@
+use crate::api::rms_config_dto::rms_dto::RmsSystemWrapper;
 use crate::api::vrm_system_model_dto::aci_dto::AcIDto;
-use crate::domain::simulator::simulator::{Simulator, SystemSimulator};
+use crate::domain::simulator::simulator::SystemSimulator;
 use crate::domain::vrm_system_model::grid_resource_management_system::vrm_component_trait::VrmComponent;
+use crate::domain::vrm_system_model::reservation::probe_reservations::ProbeReservations;
 use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationState};
-use crate::domain::vrm_system_model::reservation::reservation_store::{self, ReservationId, ReservationStore};
-use crate::domain::vrm_system_model::reservation::reservations::Reservations;
+use crate::domain::vrm_system_model::reservation::reservation_store::{ReservationId, ReservationStore};
 use crate::domain::vrm_system_model::rms::advance_reservation_trait::AdvanceReservationRms;
-use crate::domain::vrm_system_model::rms::rms_type::RmsType;
 use crate::domain::vrm_system_model::utils::id::{AciId, AdcId, ClientId, ComponentId, RouterId, ShadowScheduleId};
 use crate::domain::vrm_system_model::utils::load_buffer::LoadMetric;
 use crate::domain::vrm_system_model::utils::statistics::ANALYTICS_TARGET;
@@ -104,7 +104,7 @@ pub struct AcI {
     pub id: AciId,
     adc_id: AdcId,
     commit_timeout: i64,
-    rms_system: Box<dyn AdvanceReservationRms>,
+    rms_system: Box<dyn AdvanceReservationRms + Send>,
     shadow_schedule_reservations: ShadowScheduleReservations,
     committed_reservations: HashMap<ReservationId, ReservationContainer>,
     not_committed_reservations: HashMap<ReservationId, ReservationContainer>,
@@ -113,22 +113,19 @@ pub struct AcI {
     reservation_store: ReservationStore,
 }
 
-impl TryFrom<(AcIDto, Arc<dyn SystemSimulator>)> for AcI {
+impl TryFrom<(AcIDto, Arc<dyn SystemSimulator>, ReservationStore)> for AcI {
     type Error = ConversionError;
 
-    fn try_from(args: (AcIDto, Arc<dyn SystemSimulator>)) -> Result<Self, ConversionError> {
-        let (dto, simulator) = args;
+    fn try_from(args: (AcIDto, Arc<dyn SystemSimulator>, ReservationStore)) -> Result<Self, ConversionError> {
+        let (dto, simulator, reservation_store) = args;
 
-        let aci_name = dto.id.clone();
+        let aci_id = AciId::new(dto.id.clone());
         let adc_id: AdcId = AdcId::new(dto.adc_id);
 
-        // TODO Should be located in VRM
-        let reservation_store: ReservationStore = ReservationStore::new(None);
-
-        let rms_system = RmsType::get_instance(dto.rms_system, simulator.clone(), dto.id, reservation_store.clone())?;
+        let rms_system = RmsSystemWrapper::get_instance(dto.rms_system, simulator.clone(), aci_id.clone(), reservation_store.clone())?;
 
         Ok(AcI {
-            id: AciId::new(aci_name),
+            id: aci_id,
             adc_id: adc_id,
             commit_timeout: dto.commit_timeout,
             rms_system,
@@ -186,7 +183,6 @@ impl VrmComponent for AcI {
                 log::info!("No prior reserve for commit of {:?}. Attempting instant allocation.", reservation_id);
 
                 // Check if RMS can handle it
-
                 if !self.rms_system.can_handle_aci_request(self.reservation_store.clone(), reservation_id) {
                     self.reservation_store.update_state(reservation_id, ReservationState::Rejected);
                     self.log_stat("Commit".to_string(), reservation_id, arrival_time);
@@ -237,6 +233,7 @@ impl VrmComponent for AcI {
     }
 
     fn commit_shadow_schedule(&mut self, shadow_schedule_id: ShadowScheduleId) -> bool {
+        // TODO Add ReservationStore Listener
         let shadow_schedule_committed_reservations =
             self.shadow_schedule_reservations.get_mut(&shadow_schedule_id).expect("Committed Reservations where not found.").clone();
 
@@ -274,7 +271,7 @@ impl VrmComponent for AcI {
         return false;
     }
 
-    fn delete_task(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> ReservationId {
+    fn delete(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> ReservationId {
         let arrival_time = self.simulator.get_current_time_in_ms();
         let container;
 
@@ -352,7 +349,7 @@ impl VrmComponent for AcI {
         self.rms_system.get_system_fragmentation(shadow_schedule_id)
     }
 
-    fn probe(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> Reservations {
+    fn probe(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> ProbeReservations {
         let arrival_time = self.simulator.get_current_time_in_ms();
 
         // Can Rms handle request in general?
@@ -360,17 +357,18 @@ impl VrmComponent for AcI {
             if shadow_schedule_id.is_none() {
                 self.log_state_probe(-1, arrival_time);
             }
-            return Reservations::new_empty(self.reservation_store.clone());
+            return ProbeReservations::new(reservation_id, self.reservation_store.clone());
         }
 
-        let prob_request_answer = self.rms_system.probe(reservation_id, shadow_schedule_id.clone());
+        let mut prob_request_answer = self.rms_system.probe(reservation_id, shadow_schedule_id.clone());
+        prob_request_answer.update_origin_information(reservation_id, self.id.clone().cast(), shadow_schedule_id.clone());
 
         if prob_request_answer.is_empty() {
             if shadow_schedule_id.is_none() {
                 self.log_state_probe(0, arrival_time);
             }
 
-            return Reservations::new_empty(self.reservation_store.clone());
+            return prob_request_answer;
         }
 
         if shadow_schedule_id.is_none() {
@@ -507,6 +505,7 @@ impl AcI {
             );
         } else {
             // Handling in case reservation is missing (e.g. deleted/cleaned up)
+
             tracing::warn!(
                 target: ANALYTICS_TARGET,
                 Time = now,

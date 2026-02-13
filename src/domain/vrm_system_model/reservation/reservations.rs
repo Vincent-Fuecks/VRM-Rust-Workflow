@@ -1,4 +1,4 @@
-use crate::domain::vrm_system_model::reservation::reservation::ReservationState;
+use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationState};
 use crate::domain::vrm_system_model::reservation::reservation_store::{ReservationId, ReservationStore};
 use rand::seq::IndexedRandom;
 use std::collections::hash_set;
@@ -23,7 +23,12 @@ impl Reservations {
     // TODO maybe insert Real Reservation into store?
     // TODO Change handler_id?
     pub fn insert(&mut self, id: ReservationId) {
-        self.reservations.insert(id);
+        if self.reservations.insert(id) {
+            panic!(
+                "ErrorSchedulerReservationWasSubmittedMultipleTimes: The Reservation {:?} was already present in the schedule.",
+                self.reservation_store.get_name_for_key(id)
+            )
+        }
     }
 
     // TODO maybe del Real Reservation into store?
@@ -67,6 +72,15 @@ impl Reservations {
 
     pub fn len(&self) -> usize {
         self.reservations.len()
+    }
+
+    // Log all reservations
+    pub fn dump_reservation(&self) {
+        log::error!("=== RESERVATION RESERVATION(s) DUMP ({} entries) ===", self.reservations.len());
+        for reservation_id in &self.reservations {
+            log::error!("  -> ID: {:?} | Name: {:?}", reservation_id, self.reservation_store.get_name_for_key(reservation_id.clone()));
+        }
+        log::error!("=== END OF DUMP ===");
     }
 
     pub fn is_empty(&self) -> bool {
@@ -127,5 +141,9 @@ impl Reservations {
 
     pub fn adjust_capacity(&self, id: &ReservationId, capacity: i64) {
         self.reservation_store.adjust_capacity(id.clone(), capacity);
+    }
+
+    pub fn get_reservation_snapshot(&mut self, id: &ReservationId) -> Reservation {
+        self.reservation_store.get_reservation_snapshot(*id).unwrap()
     }
 }

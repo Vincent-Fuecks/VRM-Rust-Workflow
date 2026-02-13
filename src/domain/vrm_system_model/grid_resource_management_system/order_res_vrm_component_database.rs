@@ -2,7 +2,7 @@ use std::{cmp::Ordering, collections::HashMap};
 
 use crate::domain::vrm_system_model::{
     grid_resource_management_system::vrm_component_manager::{VrmComponentContainer, VrmComponentManager},
-    reservation::{reservation_store::ReservationId, reservations::Reservations},
+    reservation::{probe_reservations::ProbeReservations, reservation_store::ReservationId, reservations::Reservations},
     utils::id::ComponentId,
 };
 
@@ -37,9 +37,19 @@ impl OrderResVrmComponentDatabase {
     }
 
     /// Adds multiple reservations belonging to a single AI.
-    pub fn put_all(&mut self, reservations: Reservations, component_id: ComponentId) {
-        for res in reservations.iter() {
-            self.store.insert(res.clone(), component_id.clone());
+    /// TODO Should I do something with the ShadowScheduleId?
+    pub fn put_all(&mut self, probe_reservations: ProbeReservations) {
+        for res_id in probe_reservations.get_ids() {
+            let (component_id, shadow_schedule_id) = probe_reservations.get_origin_information(res_id);
+
+            if component_id.is_none() && shadow_schedule_id.is_none() {
+                self.store.insert(res_id, component_id.unwrap());
+            } else {
+                panic!(
+                    "ErrorProbeReservations: ComponentId {:?} should be Some() and ShadowScheduleId {:?} should be None.",
+                    component_id, shadow_schedule_id
+                );
+            }
         }
     }
 

@@ -1,17 +1,18 @@
-use crate::api::vrm_system_model_dto::aci_dto::RMSSystemDto;
+use crate::api::rms_config_dto::rms_dto::DummyRmsDto;
 use crate::domain::simulator::simulator::SystemSimulator;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationStore;
 use crate::domain::vrm_system_model::rms::rms::{Rms, RmsBase};
-use crate::domain::vrm_system_model::schedule::topology::NetworkTopology;
-
+use crate::domain::vrm_system_model::schedule::slotted_schedule::network_slotted_schedule::topology::NetworkTopology;
+use crate::domain::vrm_system_model::scheduler_type::SchedulerType;
+use crate::domain::vrm_system_model::utils::id::AciId;
 use crate::error::ConversionError;
 use std::any::Any;
+use std::str::FromStr;
 use std::sync::Arc;
 
 #[derive(Debug)]
 pub struct NullBroker {
     pub base: RmsBase,
-    pub network_topology: NetworkTopology,
 }
 
 impl Rms for NullBroker {
@@ -28,22 +29,25 @@ impl Rms for NullBroker {
     }
 }
 
-impl TryFrom<(RMSSystemDto, Arc<dyn SystemSimulator>, String, ReservationStore)> for NullBroker {
+impl TryFrom<(DummyRmsDto, Arc<dyn SystemSimulator>, AciId, ReservationStore)> for NullBroker {
     type Error = ConversionError;
 
-    fn try_from(args: (RMSSystemDto, Arc<dyn SystemSimulator>, String, ReservationStore)) -> Result<Self, Self::Error> {
-        let (dto, simulator, aci_name, reservation_store) = args;
-        let base = RmsBase::try_from((dto.clone(), simulator.clone(), aci_name.clone(), reservation_store.clone()))?;
-        let network_topology = NetworkTopology::try_from((dto, simulator, aci_name, reservation_store.clone()))?;
+    fn try_from(args: (DummyRmsDto, Arc<dyn SystemSimulator>, AciId, ReservationStore)) -> Result<Self, Self::Error> {
+        let (dto, simulator, aci_id, reservation_store) = args;
+
+        let topology = NetworkTopology::try_from((dto.clone(), simulator.clone(), aci_id.clone(), reservation_store.clone()))?;
+
+        let mut scheduler_type = SchedulerType::from_str(&dto.scheduler_typ)?;
+        scheduler_type = scheduler_type.get_network_scheduler_variant(topology);
+
+        let base = RmsBase::try_from((dto, simulator.clone(), aci_id.clone(), reservation_store, scheduler_type))?;
 
         if base.resources.get_node_resource_count() <= 0 {
-            log::info!("Empty NullBroker Grid: The newly created NullBroker contains no Gird Nodes.");
+            log::info!("Empty NullBroker Grid: The newly created NullBroker of AcI {} contains no Gird Nodes.", aci_id);
         }
 
-        if base.resources.get_link_resource_count() <= 0 {
-            log::info!("Empty NullBroker Link Network: The newly created NullBroker contains no LinkNetwork. Please use NullRms instead.");
-        }
+        // If network is empty check is later in setup_network_links in topology.rs done.
 
-        Ok(NullBroker { base, network_topology: network_topology })
+        Ok(NullBroker { base })
     }
 }

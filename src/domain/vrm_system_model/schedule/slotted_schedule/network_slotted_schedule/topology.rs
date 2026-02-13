@@ -1,11 +1,12 @@
-use crate::api::vrm_system_model_dto::aci_dto::RMSSystemDto;
+use crate::api::rms_config_dto::rms_dto::DummyRmsDto;
 use crate::domain::simulator::simulator::SystemSimulator;
-use crate::domain::vrm_system_model::reservation;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationStore;
 use crate::domain::vrm_system_model::resource::link_resource::LinkResource;
 use crate::domain::vrm_system_model::resource::resource_trait::{Resource, ResourceId};
-use crate::domain::vrm_system_model::schedule::slotted_schedule::SlottedSchedule;
-use crate::domain::vrm_system_model::utils::id::{LinkResourceId, RouterId, SlottedScheduleId};
+use crate::domain::vrm_system_model::rms::rms_type::RmsDummyType;
+use crate::domain::vrm_system_model::schedule::slotted_schedule::slotted_schedule::SlottedSchedule;
+use crate::domain::vrm_system_model::schedule::slotted_schedule::slotted_schedule::schedule_context::SlottedScheduleContext;
+use crate::domain::vrm_system_model::utils::id::{AciId, LinkResourceId, RouterId, SlottedScheduleId};
 use crate::error::ConversionError;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
@@ -69,13 +70,13 @@ pub struct VirtualLinkResource {
 /// * **Connectivity**: Adjacency matrices defining how routers connect.
 /// * **Routing Logic**: Caching of K-shortest paths and calculation of virtual resources.
 /// * **Heuristics**: Importance databases for link weighting.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct NetworkTopology {
     /// A map of all routers in the system, indexed by their ID.
     routers: HashMap<RouterId, Router>,
 
     /// A map of all physical network links, indexed by their ID.
-    network_links: HashMap<LinkResourceId, LinkResource>,
+    pub network_links: HashMap<LinkResourceId, LinkResource>,
 
     /// The adjacency list representing the graph structure.
     /// Maps a `RouterId` to a set of outgoing `LinkResourceId`s, enabling efficient graph traversal.
@@ -95,14 +96,14 @@ pub struct NetworkTopology {
     pub max_bandwidth_all_paths: i64,
 }
 
-impl TryFrom<(RMSSystemDto, Arc<dyn SystemSimulator>, String, ReservationStore)> for NetworkTopology {
+impl TryFrom<(DummyRmsDto, Arc<dyn SystemSimulator>, AciId, ReservationStore)> for NetworkTopology {
     type Error = ConversionError;
 
-    fn try_from(args: (RMSSystemDto, Arc<dyn SystemSimulator>, String, ReservationStore)) -> Result<Self, Self::Error> {
-        let (dto, simulator, _, reservation_store) = args;
+    fn try_from(args: (DummyRmsDto, Arc<dyn SystemSimulator>, AciId, ReservationStore)) -> Result<Self, Self::Error> {
+        let (dto, simulator, aci_id, reservation_store) = args;
 
         // 1.  Init physical links.
-        let (network_links, importance_database) = NetworkTopology::setup_network_links(&dto, simulator.clone(), reservation_store);
+        let (network_links, importance_database) = NetworkTopology::setup_network_links(&dto, aci_id, simulator.clone(), reservation_store);
 
         // 2.  Init router instances based on grid nodes and network link endpoints.
         let routers: HashMap<RouterId, Router> = NetworkTopology::setup_routers(&dto);
@@ -313,7 +314,7 @@ impl NetworkTopology {
     }
 
     /// Derives the set of all Routers from the DTO configurations (GirdNodes, LinkResources).
-    pub fn setup_routers(dto: &RMSSystemDto) -> HashMap<RouterId, Router> {
+    pub fn setup_routers(dto: &DummyRmsDto) -> HashMap<RouterId, Router> {
         let mut routers: HashMap<RouterId, Router> = HashMap::new();
 
         for grid_node in dto.grid_nodes.iter() {
@@ -344,7 +345,8 @@ impl NetworkTopology {
 
     /// Initializes all `LinkResource` structs and the importance database.
     pub fn setup_network_links(
-        dto: &RMSSystemDto,
+        dto: &DummyRmsDto,
+        aci_id: AciId,
         simulator: Arc<dyn SystemSimulator>,
         reservation_store: ReservationStore,
     ) -> (HashMap<LinkResourceId, LinkResource>, HashMap<LinkResourceId, f64>) {
@@ -353,15 +355,19 @@ impl NetworkTopology {
 
         for link in dto.network_links.iter() {
             let link_schedule_name = format!("Schedule LinkResource {} -> {}", link.start_point, link.end_point);
-            let link_schedule = SlottedSchedule::new(
+
+            let slotted_schedule_ctx = SlottedScheduleContext::new(
                 SlottedScheduleId::new(link_schedule_name),
+                simulator.get_current_time_in_s(),
                 dto.num_of_slots,
                 dto.slot_width,
                 link.capacity,
                 true,
-                simulator.clone_box().into(),
                 reservation_store.clone(),
             );
+
+            let link_schedule = SlottedSchedule::new(slotted_schedule_ctx, link.capacity, reservation_store.clone(), simulator.clone());
+
             let network_link_id: LinkResourceId = LinkResourceId::new(link.id.clone());
             network_links.insert(
                 network_link_id.clone(),
@@ -380,7 +386,10 @@ impl NetworkTopology {
         }
 
         if network_links.is_empty() {
-            log::info!("Empty NullBroker Network: The newly created NullBroker contains no Network. NullRms should be utilized instead.");
+            log::info!(
+                "Empty NullBroker Network: The newly created NullBroker of AcI {} contains no Network. NullRms should be utilized instead.",
+                aci_id
+            );
         }
         return (network_links, importance_database);
     }

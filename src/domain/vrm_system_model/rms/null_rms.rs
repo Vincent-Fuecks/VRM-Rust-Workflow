@@ -1,9 +1,12 @@
-use crate::api::vrm_system_model_dto::aci_dto::RMSSystemDto;
+use crate::api::rms_config_dto::rms_dto::DummyRmsDto;
 use crate::domain::simulator::simulator::SystemSimulator;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationStore;
 use crate::domain::vrm_system_model::rms::rms::{Rms, RmsBase};
+use crate::domain::vrm_system_model::scheduler_type::SchedulerType;
+use crate::domain::vrm_system_model::utils::id::AciId;
 use crate::error::ConversionError;
 use std::any::Any;
+use std::str::FromStr;
 use std::sync::Arc;
 
 #[derive(Debug)]
@@ -17,18 +20,22 @@ impl NullRms {
     }
 }
 
-impl TryFrom<(RMSSystemDto, Arc<dyn SystemSimulator>, String, ReservationStore)> for NullRms {
+impl TryFrom<(DummyRmsDto, Arc<dyn SystemSimulator>, AciId, ReservationStore)> for NullRms {
     type Error = ConversionError;
 
-    fn try_from(args: (RMSSystemDto, Arc<dyn SystemSimulator>, String, ReservationStore)) -> Result<Self, Self::Error> {
-        let base = RmsBase::try_from(args)?;
+    fn try_from(args: (DummyRmsDto, Arc<dyn SystemSimulator>, AciId, ReservationStore)) -> Result<Self, Self::Error> {
+        let (rms_dto, simulator, aci_id, reservation_store) = args.clone();
+
+        let schedule_type = SchedulerType::from_str(&rms_dto.scheduler_typ)?;
+        let base = RmsBase::try_from((rms_dto, simulator, aci_id.clone(), reservation_store, schedule_type))?;
         if base.resources.get_node_resource_count() == 0 {
-            log::info!("Empty NullRms Grid: The newly created NullRms contains no Gird Nodes.");
+            log::info!("Empty NullRms Grid: The newly created NullRms of AcI {} contains no Gird Nodes.", aci_id);
         }
 
-        if base.resources.get_link_resource_count() >= 0 {
+        if base.resources.get_link_resource_count() > 0 {
             log::info!(
-                "Not Empty NullRms Link Network: The newly created NullRms contains links. These are ignored by the NullRms do you like to use NullBroker or Slurm as Rms system?"
+                "Not Empty NullRms Link Network: The newly created NullRms of AcI {} contains links. These are ignored by the NullRms do you like to use NullBroker or Slurm as Rms system?",
+                aci_id
             );
         }
 

@@ -26,13 +26,20 @@ impl Slot {
     /// This function determines the maximum capacity that can be satisfied, up to the
     /// requested `requirements`.
     pub fn get_adjust_requirement(&self, requirements: i64) -> i64 {
-        let res_left = self.capacity - self.load;
+        let capacity_left = self.capacity - self.load;
 
-        if res_left >= requirements {
+        if capacity_left >= requirements {
             return requirements;
         }
 
-        return res_left;
+        if capacity_left < 0 {
+            log::error!(
+                "ErrorSlotIsOverBooked: The left capacity of a slot is {}. Signals error Slot capacity calculation/assignment process.",
+                capacity_left
+            );
+        }
+
+        return capacity_left;
     }
 
     /// Resets the slot state by clearing all associated reservation keys and setting the

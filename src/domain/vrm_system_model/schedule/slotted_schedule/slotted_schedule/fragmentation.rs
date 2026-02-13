@@ -1,13 +1,10 @@
-use crate::domain::vrm_system_model::reservation::reservation_store::ReservationId;
-use crate::domain::vrm_system_model::schedule::slotted_schedule::SlottedSchedule;
-use crate::domain::vrm_system_model::scheduler_trait::Schedule;
-
-use std::i64;
-use std::ops::Not;
+use crate::domain::vrm_system_model::{
+    reservation::reservation_store::ReservationId, schedule::slotted_schedule::slotted_schedule::SlottedSchedule, scheduler_trait::Schedule,
+};
 
 const FRAGMENTATION_POWER: f64 = 2.0;
 
-impl super::SlottedSchedule {
+impl SlottedSchedule {
     /// Computes the **Fragmentation Index** of the schedule over a specific time range using
     /// the **Quadratic Mean** method.
     ///
@@ -47,7 +44,7 @@ impl super::SlottedSchedule {
         current_free_block_len: &mut Vec<i64>,
     ) {
         for slot_index in start_slot_index..=end_slot_index {
-            let free_capacity = self.capacity - self.get_slot_load(slot_index);
+            let free_capacity = self.capacity - self.ctx.get_slot_load(slot_index);
 
             for capacity in 1..=free_capacity {
                 current_free_block_len[capacity as usize] += 1;
@@ -119,13 +116,13 @@ impl super::SlottedSchedule {
     /// A `f64` representing the RFI, typically between **0.0** (good) and **1.0** (bad).
     /// Returns **0.0** if the range is completely empty.
     pub fn get_fragmentation_resubmit(&self, start_slot_index: i64, end_slot_index: i64) -> f64 {
-        log::warn!("In SlottedSchedule id: {}, fragmentation resubmit is requested.", self.id);
+        log::warn!("In SlottedSchedule id: {}, fragmentation resubmit is requested.", self.ctx.id);
 
         let mut free_capacity_in_range: i64 = 0;
         let mut range_in_use: bool = false;
 
         for slot_index in start_slot_index..=end_slot_index {
-            let next_slot_load: i64 = self.get_slot_load(slot_index);
+            let next_slot_load: i64 = self.ctx.get_slot_load(slot_index);
             free_capacity_in_range += self.capacity - next_slot_load;
 
             if next_slot_load > 0 {
@@ -133,27 +130,27 @@ impl super::SlottedSchedule {
             }
         }
 
-        if range_in_use.not() {
+        if !range_in_use {
             return 0.0;
         }
 
-        let mut remaining_capacity: i64 = free_capacity_in_range * self.slot_width;
+        let mut remaining_capacity: i64 = free_capacity_in_range * self.ctx.slot_width;
         let mut rejected_capacity: i64 = 0;
 
-        let mut test_schedule: SlottedSchedule = self.clone();
+        let mut test_schedule = self.clone();
 
         while remaining_capacity > 0 {
-            if self.active_reservations.is_empty() {
+            if self.ctx.active_reservations.is_empty() {
                 log::error!("Simulation of single resubmission failed, because active reservations are empty while remaining_capacity > 0.");
                 return 0.0;
             }
 
             // This loop ensures we select a reservation that AT LEAST PARTLY overlaps the range.
             let random_reservation_id: ReservationId = loop {
-                let id = self.active_reservations.get_random_id().expect("No random ReservationId was found in test SlottedSchedule.");
+                let id = self.ctx.active_reservations.get_random_id().expect("No random ReservationId was found in test SlottedSchedule.");
 
-                let is_non_overlapping = self.active_reservations.get_assigned_start(&id) > self.get_slot_end_time(end_slot_index)
-                    || self.active_reservations.get_assigned_end(&id) < self.get_slot_start_time(start_slot_index);
+                let is_non_overlapping = self.ctx.active_reservations.get_assigned_start(&id) > self.ctx.get_slot_end_time(end_slot_index)
+                    || self.ctx.active_reservations.get_assigned_end(&id) < self.ctx.get_slot_start_time(start_slot_index);
 
                 if !is_non_overlapping {
                     break id;
@@ -163,15 +160,16 @@ impl super::SlottedSchedule {
             match test_schedule.reserve(random_reservation_id) {
                 // Could not book again
                 Some(id) => {
-                    remaining_capacity -= self.active_reservations.get_reserved_capacity(&id);
-                    rejected_capacity += self.active_reservations.get_reserved_capacity(&id) * self.active_reservations.get_task_duration(&id);
+                    remaining_capacity -= self.ctx.active_reservations.get_reserved_capacity(&id);
+                    rejected_capacity +=
+                        self.ctx.active_reservations.get_reserved_capacity(&id) * self.ctx.active_reservations.get_task_duration(&id);
                 }
                 // Success
                 None => {
-                    remaining_capacity -= self.active_reservations.get_reserved_capacity(&random_reservation_id);
+                    remaining_capacity -= self.ctx.active_reservations.get_reserved_capacity(&random_reservation_id);
                 }
             }
         }
-        return (rejected_capacity as f64) / ((free_capacity_in_range * self.slot_width) as f64);
+        return (rejected_capacity as f64) / ((free_capacity_in_range * self.ctx.slot_width) as f64);
     }
 }
