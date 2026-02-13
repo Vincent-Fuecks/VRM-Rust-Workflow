@@ -837,7 +837,7 @@ impl VrmComponentManager {
                 }
                 // Del Reservation form VrmComponent and update Local schedule view
                 if let Some(container) = self.vrm_components.get_mut(component_id) {
-                    container.vrm_component.delete_task(reservation_id.clone(), shadow_schedule_id);
+                    container.vrm_component.delete(reservation_id.clone(), shadow_schedule_id);
                     container.schedule.delete_reservation(reservation_id.clone());
                 } else {
                     log::error!(
