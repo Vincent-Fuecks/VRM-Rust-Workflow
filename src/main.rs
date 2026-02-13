@@ -38,7 +38,7 @@ async fn main() {
     AnalyticsSystem::init(log_file_path);
 
     let file_path_workflows: &str = "src/data/test/test_workflow_with_simple_co_allocation_graph.json";
-    let file_path_vrm: &str = "/home/vincent/Desktop/Repository/VRM-Rust-Workflow/src/data/vrm.json";
+    let file_path_vrm: &str = "/home/vincent/Desktop/Repository/VRM-Rust-Workflow/src/data/vrm_with_slurm.json";
     let reservation_store = ReservationStore::new();
     reservation_store.add_listener(Arc::new(VrmStateListener::new_empty()));
 

@@ -2,6 +2,7 @@ use crate::api::rms_config_dto::rms_dto::{DummyRmsDto, RmsSystemWrapper};
 use crate::domain::simulator::simulator::SystemSimulator;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationStore;
 use crate::domain::vrm_system_model::rms::advance_reservation_trait::AdvanceReservationRms;
+use crate::domain::vrm_system_model::rms::slurm::slurm::SlurmRms;
 use crate::domain::vrm_system_model::rms::{null_broker::NullBroker, null_rms::NullRms};
 use crate::domain::vrm_system_model::utils::id::AciId;
 use crate::error::ConversionError;
@@ -22,8 +23,9 @@ impl RmsSystemWrapper {
         reservation_store: ReservationStore,
     ) -> Result<Box<dyn AdvanceReservationRms>, ConversionError> {
         match dto {
-            RmsSystemWrapper::Slurm(data) => {
-                todo!()
+            RmsSystemWrapper::Slurm(dto) => {
+                let rms_instance = SlurmRms::new(dto, simulator, aci_id, reservation_store).await?;
+                Ok(Box::new(rms_instance))
             }
 
             RmsSystemWrapper::DummyRms(dummy_rms_dto) => {

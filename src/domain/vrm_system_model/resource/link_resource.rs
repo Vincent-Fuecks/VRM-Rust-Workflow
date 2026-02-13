@@ -1,5 +1,4 @@
 use std::any::Any;
-use std::collections::HashSet;
 
 use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationTrait};
 use crate::domain::vrm_system_model::reservation::reservation_store::{ReservationId, ReservationStore};
@@ -8,6 +7,7 @@ use crate::domain::vrm_system_model::resource::resources::BaseResource;
 use crate::domain::vrm_system_model::schedule::slotted_schedule::slotted_schedule::SlottedSchedule;
 use crate::domain::vrm_system_model::utils::id::{LinkResourceId, RouterId};
 
+// TODO Naming is of should be just Link
 #[derive(Debug, Clone)]
 pub struct LinkResource {
     base: BaseResource<LinkResourceId>,
@@ -20,16 +20,8 @@ pub struct LinkResource {
 }
 
 impl LinkResource {
-    pub fn new(
-        id: LinkResourceId,
-        connected_routers: HashSet<RouterId>,
-        source: RouterId,
-        target: RouterId,
-        capacity: i64,
-        avg_bandwidth: i64,
-        schedule: SlottedSchedule,
-    ) -> Self {
-        let base = BaseResource::new(id, capacity, connected_routers);
+    pub fn new(id: LinkResourceId, source: RouterId, target: RouterId, capacity: i64, avg_bandwidth: i64, schedule: SlottedSchedule) -> Self {
+        let base = BaseResource::new(id, capacity);
 
         Self { base, source, target, avg_bandwidth, schedule }
     }
@@ -38,10 +30,6 @@ impl LinkResource {
 impl Resource for LinkResource {
     fn get_capacity(&self) -> i64 {
         self.base.capacity
-    }
-
-    fn get_connected_routers(&self) -> &HashSet<RouterId> {
-        &self.base.connected_routers
     }
 
     fn can_handle_adc_capacity_request(&self, res: Reservation) -> bool {

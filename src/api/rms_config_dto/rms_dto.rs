@@ -16,13 +16,16 @@ pub struct DummyRmsDto {
 pub struct SlurmRmsDto {
     pub id: String,
     pub scheduler_typ: String,
+    pub slot_width: i64,
+    pub num_of_slots: i64,
     pub slurm_url: String,
     pub user_name: String,
     pub jwt_token: String,
+    pub topology: Vec<SlurmSwitchDto>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-#[serde(untagged)] // This is the "magic" attribute
+#[serde(untagged)]
 pub enum RmsSystemWrapper {
     DummyRms(DummyRmsDto),
     Slurm(SlurmRmsDto),
@@ -43,4 +46,12 @@ pub struct NetworkLinkDto {
     pub start_point: String,
     pub end_point: String,
     pub capacity: i64,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct SlurmSwitchDto {
+    pub switch_name: String,
+    pub switches: Vec<String>,
+    pub nodes: Vec<String>,
+    pub link_speed: i64,
 }

@@ -26,3 +26,14 @@ pub struct NetworkSlottedSchedule {
     pub reservation_store: ReservationStore,
     simulator: Arc<dyn SystemSimulator>,
 }
+
+impl NetworkSlottedSchedule {
+    pub fn new(
+        ctx: SlottedScheduleContext,
+        topology: NetworkTopology,
+        reservation_store: ReservationStore,
+        simulator: Arc<dyn SystemSimulator>,
+    ) -> Self {
+        Self { ctx, topology, reserved_paths: HashMap::new(), reservation_store, simulator }
+    }
+}

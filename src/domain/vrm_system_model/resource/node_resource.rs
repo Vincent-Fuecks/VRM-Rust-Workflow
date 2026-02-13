@@ -16,7 +16,7 @@ pub struct NodeResource {
 
 impl NodeResource {
     pub fn new(id: NodeResourceId, capacity: i64, connected_routers: HashSet<RouterId>) -> Self {
-        let base = BaseResource::new(id, capacity, connected_routers);
+        let base = BaseResource::new(id, capacity);
         Self { base }
     }
 }
@@ -24,10 +24,6 @@ impl NodeResource {
 impl Resource for NodeResource {
     fn get_capacity(&self) -> i64 {
         self.base.capacity
-    }
-
-    fn get_connected_routers(&self) -> &HashSet<RouterId> {
-        &self.base.connected_routers
     }
 
     fn can_handle_adc_capacity_request(&self, res: Reservation) -> bool {

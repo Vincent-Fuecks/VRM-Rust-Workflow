@@ -2,12 +2,14 @@ use crate::api::rms_config_dto::rms_dto::{DummyRmsDto, RmsSystemWrapper};
 use crate::domain::simulator::simulator::SystemSimulator;
 use crate::domain::vrm_system_model::reservation::reservation::ReservationState;
 use crate::domain::vrm_system_model::reservation::reservation_store::{ReservationId, ReservationStore};
+use crate::domain::vrm_system_model::resource::link_resource::LinkResource;
 use crate::domain::vrm_system_model::resource::node_resource::NodeResource;
 use crate::domain::vrm_system_model::resource::resource_trait::Resource;
 use crate::domain::vrm_system_model::resource::resources::Resources;
+use crate::domain::vrm_system_model::schedule::slotted_schedule::network_slotted_schedule::topology::{Link, Node};
 use crate::domain::vrm_system_model::scheduler_trait::Schedule;
 use crate::domain::vrm_system_model::scheduler_type::{ScheduleContext, SchedulerType};
-use crate::domain::vrm_system_model::utils::id::{AciId, NodeResourceId, RmsId, RouterId, ShadowScheduleId, SlottedScheduleId};
+use crate::domain::vrm_system_model::utils::id::{AciId, LinkResourceId, NodeResourceId, RmsId, RouterId, ShadowScheduleId, SlottedScheduleId};
 use crate::error::ConversionError;
 
 use std::any::Any;
@@ -67,11 +69,113 @@ pub struct RmsBase {
     pub reservation_store: ReservationStore,
 }
 
+pub struct RmsContext {
+    pub aci_id: AciId,
+    pub rms_type: String,
+    pub slot_width: i64,
+    pub num_of_slots: i64,
+    pub reservation_store: ReservationStore,
+    pub simulator: Arc<dyn SystemSimulator>,
+    pub schedule_type: SchedulerType,
+    pub nodes: Vec<Node>,
+    pub links: Vec<Link>,
+}
+
+impl RmsBase {
+    pub fn new_only_nodes(ctx: RmsContext) -> Self {
+        let RmsContext { aci_id, rms_type, slot_width, num_of_slots, reservation_store, simulator, schedule_type, nodes, .. } = ctx;
+
+        let name = format!("AcI: {}, RmsType: {}", aci_id, &rms_type);
+        let mut grid_nodes: Vec<Box<dyn Resource>> = Vec::new();
+        let mut schedule_capacity: i64 = 0;
+
+        for node in nodes.iter() {
+            let mut connected_to_router: HashSet<RouterId> = HashSet::new();
+            let connected_to_router_vec: Vec<RouterId> = node.connected_to_router.iter().map(|router_id| RouterId::new(router_id.clone())).collect();
+
+            connected_to_router.extend(connected_to_router_vec);
+
+            schedule_capacity += node.cpus;
+
+            grid_nodes.push(Box::new(NodeResource::new(NodeResourceId::new(node.id.clone()), node.cpus, connected_to_router)));
+        }
+
+        let resources: Resources = Resources::new(grid_nodes, Vec::new());
+
+        let schedule_context = ScheduleContext {
+            id: SlottedScheduleId::new(name.clone()),
+            number_of_slots: num_of_slots,
+            slot_width: slot_width,
+            capacity: schedule_capacity,
+            simulator,
+            reservation_store: reservation_store.clone(),
+        };
+
+        let schedule = schedule_type.get_instance(schedule_context);
+
+        RmsBase {
+            id: RmsId::new(name),
+            schedule: schedule,
+            shadow_schedules: HashMap::new(),
+            slot_width: slot_width,
+            num_of_slots: num_of_slots,
+            resources: resources,
+            reservation_store,
+        }
+    }
+
+    pub fn new(ctx: RmsContext) -> Self {
+        let RmsContext { aci_id, rms_type, slot_width, num_of_slots, reservation_store, simulator, schedule_type, nodes, links } = ctx;
+
+        let name = format!("AcI: {}, RmsType: {}", aci_id, &rms_type);
+        let mut resources: Vec<Box<dyn Resource>> = Vec::new();
+        let mut schedule_capacity: i64 = 0;
+
+        for node in nodes.iter() {
+            let mut connected_to_router: HashSet<RouterId> = HashSet::new();
+            let connected_to_router_vec: Vec<RouterId> = node.connected_to_router.iter().map(|router_id| RouterId::new(router_id.clone())).collect();
+
+            connected_to_router.extend(connected_to_router_vec);
+
+            schedule_capacity += node.cpus;
+
+            resources.push(Box::new(NodeResource::new(NodeResourceId::new(node.id.clone()), node.cpus, connected_to_router)));
+        }
+
+        for link in links.iter() {
+            resources.push(Box::new(LinkResource::new(LinkResourceId::new(link.id.clone()), link.source, link.target, link.capacity)));
+        }
+
+        let resources: Resources = Resources::new(resources, Vec::new());
+
+        let schedule_context = ScheduleContext {
+            id: SlottedScheduleId::new(name.clone()),
+            number_of_slots: num_of_slots,
+            slot_width: slot_width,
+            capacity: schedule_capacity,
+            simulator,
+            reservation_store: reservation_store.clone(),
+        };
+
+        let schedule = schedule_type.get_instance(schedule_context);
+
+        RmsBase {
+            id: RmsId::new(name),
+            schedule: schedule,
+            shadow_schedules: HashMap::new(),
+            slot_width: slot_width,
+            num_of_slots: num_of_slots,
+            resources: resources,
+            reservation_store,
+        }
+    }
+}
+
 impl TryFrom<(DummyRmsDto, Arc<dyn SystemSimulator>, AciId, ReservationStore, SchedulerType)> for RmsBase {
     type Error = ConversionError;
     fn try_from(args: (DummyRmsDto, Arc<dyn SystemSimulator>, AciId, ReservationStore, SchedulerType)) -> Result<Self, Self::Error> {
         let (dto, simulator, aci_id, reservation_store, schedule_type) = args;
-        let rms_id: RmsId = RmsId::new(format!("AcI: {}, RmsType: {}", aci_id.clone(), &dto.typ));
+
         let schedule_id: SlottedScheduleId = SlottedScheduleId::new(format!("AcI: {}, RmsType: {}", aci_id, &dto.scheduler_typ));
 
         let mut grid_nodes: Vec<Box<dyn Resource>> = Vec::new();

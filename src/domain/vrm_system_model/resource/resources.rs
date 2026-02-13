@@ -11,12 +11,11 @@ use crate::domain::vrm_system_model::utils::id::RouterId;
 pub struct BaseResource<ID> {
     pub id: ID,
     pub capacity: i64,
-    pub connected_routers: HashSet<RouterId>,
 }
 
 impl<ID: Clone> BaseResource<ID> {
-    pub fn new(id: ID, capacity: i64, connected_routers: HashSet<RouterId>) -> Self {
-        Self { id, capacity, connected_routers: connected_routers }
+    pub fn new(id: ID, capacity: i64) -> Self {
+        Self { id, capacity }
     }
 
     pub fn can_handle_adc_capacity_request(&self, res: Reservation) -> bool {

@@ -1,18 +1,41 @@
-use crate::api::rms_config_dto::rms_dto::DummyRmsDto;
 use crate::domain::simulator::simulator::SystemSimulator;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationStore;
 use crate::domain::vrm_system_model::resource::link_resource::LinkResource;
 use crate::domain::vrm_system_model::resource::resource_trait::{Resource, ResourceId};
-use crate::domain::vrm_system_model::rms::rms_type::RmsDummyType;
 use crate::domain::vrm_system_model::schedule::slotted_schedule::slotted_schedule::SlottedSchedule;
 use crate::domain::vrm_system_model::schedule::slotted_schedule::slotted_schedule::schedule_context::SlottedScheduleContext;
-use crate::domain::vrm_system_model::utils::id::{AciId, LinkResourceId, RouterId, SlottedScheduleId};
-use crate::error::ConversionError;
+use crate::domain::vrm_system_model::utils::id::{AciId, LinkResourceId, NodeResourceId, RouterId, SlottedScheduleId};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 
 /// The number of k shortest paths to calculate and cache between any two grid access points.
 const K_NUMBER_OF_PATHS: usize = 10;
+
+pub struct TopologyContext {
+    links: Vec<Link>,
+    nodes: Vec<Node>,
+    slot_width: i64,
+    num_of_slots: i64,
+}
+
+impl TopologyContext {
+    pub fn new(links: Vec<Link>, nodes: Vec<Node>, slot_width: i64, num_of_slots: i64) -> Self {
+        Self { links, nodes, slot_width, num_of_slots }
+    }
+}
+
+pub struct Link {
+    pub id: RouterId,
+    pub source: RouterId,
+    pub target: RouterId,
+    pub capacity: i64,
+}
+
+pub struct Node {
+    pub id: NodeResourceId,
+    pub cpus: i64,
+    pub connected_to_router: Vec<RouterId>,
+}
 
 /// Represents a physical router within the grid network.
 #[derive(Debug, Clone)]
@@ -96,17 +119,13 @@ pub struct NetworkTopology {
     pub max_bandwidth_all_paths: i64,
 }
 
-impl TryFrom<(DummyRmsDto, Arc<dyn SystemSimulator>, AciId, ReservationStore)> for NetworkTopology {
-    type Error = ConversionError;
-
-    fn try_from(args: (DummyRmsDto, Arc<dyn SystemSimulator>, AciId, ReservationStore)) -> Result<Self, Self::Error> {
-        let (dto, simulator, aci_id, reservation_store) = args;
-
+impl NetworkTopology {
+    pub fn new(ctx: TopologyContext, simulator: Arc<dyn SystemSimulator>, aci_id: AciId, reservation_store: ReservationStore) -> Self {
         // 1.  Init physical links.
-        let (network_links, importance_database) = NetworkTopology::setup_network_links(&dto, aci_id, simulator.clone(), reservation_store);
+        let (network_links, importance_database) = NetworkTopology::setup_network_links(&ctx, aci_id, simulator.clone(), reservation_store);
 
         // 2.  Init router instances based on grid nodes and network link endpoints.
-        let routers: HashMap<RouterId, Router> = NetworkTopology::setup_routers(&dto);
+        let routers: HashMap<RouterId, Router> = NetworkTopology::setup_routers(&ctx);
 
         // 3. Build the adjacency matrix
         let adjacency: HashMap<RouterId, HashSet<LinkResourceId>> = NetworkTopology::setup_adjacency_matrix(&network_links, &routers);
@@ -124,21 +143,12 @@ impl TryFrom<(DummyRmsDto, Arc<dyn SystemSimulator>, AciId, ReservationStore)> f
         // 4.  Pre-calculating all K-shortest paths between Grid Access Points.
         topology.calc_all_paths();
 
-        Ok(topology)
+        return topology;
     }
-}
 
-impl NetworkTopology {
-    pub fn new() -> Self {
-        Self {
-            routers: HashMap::new(),
-            network_links: HashMap::new(),
-            adjacency: HashMap::new(),
-            importance_database: HashMap::new(),
-            path_cache: HashMap::new(),
-            virtual_link_resources: Vec::new(),
-            max_bandwidth_all_paths: 0,
-        }
+    pub fn get_link_resources(&self) -> HashMap<LinkResourceId, LinkResource> {
+        self.network_links.clone()
+        TODO
     }
     /// Calculates the K-shortest paths between the source and target router using a Breadth-First Search (BFS) approach.
     /// # Returns
@@ -314,22 +324,20 @@ impl NetworkTopology {
     }
 
     /// Derives the set of all Routers from the DTO configurations (GirdNodes, LinkResources).
-    pub fn setup_routers(dto: &DummyRmsDto) -> HashMap<RouterId, Router> {
+    pub fn setup_routers(ctx: &TopologyContext) -> HashMap<RouterId, Router> {
         let mut routers: HashMap<RouterId, Router> = HashMap::new();
 
-        for grid_node in dto.grid_nodes.iter() {
-            for router_name in grid_node.connected_to_router.iter() {
-                let router_id = RouterId::new(router_name);
-
+        for grid_node in ctx.nodes.iter() {
+            for router_id in grid_node.connected_to_router.iter() {
                 if !routers.contains_key(&router_id) {
-                    routers.insert(router_id.clone(), Router { id: router_id, is_grid_access_point: true });
+                    routers.insert(router_id.clone(), Router { id: router_id.clone(), is_grid_access_point: true });
                 }
             }
         }
 
-        for network_link in dto.network_links.iter() {
-            let router_end_point_id = RouterId::new(network_link.end_point.clone());
-            let router_start_point_id = RouterId::new(network_link.start_point.clone());
+        for network_link in ctx.links.iter() {
+            let router_end_point_id = RouterId::new(network_link.target.clone());
+            let router_start_point_id = RouterId::new(network_link.source.clone());
 
             if !routers.contains_key(&router_end_point_id) {
                 routers.insert(router_end_point_id.clone(), Router { id: router_end_point_id, is_grid_access_point: false });
@@ -345,7 +353,7 @@ impl NetworkTopology {
 
     /// Initializes all `LinkResource` structs and the importance database.
     pub fn setup_network_links(
-        dto: &DummyRmsDto,
+        ctx: &TopologyContext,
         aci_id: AciId,
         simulator: Arc<dyn SystemSimulator>,
         reservation_store: ReservationStore,
@@ -353,14 +361,14 @@ impl NetworkTopology {
         let mut network_links: HashMap<LinkResourceId, LinkResource> = HashMap::new();
         let mut importance_database: HashMap<LinkResourceId, f64> = HashMap::new();
 
-        for link in dto.network_links.iter() {
-            let link_schedule_name = format!("Schedule LinkResource {} -> {}", link.start_point, link.end_point);
+        for link in ctx.links.iter() {
+            let link_schedule_name = format!("Schedule LinkResource {} -> {}", link.source, link.target);
 
             let slotted_schedule_ctx = SlottedScheduleContext::new(
                 SlottedScheduleId::new(link_schedule_name),
                 simulator.get_current_time_in_s(),
-                dto.num_of_slots,
-                dto.slot_width,
+                ctx.num_of_slots,
+                ctx.slot_width,
                 link.capacity,
                 true,
                 reservation_store.clone(),
@@ -373,9 +381,8 @@ impl NetworkTopology {
                 network_link_id.clone(),
                 LinkResource::new(
                     network_link_id.clone(),
-                    HashSet::new(),
-                    RouterId::new(link.start_point.clone()),
-                    RouterId::new(link.end_point.clone()),
+                    RouterId::new(link.source.clone()),
+                    RouterId::new(link.target.clone()),
                     link.capacity,
                     link.capacity,
                     link_schedule,

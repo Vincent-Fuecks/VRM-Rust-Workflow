@@ -1,0 +1,70 @@
+{
+    "adcMasterId" : "ADC-001",
+    "simulator": {
+        "endTime": 36000,
+        "isSimulation": true
+    },
+    "adc": [
+        {
+            "id": "ADC-001",
+            "schedulerTyp": "HEFT", 
+            "requestOrder": "Start-First",
+            "numOfSlots" : 265, 
+            "slotWidth": 256,
+            "timeout": 256, 
+            "maxOptimizationTime": 256, 
+            "rejectNewReservationsAt" : 1000,
+            "children": ["AcI-001"]
+        }
+    ],
+    "aci": [
+        {
+            "id": "AcI-001",
+            "adcId": "Adc-001",
+            "commitTimeout": 256,
+            "rmsSystem":
+            {
+                "id": "HPC-Freie-Universitaet-Berlin",
+                "schedulerTyp": "SlottedSchedule",
+                "slotWidth": 60,
+                "numOfSlots": 60,
+                "slurmUrl": "http://localhost:6820", 
+                "userName": "slurm", 
+                "jwtToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjIwODYzMjkwNDQsImlhdCI6MTc3MDk2OTA0NCwic3VuIjoic2x1cm0ifQ.cXw0JYQSNaA68RVQBAXovbkWpekSj0cO7itYh-AHIrE",
+                "topology" : [
+                    {
+                        "switchName": "s0",
+                        "switches": [],
+                        "nodes": [
+                            "c0",
+                            "c1"
+                        ],
+                        "linkSpeed" : 1000
+                    },
+                    {
+                        "switchName": "s1",
+                        "switches": [],
+                        "nodes": [
+                            "c3",
+                            "c4",
+                            "c5",
+                            "c6"
+                        ],
+                        "linkSpeed" : 1000
+                    },
+                    {
+                        "switchName": "s2",
+                        "switches": [
+                            "s0",
+                            "s1"
+                        ],
+                        "nodes": [
+                            "c2"
+                        ],
+                        "linkSpeed" : 1000
+                    }
+                ]
+            }
+        }  
+    ]
+}

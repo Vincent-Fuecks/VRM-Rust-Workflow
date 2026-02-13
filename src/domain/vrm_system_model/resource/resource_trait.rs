@@ -21,9 +21,6 @@ pub trait Resource: std::fmt::Debug + Send {
     /// Returns the capacity
     fn get_capacity(&self) -> i64;
 
-    /// Returns connected routers
-    fn get_connected_routers(&self) -> &HashSet<RouterId>;
-
     /// Down casting into NodeResource or LinkResource
     fn as_any(&self) -> &dyn Any;
 

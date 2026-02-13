@@ -1,5 +1,6 @@
 use crate::domain::simulator::simulator::SystemSimulator;
-use crate::domain::vrm_system_model::reservation::reservation_store::ReservationStore;
+use crate::domain::vrm_system_model::reservation::reservation_store::{self, ReservationStore};
+use crate::domain::vrm_system_model::schedule::slotted_schedule::network_slotted_schedule::NetworkSlottedSchedule;
 use crate::domain::vrm_system_model::schedule::slotted_schedule::network_slotted_schedule::topology::NetworkTopology;
 use crate::domain::vrm_system_model::schedule::slotted_schedule::slotted_schedule::SlottedSchedule;
 use crate::domain::vrm_system_model::schedule::slotted_schedule::slotted_schedule::schedule_context::SlottedScheduleContext;
@@ -81,7 +82,7 @@ impl SchedulerType {
                     ctx.reservation_store.clone(),
                 );
 
-                Box::new(SlottedSchedule::new(slotted_schedule_ctx, ctx.capacity, ctx.reservation_store, ctx.simulator))
+                Box::new(NetworkSlottedSchedule::new(slotted_schedule_ctx, topology.clone(), ctx.reservation_store, ctx.simulator))
             }
             Self::SlottedSchedule12 => {
                 let number_of_real_slots = (ctx.number_of_slots * (ctx.slot_width + 11)) / 12;

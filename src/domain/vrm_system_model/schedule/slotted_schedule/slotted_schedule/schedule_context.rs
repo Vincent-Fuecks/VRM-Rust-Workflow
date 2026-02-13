@@ -21,7 +21,8 @@ pub struct SlottedScheduleContext {
     /// A list of all time **Slots** defined for this schedule.
     pub slots: Vec<Slot>,
 
-    /// The duration of a single time slot.
+    /// The duration of a single time slot in s.
+    /// Example If the billing periode of the cluster is hour a slot width of 60*60 = 3600s could be used
     pub slot_width: i64,
 
     /// The index of the earliest possible slot that can be used for scheduling.
@@ -69,6 +70,7 @@ impl SlottedScheduleContext {
         let mut slots: Vec<Slot> = Vec::new();
 
         // number_of_real_slots is the number of slots in the considered scheduling window
+        // slot_width = 1h number_of_real_slots = 10 -> 10h scheduling window
         for _ in 0..number_of_real_slots {
             slots.push(Slot::new(capacity));
         }
