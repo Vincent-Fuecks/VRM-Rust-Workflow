@@ -24,7 +24,8 @@ impl RmsSystemWrapper {
     ) -> Result<Box<dyn AdvanceReservationRms>, ConversionError> {
         match dto {
             RmsSystemWrapper::Slurm(dto) => {
-                let rms_instance = SlurmRms::new(dto, simulator, aci_id, reservation_store).await?;
+                let rms_instance = SlurmRms::new(dto, simulator, aci_id, reservation_store)?;
+
                 Ok(Box::new(rms_instance))
             }
 

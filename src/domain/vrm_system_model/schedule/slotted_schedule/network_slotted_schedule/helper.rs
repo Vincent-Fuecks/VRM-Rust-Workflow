@@ -39,23 +39,22 @@ impl NetworkSlottedSchedule {
 
         let mut available_capacity = 0;
 
+        // Check if all links can handle the requested capacity
+
         // Iterate through the K-Shortest Paths
         for path in available_paths {
             // Init with capacity of first link
-            let mut path_available_capacity =
-                self.topology.network_links.get(path.network_links.first().unwrap()).unwrap().schedule.adjust_requirement_to_slot_capacity(
-                    slot_index,
-                    self.get_capacity(),
-                    reservation_id,
-                );
+            let path_first_link_id = path.network_links.first().unwrap();
+
+            let mut path_available_capacity = self.resource_store.with_mut_schedule(*path_first_link_id, |schedule| {
+                schedule.adjust_requirement_to_slot_capacity(slot_index, self.get_capacity(), reservation_id)
+            });
 
             // Check if all links can handle the requested capacity
             for link_id in &path.network_links {
-                path_available_capacity = self.topology.network_links.get(link_id).unwrap().schedule.adjust_requirement_to_slot_capacity(
-                    slot_index,
-                    path_available_capacity,
-                    reservation_id,
-                );
+                path_available_capacity = self.resource_store.with_mut_schedule(*link_id, |schedule| {
+                    schedule.adjust_requirement_to_slot_capacity(slot_index, path_available_capacity, reservation_id)
+                });
 
                 if path_available_capacity == 0 {
                     break;
@@ -109,12 +108,11 @@ impl NetworkSlottedSchedule {
             for link_id in &path.network_links {
                 let link_reserved_capacity = self.reservation_store.get_reserved_capacity(reservation_id);
 
-                if self.topology.network_links.get(link_id).unwrap().schedule.adjust_requirement_to_slot_capacity(
-                    slot_index,
-                    link_reserved_capacity,
-                    reservation_id,
-                ) != link_reserved_capacity
-                {
+                let path_available_capacity = self.resource_store.with_mut_schedule(*link_id, |schedule| {
+                    schedule.adjust_requirement_to_slot_capacity(slot_index, link_reserved_capacity, reservation_id)
+                });
+
+                if path_available_capacity != link_reserved_capacity {
                     free = false;
                     break;
                 }
@@ -124,11 +122,10 @@ impl NetworkSlottedSchedule {
                 // Found path -> register reservation
                 for link_id in &path.network_links {
                     let link_reserved_capacity = self.reservation_store.get_reserved_capacity(reservation_id);
-                    self.topology.network_links.get_mut(link_id).unwrap().schedule.ctx.insert_reservation_into_slot(
-                        &reservation_id,
-                        link_reserved_capacity,
-                        slot_index,
-                    );
+
+                    self.resource_store.with_mut_schedule(*link_id, |schedule| {
+                        schedule.ctx.insert_reservation_into_slot(&reservation_id, link_reserved_capacity, slot_index)
+                    });
                 }
 
                 // Remember path for reservation and slot
@@ -175,11 +172,9 @@ impl NetworkSlottedSchedule {
         // For each time slot resolve the booked path
         for (slot_index, path) in path_per_slot {
             for link_id in &path.network_links {
-                if !self.topology.network_links.get_mut(link_id).unwrap().schedule.ctx.delete_reservation_in_slot(
-                    reservation_id,
-                    self.reservation_store.get_reserved_capacity(reservation_id),
-                    slot_index,
-                ) {
+                if !self.resource_store.with_mut_schedule(*link_id, |schedule| {
+                    schedule.ctx.delete_reservation_in_slot(reservation_id, self.reservation_store.get_reserved_capacity(reservation_id), slot_index)
+                }) {
                     log::error!(
                         "NetworkPolicyDeletionOfReservationFailed: The network path deletion of Reservation {:?} failed. slot_index: {}, path: {:?} the link_id which failed of the processed path {:?}. This link should be empty but part of it is still occupied.",
                         self.reservation_store.get_name_for_key(reservation_id),

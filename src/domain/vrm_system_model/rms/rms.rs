@@ -9,7 +9,7 @@ use crate::domain::vrm_system_model::resource::resources::Resources;
 use crate::domain::vrm_system_model::schedule::slotted_schedule::network_slotted_schedule::topology::{Link, Node};
 use crate::domain::vrm_system_model::scheduler_trait::Schedule;
 use crate::domain::vrm_system_model::scheduler_type::{ScheduleContext, SchedulerType};
-use crate::domain::vrm_system_model::utils::id::{AciId, LinkResourceId, NodeResourceId, RmsId, RouterId, ShadowScheduleId, SlottedScheduleId};
+use crate::domain::vrm_system_model::utils::id::{AciId, ResourceName, RmsId, RouterId, ShadowScheduleId, SlottedScheduleId};
 use crate::error::ConversionError;
 
 use std::any::Any;
@@ -77,13 +77,11 @@ pub struct RmsContext {
     pub reservation_store: ReservationStore,
     pub simulator: Arc<dyn SystemSimulator>,
     pub schedule_type: SchedulerType,
-    pub nodes: Vec<Node>,
-    pub links: Vec<Link>,
 }
 
 impl RmsBase {
-    pub fn new_only_nodes(ctx: RmsContext) -> Self {
-        let RmsContext { aci_id, rms_type, slot_width, num_of_slots, reservation_store, simulator, schedule_type, nodes, .. } = ctx;
+    pub fn new_only_nodes(ctx: RmsContext, nodes: &Vec<Node>) -> Self {
+        let RmsContext { aci_id, rms_type, slot_width, num_of_slots, reservation_store, simulator, schedule_type } = ctx;
 
         let name = format!("AcI: {}, RmsType: {}", aci_id, &rms_type);
         let mut grid_nodes: Vec<Box<dyn Resource>> = Vec::new();
@@ -97,7 +95,7 @@ impl RmsBase {
 
             schedule_capacity += node.cpus;
 
-            grid_nodes.push(Box::new(NodeResource::new(NodeResourceId::new(node.id.clone()), node.cpus, connected_to_router)));
+            grid_nodes.push(Box::new(NodeResource::new(ResourceName::new(node.id.clone()), node.cpus, connected_to_router)));
         }
 
         let resources: Resources = Resources::new(grid_nodes, Vec::new());
@@ -124,8 +122,8 @@ impl RmsBase {
         }
     }
 
-    pub fn new(ctx: RmsContext) -> Self {
-        let RmsContext { aci_id, rms_type, slot_width, num_of_slots, reservation_store, simulator, schedule_type, nodes, links } = ctx;
+    pub fn new(ctx: RmsContext, nodes: &Vec<Node>, links: &Vec<Link>) -> Self {
+        let RmsContext { aci_id, rms_type, slot_width, num_of_slots, reservation_store, simulator, schedule_type } = ctx;
 
         let name = format!("AcI: {}, RmsType: {}", aci_id, &rms_type);
         let mut resources: Vec<Box<dyn Resource>> = Vec::new();

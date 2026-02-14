@@ -11,8 +11,8 @@ impl Schedule for NetworkSlottedSchedule {
     fn clear(&mut self) {
         log::debug!("Clear NetworkSlottedSchedule {}", self.ctx.id);
 
-        for (_, link) in &mut self.topology.network_links {
-            link.schedule.clear();
+        for link_id in &self.topology.link_ids {
+            self.resource_store.with_mut_schedule(*link_id, |schedule| schedule.clear());
         }
 
         self.reserved_paths.clear();

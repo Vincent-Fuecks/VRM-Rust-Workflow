@@ -1,15 +1,8 @@
 use crate::domain::vrm_system_model::reservation::reservation::Reservation;
 use crate::domain::vrm_system_model::reservation::reservation_store::{ReservationId, ReservationStore};
-use crate::domain::vrm_system_model::utils::id::{LinkResourceId, NodeResourceId, RouterId};
+use crate::domain::vrm_system_model::utils::id::ResourceName;
 
 use std::any::Any;
-use std::collections::HashSet;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ResourceId {
-    Link(LinkResourceId),
-    Node(NodeResourceId),
-}
 
 pub trait Resource: std::fmt::Debug + Send {
     /// Returns true if this specific resource can handle the reservation
@@ -25,5 +18,5 @@ pub trait Resource: std::fmt::Debug + Send {
     fn as_any(&self) -> &dyn Any;
 
     /// Return the Id of the Resource
-    fn get_id(&self) -> ResourceId;
+    fn get_name(&self) -> ResourceName;
 }

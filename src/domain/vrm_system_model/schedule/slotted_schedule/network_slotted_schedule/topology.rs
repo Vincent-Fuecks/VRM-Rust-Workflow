@@ -1,28 +1,16 @@
 use crate::domain::simulator::simulator::SystemSimulator;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationStore;
 use crate::domain::vrm_system_model::resource::link_resource::LinkResource;
-use crate::domain::vrm_system_model::resource::resource_trait::{Resource, ResourceId};
+use crate::domain::vrm_system_model::resource::resource_store::{LinkResourceId, NodeResourceId, ResourceStore};
 use crate::domain::vrm_system_model::schedule::slotted_schedule::slotted_schedule::SlottedSchedule;
 use crate::domain::vrm_system_model::schedule::slotted_schedule::slotted_schedule::schedule_context::SlottedScheduleContext;
-use crate::domain::vrm_system_model::utils::id::{AciId, LinkResourceId, NodeResourceId, RouterId, SlottedScheduleId};
+use crate::domain::vrm_system_model::utils::id::{AciId, ResourceName, RouterId, SlottedScheduleId};
+
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 
 /// The number of k shortest paths to calculate and cache between any two grid access points.
 const K_NUMBER_OF_PATHS: usize = 10;
-
-pub struct TopologyContext {
-    links: Vec<Link>,
-    nodes: Vec<Node>,
-    slot_width: i64,
-    num_of_slots: i64,
-}
-
-impl TopologyContext {
-    pub fn new(links: Vec<Link>, nodes: Vec<Node>, slot_width: i64, num_of_slots: i64) -> Self {
-        Self { links, nodes, slot_width, num_of_slots }
-    }
-}
 
 pub struct Link {
     pub id: RouterId,
@@ -99,15 +87,11 @@ pub struct NetworkTopology {
     routers: HashMap<RouterId, Router>,
 
     /// A map of all physical network links, indexed by their ID.
-    pub network_links: HashMap<LinkResourceId, LinkResource>,
+    pub link_ids: HashSet<LinkResourceId>,
 
     /// The adjacency list representing the graph structure.
     /// Maps a `RouterId` to a set of outgoing `LinkResourceId`s, enabling efficient graph traversal.
     adjacency: HashMap<RouterId, HashSet<LinkResourceId>>,
-
-    /// Stores heuristic weights for network links.
-    /// Values represent how influential a link was in previous reservations.
-    importance_database: HashMap<LinkResourceId, f64>,
 
     /// A cache storing the calculated K-shortest paths between pairs of routers.
     pub path_cache: HashMap<(RouterId, RouterId), Vec<Path>>,
@@ -117,27 +101,47 @@ pub struct NetworkTopology {
 
     /// Tracks maximum bandwidth across all calculated paths (highest bottleneck bandwidth on all the found paths)
     pub max_bandwidth_all_paths: i64,
+
+    pub resource_store: ResourceStore,
 }
 
 impl NetworkTopology {
-    pub fn new(ctx: TopologyContext, simulator: Arc<dyn SystemSimulator>, aci_id: AciId, reservation_store: ReservationStore) -> Self {
+    pub fn new(
+        links: &Vec<Link>,
+        nodes: &Vec<Node>,
+        slot_width: i64,
+        num_of_slots: i64,
+        simulator: Arc<dyn SystemSimulator>,
+        aci_id: AciId,
+        reservation_store: ReservationStore,
+        resource_store: ResourceStore,
+    ) -> Self {
         // 1.  Init physical links.
-        let (network_links, importance_database) = NetworkTopology::setup_network_links(&ctx, aci_id, simulator.clone(), reservation_store);
+        let link_ids = NetworkTopology::setup_network_links(
+            links,
+            num_of_slots,
+            slot_width,
+            aci_id,
+            simulator.clone(),
+            reservation_store,
+            resource_store.clone(),
+        );
 
         // 2.  Init router instances based on grid nodes and network link endpoints.
-        let routers: HashMap<RouterId, Router> = NetworkTopology::setup_routers(&ctx);
+        let routers: HashMap<RouterId, Router> = NetworkTopology::setup_routers(nodes, links);
 
         // 3. Build the adjacency matrix
-        let adjacency: HashMap<RouterId, HashSet<LinkResourceId>> = NetworkTopology::setup_adjacency_matrix(&network_links, &routers);
+        let adjacency: HashMap<RouterId, HashSet<LinkResourceId>> =
+            NetworkTopology::setup_adjacency_matrix(&link_ids, &routers, resource_store.clone());
 
         let mut topology = NetworkTopology {
             routers,
-            network_links,
+            link_ids,
             adjacency,
-            importance_database,
             path_cache: HashMap::new(),
             virtual_link_resources: Vec::new(),
-            max_bandwidth_all_paths: 0,
+            max_bandwidth_all_paths: -1,
+            resource_store,
         };
 
         // 4.  Pre-calculating all K-shortest paths between Grid Access Points.
@@ -146,10 +150,6 @@ impl NetworkTopology {
         return topology;
     }
 
-    pub fn get_link_resources(&self) -> HashMap<LinkResourceId, LinkResource> {
-        self.network_links.clone()
-        TODO
-    }
     /// Calculates the K-shortest paths between the source and target router using a Breadth-First Search (BFS) approach.
     /// # Returns
     ///
@@ -161,7 +161,7 @@ impl NetworkTopology {
         // Initialize queue with all outgoing network links from source
         if let Some(outgoing_links) = self.adjacency.get(&source_router.id) {
             for link_id in outgoing_links {
-                if self.network_links.contains_key(link_id) {
+                if self.link_ids.contains(link_id) {
                     let mut p = Path::new();
                     p.network_links.push(link_id.clone());
                     queue.push_back(p);
@@ -172,9 +172,9 @@ impl NetworkTopology {
         while let Some(current_path) = queue.pop_front() {
             let current_last_network_link = current_path.network_links.last().expect("Path should not be empty");
 
-            let last_network_link = self.network_links.get(current_last_network_link).expect("Network Link should exist.");
+            let last_link_id = self.link_ids.get(current_last_network_link).expect("Network Link should exist.");
 
-            let current_target_router_id = last_network_link.target.clone();
+            let current_target_router_id = self.resource_store.get_target(*last_link_id);
 
             if current_target_router_id.eq(&target_router.id) {
                 found_solutions.push(current_path);
@@ -184,12 +184,12 @@ impl NetworkTopology {
                 }
             } else if self.adjacency.contains_key(&current_target_router_id) {
                 for outgoing_link_id in self.adjacency.get(&current_target_router_id).unwrap().clone().iter() {
-                    let outgoing_link_target_id = self.network_links.get(&outgoing_link_id).unwrap().target.clone();
+                    let outgoing_link_target_id = self.resource_store.get_target(*outgoing_link_id);
 
                     let mut is_loop: bool = false;
 
                     for old_part_id in &current_path.network_links {
-                        let old_part_source_id = self.network_links.get(&old_part_id).unwrap().source.clone();
+                        let old_part_source_id = self.resource_store.get_source(*old_part_id);
 
                         if old_part_source_id == outgoing_link_target_id {
                             is_loop = true;
@@ -220,9 +220,10 @@ impl NetworkTopology {
 
             // Find bottleneck (min capacity) of this path
             for link_id in &solution.network_links {
-                let link = self.network_links.get(link_id).unwrap();
-                if link.get_capacity() < bandwidth_bottleneck {
-                    bandwidth_bottleneck = link.get_capacity();
+                let link_capacity = self.resource_store.get_capacity(*link_id);
+
+                if link_capacity < bandwidth_bottleneck {
+                    bandwidth_bottleneck = link_capacity;
                 }
             }
 
@@ -272,15 +273,16 @@ impl NetworkTopology {
     }
 
     /// Constructs the adjacency matrix for the network graph.
-    pub fn setup_adjacency_matrix(
-        network_links: &HashMap<LinkResourceId, LinkResource>,
+    fn setup_adjacency_matrix(
+        link_ids: &HashSet<LinkResourceId>,
         routers: &HashMap<RouterId, Router>,
+        resource_store: ResourceStore,
     ) -> HashMap<RouterId, HashSet<LinkResourceId>> {
         let mut adjacency: HashMap<RouterId, HashSet<LinkResourceId>> = HashMap::new();
 
-        for (network_link_id, network_link) in network_links {
-            let source: RouterId = network_link.source.clone();
-            let target: RouterId = network_link.target.clone();
+        for link_id in link_ids {
+            let source: RouterId = resource_store.get_source(*link_id);
+            let target: RouterId = resource_store.get_target(*link_id);
 
             let mut source_found: bool = false;
             let mut target_found: bool = false;
@@ -289,13 +291,7 @@ impl NetworkTopology {
                 if router_id.eq(&source) {
                     source_found = true;
 
-                    let resource_id = network_link.get_id();
-
-                    if let ResourceId::Link(link_id) = resource_id {
-                        adjacency.entry(source.clone()).or_insert_with(HashSet::new).insert(link_id);
-                    } else {
-                        panic!("Expected a LinkResource ID but found {:?}", resource_id);
-                    }
+                    adjacency.entry(source.clone()).or_insert_with(HashSet::new).insert(*link_id);
 
                     if target_found {
                         break;
@@ -324,10 +320,10 @@ impl NetworkTopology {
     }
 
     /// Derives the set of all Routers from the DTO configurations (GirdNodes, LinkResources).
-    pub fn setup_routers(ctx: &TopologyContext) -> HashMap<RouterId, Router> {
+    fn setup_routers(nodes: &Vec<Node>, links: &Vec<Link>) -> HashMap<RouterId, Router> {
         let mut routers: HashMap<RouterId, Router> = HashMap::new();
 
-        for grid_node in ctx.nodes.iter() {
+        for grid_node in nodes.iter() {
             for router_id in grid_node.connected_to_router.iter() {
                 if !routers.contains_key(&router_id) {
                     routers.insert(router_id.clone(), Router { id: router_id.clone(), is_grid_access_point: true });
@@ -335,7 +331,7 @@ impl NetworkTopology {
             }
         }
 
-        for network_link in ctx.links.iter() {
+        for network_link in links.iter() {
             let router_end_point_id = RouterId::new(network_link.target.clone());
             let router_start_point_id = RouterId::new(network_link.source.clone());
 
@@ -352,23 +348,25 @@ impl NetworkTopology {
     }
 
     /// Initializes all `LinkResource` structs and the importance database.
-    pub fn setup_network_links(
-        ctx: &TopologyContext,
+    fn setup_network_links(
+        links: &Vec<Link>,
+        num_of_slots: i64,
+        slot_width: i64,
         aci_id: AciId,
         simulator: Arc<dyn SystemSimulator>,
         reservation_store: ReservationStore,
-    ) -> (HashMap<LinkResourceId, LinkResource>, HashMap<LinkResourceId, f64>) {
-        let mut network_links: HashMap<LinkResourceId, LinkResource> = HashMap::new();
-        let mut importance_database: HashMap<LinkResourceId, f64> = HashMap::new();
+        resource_store: ResourceStore,
+    ) -> HashSet<LinkResourceId> {
+        let mut links_ids: HashSet<LinkResourceId> = HashSet::new();
 
-        for link in ctx.links.iter() {
+        for link in links.iter() {
             let link_schedule_name = format!("Schedule LinkResource {} -> {}", link.source, link.target);
 
             let slotted_schedule_ctx = SlottedScheduleContext::new(
                 SlottedScheduleId::new(link_schedule_name),
                 simulator.get_current_time_in_s(),
-                ctx.num_of_slots,
-                ctx.slot_width,
+                num_of_slots,
+                slot_width,
                 link.capacity,
                 true,
                 reservation_store.clone(),
@@ -376,28 +374,24 @@ impl NetworkTopology {
 
             let link_schedule = SlottedSchedule::new(slotted_schedule_ctx, link.capacity, reservation_store.clone(), simulator.clone());
 
-            let network_link_id: LinkResourceId = LinkResourceId::new(link.id.clone());
-            network_links.insert(
-                network_link_id.clone(),
-                LinkResource::new(
-                    network_link_id.clone(),
-                    RouterId::new(link.source.clone()),
-                    RouterId::new(link.target.clone()),
-                    link.capacity,
-                    link.capacity,
-                    link_schedule,
-                ),
+            let link_resouce_name = ResourceName::new(link.id.clone());
+            let link_resource = LinkResource::new(
+                link_resouce_name,
+                RouterId::new(link.source.clone()),
+                RouterId::new(link.target.clone()),
+                link.capacity,
+                link_schedule,
             );
 
-            importance_database.insert(network_link_id, 1.0);
+            links_ids.insert(resource_store.add_link(link_resource));
         }
 
-        if network_links.is_empty() {
+        if links_ids.is_empty() {
             log::info!(
                 "Empty NullBroker Network: The newly created NullBroker of AcI {} contains no Network. NullRms should be utilized instead.",
                 aci_id
             );
         }
-        return (network_links, importance_database);
+        return links_ids;
     }
 }

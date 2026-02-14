@@ -1,22 +1,19 @@
 use crate::domain::vrm_system_model::reservation::reservation::Reservation;
 use crate::domain::vrm_system_model::reservation::reservation_store::{ReservationId, ReservationStore};
-use crate::domain::vrm_system_model::resource::{
-    resource_trait::{Resource, ResourceId},
-    resources::BaseResource,
-};
-use crate::domain::vrm_system_model::utils::id::{NodeResourceId, RouterId};
+use crate::domain::vrm_system_model::resource::{resource_trait::Resource, resources::BaseResource};
+use crate::domain::vrm_system_model::utils::id::{ResourceName, RouterId};
 
 use std::any::Any;
 use std::collections::HashSet;
 
 #[derive(Debug, Clone)]
 pub struct NodeResource {
-    pub base: BaseResource<NodeResourceId>,
+    pub base: BaseResource,
 }
 
 impl NodeResource {
-    pub fn new(id: NodeResourceId, capacity: i64, connected_routers: HashSet<RouterId>) -> Self {
-        let base = BaseResource::new(id, capacity);
+    pub fn new(name: ResourceName, capacity: i64, connected_routers: HashSet<RouterId>) -> Self {
+        let base = BaseResource::new(name, capacity);
         Self { base }
     }
 }
@@ -38,7 +35,7 @@ impl Resource for NodeResource {
         self
     }
 
-    fn get_id(&self) -> ResourceId {
-        ResourceId::Node(self.base.get_id())
+    fn get_name(&self) -> ResourceName {
+        self.base.get_name()
     }
 }

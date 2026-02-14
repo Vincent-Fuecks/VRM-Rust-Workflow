@@ -5,17 +5,17 @@ use crate::domain::vrm_system_model::reservation::reservation_store::{Reservatio
 use crate::domain::vrm_system_model::resource::link_resource::LinkResource;
 use crate::domain::vrm_system_model::resource::node_resource::NodeResource;
 use crate::domain::vrm_system_model::resource::resource_trait::Resource;
-use crate::domain::vrm_system_model::utils::id::RouterId;
+use crate::domain::vrm_system_model::utils::id::{ResourceName, RouterId};
 
 #[derive(Debug, Clone)]
-pub struct BaseResource<ID> {
-    pub id: ID,
+pub struct BaseResource {
+    pub name: ResourceName,
     pub capacity: i64,
 }
 
-impl<ID: Clone> BaseResource<ID> {
-    pub fn new(id: ID, capacity: i64) -> Self {
-        Self { id, capacity }
+impl BaseResource {
+    pub fn new(name: ResourceName, capacity: i64) -> Self {
+        Self { name, capacity }
     }
 
     pub fn can_handle_adc_capacity_request(&self, res: Reservation) -> bool {
@@ -34,8 +34,8 @@ impl<ID: Clone> BaseResource<ID> {
         }
     }
 
-    pub fn get_id(&self) -> ID {
-        self.id.clone()
+    pub fn get_name(&self) -> ResourceName {
+        self.name.clone()
     }
 }
 
@@ -92,7 +92,7 @@ impl Resources {
 
     /// Returns the aggregated sum of the link resource capacities
     pub fn get_total_link_capacity(&self) -> i64 {
-        self.inner.iter().filter_map(|r| r.as_any().downcast_ref::<LinkResource>()).map(|link| link.avg_bandwidth).sum()
+        self.inner.iter().filter_map(|r| r.as_any().downcast_ref::<LinkResource>()).map(|link| link.get_capacity()).sum()
     }
 
     /// Returns the aggregated sum of the node resource capacities

@@ -50,9 +50,7 @@ pub struct ReservationTag;
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Copy)]
 pub struct RouterTag;
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Copy, Serialize, Deserialize)]
-pub struct NodeResourceTag;
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Copy)]
-pub struct LinkResourceTag;
+pub struct ResourceTag;
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Copy)]
 pub struct RmsTag;
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Copy)]
@@ -84,8 +82,7 @@ pub struct CoAllocationDependencyTag;
 
 pub type ReservationName = Id<ReservationTag>;
 pub type RouterId = Id<RouterTag>;
-pub type NodeResourceId = Id<NodeResourceTag>;
-pub type LinkResourceId = Id<LinkResourceTag>;
+pub type ResourceName = Id<ResourceTag>;
 pub type RmsId = Id<RmsTag>;
 pub type SlottedScheduleId = Id<SlottedScheduleTag>;
 pub type AciId = Id<AciTag>;
