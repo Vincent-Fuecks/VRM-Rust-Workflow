@@ -55,10 +55,6 @@ impl VrmComponent for VrmComponentProxy {
         self.call(VrmMessage::GetLinkResourceCount)
     }
 
-    fn get_router_list(&self) -> Vec<RouterId> {
-        self.call(VrmMessage::GetRouterList)
-    }
-
     fn can_handel(&self, res: Reservation) -> bool {
         self.call(|tx| VrmMessage::CanHandel { reservation: res, reply_to: tx })
     }

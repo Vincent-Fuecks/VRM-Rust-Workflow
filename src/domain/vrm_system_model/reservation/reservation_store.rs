@@ -193,9 +193,11 @@ impl ReservationStore {
         if let Some(handle) = self.get(reservation_id) {
             let res = handle.read().unwrap();
             let res = res.as_any().downcast_ref::<LinkReservation>();
+
             return res.unwrap().start_point.clone();
         } else {
             log::error!("Get reservation (id: {:?}) was not possible.", reservation_id);
+            self.dump_store_contents(reservation_id);
             return None;
         }
     }
@@ -288,7 +290,7 @@ impl ReservationStore {
             let res = handle.read().unwrap();
             return res.get_booking_interval_start();
         } else {
-            self.dump_store_contents();
+            self.dump_store_contents(reservation_id);
             panic!("Reservation (id: {:?}) does not contain a booking interval start time.", reservation_id);
         }
     }
@@ -408,6 +410,16 @@ impl ReservationStore {
         if let Some(handle) = self.get(reservation_id) {
             let res = handle.read().unwrap();
             return matches!(res.get_typ(), ReservationTyp::Link);
+        } else {
+            log::error!("Get reservation (id: {:?}) was not possible.", reservation_id);
+            return false;
+        }
+    }
+
+    pub fn is_node(&self, reservation_id: ReservationId) -> bool {
+        if let Some(handle) = self.get(reservation_id) {
+            let res = handle.read().unwrap();
+            return matches!(res.get_typ(), ReservationTyp::Node);
         } else {
             log::error!("Get reservation (id: {:?}) was not possible.", reservation_id);
             return false;
@@ -600,15 +612,16 @@ impl ReservationStore {
     }
 
     /// Iterates through all reservations and logs their ID and Name to the error log.
-    pub fn dump_store_contents(&self) {
+    pub fn dump_store_contents(&self, reservation_id: ReservationId) {
         let guard = self.inner.read().expect("RwLock poisoned");
         log::error!("=== RESERVATION STORE DUMP ({} entries) ===", guard.slots.len());
+        log::error!("=== Panic by Reservation ID: {:?}, Name: {:?} ===", reservation_id, self.get_name_for_key(reservation_id));
 
         for (id, res_handle) in &guard.slots {
             // We attempt to read the reservation name directly from the object
             match res_handle.read() {
                 Ok(res) => {
-                    log::error!("  -> ID: {:?} | Name: {:?} | State: {:?}", id, res.get_name(), res.get_state());
+                    log::error!("  -> ID: {:?} | Name: {:?} | State: {:?} | Type: {:?}", id, res.get_name(), res.get_state(), res.get_typ());
                 }
                 Err(_) => {
                     log::error!("  -> ID: {:?} | [Lock Poisoned]", id);

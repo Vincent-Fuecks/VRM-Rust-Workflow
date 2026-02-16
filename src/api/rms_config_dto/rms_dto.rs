@@ -49,6 +49,7 @@ pub struct NetworkLinkDto {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SlurmSwitchDto {
     pub switch_name: String,
     pub switches: Vec<String>,

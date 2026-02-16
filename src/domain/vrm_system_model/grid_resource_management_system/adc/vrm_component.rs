@@ -34,17 +34,6 @@ impl VrmComponent for ADC {
         self.manager.get_link_resource_count()
     }
 
-    fn get_router_list(&self) -> Vec<RouterId> {
-        let component_router_list = self
-            .manager
-            .get_random_ordered_vrm_components()
-            .into_iter()
-            .flat_map(|component_id| self.manager.get_component_router_list(component_id))
-            .collect();
-
-        return component_router_list;
-    }
-
     fn can_handel(&self, res: Reservation) -> bool {
         for component_id in self.manager.get_random_ordered_vrm_components() {
             if self.manager.can_component_handel(component_id, res.clone()) {

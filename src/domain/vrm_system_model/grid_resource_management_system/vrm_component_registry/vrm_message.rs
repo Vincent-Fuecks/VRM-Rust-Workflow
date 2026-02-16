@@ -15,7 +15,6 @@ pub enum VrmMessage {
     GetTotalLinkCapacity(mpsc::Sender<i64>),
     GetTotalNodeCapacity(mpsc::Sender<i64>),
     GetLinkResourceCount(mpsc::Sender<usize>),
-    GetRouterList(mpsc::Sender<Vec<RouterId>>),
 
     CanHandel { reservation: Reservation, reply_to: mpsc::Sender<bool> },
 

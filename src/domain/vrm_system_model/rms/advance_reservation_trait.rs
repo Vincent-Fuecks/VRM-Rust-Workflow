@@ -194,9 +194,13 @@ pub trait AdvanceReservationRms: Rms + Send {
     /// If no candidates are found, an empty list is returned.
     /// TODO is the state of all reservation changed in the ReservationStore?
     fn probe(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> ProbeReservations {
-        match shadow_schedule_id {
-            Some(id) => self.get_mut_shadow_schedule(id).probe(reservation_id),
-            None => self.get_mut_master_schedule().probe(reservation_id),
+        if self.can_rms_handle_reservation(reservation_id) {
+            match shadow_schedule_id {
+                Some(id) => self.get_mut_shadow_schedule(id).probe(reservation_id),
+                None => self.get_mut_master_schedule().probe(reservation_id),
+            }
+        } else {
+            return ProbeReservations::new(reservation_id, self.get_base().reservation_store.clone());
         }
     }
 
@@ -218,9 +222,13 @@ pub trait AdvanceReservationRms: Rms + Send {
     /// * `None` if the reservation was rejected (e.g., due to conflicts). The state
     ///   will be `ReservationState::Rejected`
     fn reserve(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> Option<ReservationId> {
-        match shadow_schedule_id {
-            Some(id) => self.get_mut_shadow_schedule(id).reserve(reservation_id),
-            None => self.get_mut_master_schedule().reserve(reservation_id),
+        if self.can_rms_handle_reservation(reservation_id) {
+            match shadow_schedule_id {
+                Some(id) => self.get_mut_shadow_schedule(id).reserve(reservation_id),
+                None => self.get_mut_master_schedule().reserve(reservation_id),
+            }
+        } else {
+            None
         }
     }
 
@@ -244,9 +252,12 @@ pub trait AdvanceReservationRms: Rms + Send {
     /// The `ReservationId` of the committed job.
     fn commit(&mut self, reservation_id: ReservationId) -> ReservationId {
         log::info!("RmsNull committed reservation with id: {:?}.  Please verify if specific RMS logic is required.", reservation_id);
-
-        self.set_reservation_state(reservation_id, ReservationState::Committed);
-        return reservation_id;
+        if self.can_rms_handle_reservation(reservation_id) {
+            self.set_reservation_state(reservation_id, ReservationState::Committed);
+            return reservation_id;
+        } else {
+            return reservation_id;
+        }
     }
 
     /// Destroys the specified **Shadow Schedule**.
@@ -282,9 +293,13 @@ pub trait AdvanceReservationRms: Rms + Send {
         comparator: &mut dyn FnMut(ReservationId, ReservationId) -> Ordering,
         shadow_schedule_id: Option<ShadowScheduleId>,
     ) -> Option<ReservationId> {
-        match shadow_schedule_id {
-            Some(id) => self.get_mut_shadow_schedule(id).probe_best(request_id, comparator),
-            None => self.get_mut_master_schedule().probe_best(request_id, comparator),
+        if self.can_rms_handle_reservation(request_id) {
+            match shadow_schedule_id {
+                Some(id) => self.get_mut_shadow_schedule(id).probe_best(request_id, comparator),
+                None => self.get_mut_master_schedule().probe_best(request_id, comparator),
+            }
+        } else {
+            return None;
         }
     }
 
@@ -300,39 +315,37 @@ pub trait AdvanceReservationRms: Rms + Send {
     /// * `reservation_id` - The ID of the job to delete.
     /// * `shadow_schedule_id` - If `Some`, deletes from the specified shadow schedule.   
     fn delete_task(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) {
-        match shadow_schedule_id {
-            Some(id) => self.get_mut_shadow_schedule(id).delete_reservation(reservation_id),
-            None => self.get_mut_master_schedule().delete_reservation(reservation_id),
+        if self.can_rms_handle_reservation(reservation_id) {
+            match shadow_schedule_id {
+                Some(id) => self.get_mut_shadow_schedule(id).delete_reservation(reservation_id),
+                None => self.get_mut_master_schedule().delete_reservation(reservation_id),
+            }
         }
     }
 
     fn can_handle_adc_request(&self, res: Reservation) -> bool {
-        self.get_base().resources.can_handle_adc_request(res)
+        self.get_base().resource_store.can_handle_adc_request(res)
     }
 
     fn can_handle_aci_request(&self, reservation_store: ReservationStore, reservation_id: ReservationId) -> bool {
-        self.get_base().resources.can_handle_aci_request(reservation_store, reservation_id)
+        self.get_base().resource_store.can_handle_aci_request(reservation_store, reservation_id)
     }
 
     fn get_total_link_capacity(&self) -> i64 {
-        self.get_base().resources.get_total_link_capacity()
+        self.get_base().resource_store.get_total_link_capacity()
     }
 
     fn get_total_node_capacity(&self) -> i64 {
-        self.get_base().resources.get_total_node_capacity()
+        self.get_base().resource_store.get_total_node_capacity()
     }
 
     fn get_total_capacity(&self) -> i64 {
-        self.get_base().resources.get_total_capacity()
+        self.get_base().resource_store.get_total_capacity()
     }
 
     fn get_link_resource_count(&self) -> usize {
-        self.get_base().resources.get_link_resource_count()
+        self.get_base().resource_store.get_num_of_links()
     }
 
-    fn get_router_list(&self) -> Vec<RouterId> {
-        self.get_base().resources.get_router_list()
-    }
+    fn can_rms_handle_reservation(&self, reservation_id: ReservationId) -> bool;
 }
-
-impl<T: Rms + Send> AdvanceReservationRms for T {}

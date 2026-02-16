@@ -13,14 +13,14 @@ use std::sync::Arc;
 const K_NUMBER_OF_PATHS: usize = 10;
 
 pub struct Link {
-    pub id: RouterId,
+    pub id: ResourceName,
     pub source: RouterId,
     pub target: RouterId,
     pub capacity: i64,
 }
 
 pub struct Node {
-    pub id: NodeResourceId,
+    pub name: ResourceName,
     pub cpus: i64,
     pub connected_to_router: Vec<RouterId>,
 }
@@ -388,7 +388,7 @@ impl NetworkTopology {
 
         if links_ids.is_empty() {
             log::info!(
-                "Empty NullBroker Network: The newly created NullBroker of AcI {} contains no Network. NullRms should be utilized instead.",
+                "Empty Network Cluster: The newly created Rms Network of AcI {} contains no Network. NullRms should be utilized instead.",
                 aci_id
             );
         }

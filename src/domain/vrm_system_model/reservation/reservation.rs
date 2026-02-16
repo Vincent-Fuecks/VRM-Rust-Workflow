@@ -14,6 +14,7 @@ pub enum Reservation {
     Link(LinkReservation),
 }
 
+#[derive(Debug)]
 pub enum ReservationTyp {
     Workflow,
     Link,
@@ -57,6 +58,13 @@ impl Reservation {
     pub fn as_workflow_mut(&mut self) -> Option<&mut Workflow> {
         match self {
             Reservation::Workflow(w) => Some(w),
+            _ => None,
+        }
+    }
+
+    pub fn as_node(&self) -> Option<&NodeReservation> {
+        match self {
+            Reservation::Node(n) => Some(n),
             _ => None,
         }
     }

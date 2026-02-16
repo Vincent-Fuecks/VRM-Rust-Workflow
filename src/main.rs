@@ -30,8 +30,7 @@ pub fn get_vrm_dto(file_path: &str) -> Result<VrmDto> {
     Ok(root_dto)
 }
 
-#[tokio::main]
-async fn main() {
+fn main() {
     // Init Logging
     logger::init();
     let log_file_path = "/home/vincent/Desktop/Repository/VRM-Rust-Workflow/statistics/analytics.csv".to_string();
@@ -50,7 +49,14 @@ async fn main() {
     let simulator: Arc<dyn SystemSimulator> = Arc::new(Simulator::new(simulator_dto));
 
     let mut vrm_manager = VrmManager::init_vrm_system(vrm_dto, unprocessed_reservations, simulator.clone(), registry, reservation_store.clone());
-    vrm_manager.run_vrm().await;
+
+    let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
+
+    log::info!("Bootstrap complete. Starting VRM Async Runtime.");
+
+    rt.block_on(async move {
+        vrm_manager.run_vrm().await;
+    });
 
     // Prevent main from exiting immediately so threads can run
     std::thread::park();

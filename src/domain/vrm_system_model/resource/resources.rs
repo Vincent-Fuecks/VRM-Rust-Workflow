@@ -18,20 +18,8 @@ impl BaseResource {
         Self { name, capacity }
     }
 
-    pub fn can_handle_adc_capacity_request(&self, res: Reservation) -> bool {
-        if res.get_base_reservation().is_moldable() && res.get_base_reservation().get_reserved_capacity() > 0 {
-            res.get_base_reservation().get_reserved_capacity() <= self.capacity
-        } else {
-            true
-        }
-    }
-
-    pub fn can_handle_aci_capacity_request(&self, reservation_store: ReservationStore, reservation_id: ReservationId) -> bool {
-        if reservation_store.is_moldable(reservation_id) && reservation_store.get_reserved_capacity(reservation_id) > 0 {
-            reservation_store.get_reserved_capacity(reservation_id) <= self.capacity
-        } else {
-            true
-        }
+    pub fn can_handle_adc_capacity_request(&self, is_res_moldable: bool, res_reserved_capacity: i64) -> bool {
+        if is_res_moldable && res_reserved_capacity > 0 { res_reserved_capacity <= self.capacity } else { true }
     }
 
     pub fn get_name(&self) -> ResourceName {
@@ -60,24 +48,6 @@ impl Resources {
 
     pub fn get_total_capacity(&self) -> i64 {
         self.inner.iter().map(|r| r.get_capacity()).sum()
-    }
-
-    pub fn can_handle_adc_request(&self, res: Reservation) -> bool {
-        for resource in &self.inner {
-            if resource.can_handle_adc_capacity_request(res.clone()) {
-                return true;
-            }
-        }
-        false
-    }
-
-    pub fn can_handle_aci_request(&self, reservation_store: ReservationStore, reservation_id: ReservationId) -> bool {
-        for resource in &self.inner {
-            if resource.can_handle_aci_capacity_request(reservation_store.clone(), reservation_id) {
-                return true;
-            }
-        }
-        false
     }
 
     /// Returns the number of NodeResources in Resources

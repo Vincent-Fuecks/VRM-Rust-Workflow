@@ -1,9 +1,10 @@
-use crate::api::rms_config_dto::rms_dto::{DummyRmsDto, RmsSystemWrapper};
+use crate::api::rms_config_dto::rms_dto::RmsSystemWrapper;
 use crate::domain::simulator::simulator::SystemSimulator;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationStore;
 use crate::domain::vrm_system_model::rms::advance_reservation_trait::AdvanceReservationRms;
+use crate::domain::vrm_system_model::rms::rms_simulator::rms_network_simulator::RmsNetworkSimulator;
+use crate::domain::vrm_system_model::rms::rms_simulator::rms_node_simulator::RmsNodeSimulator;
 use crate::domain::vrm_system_model::rms::slurm::slurm::SlurmRms;
-use crate::domain::vrm_system_model::rms::{null_broker::NullBroker, null_rms::NullRms};
 use crate::domain::vrm_system_model::utils::id::AciId;
 use crate::error::ConversionError;
 use std::str::FromStr;
@@ -24,9 +25,12 @@ impl RmsSystemWrapper {
     ) -> Result<Box<dyn AdvanceReservationRms>, ConversionError> {
         match dto {
             RmsSystemWrapper::Slurm(dto) => {
-                let rms_instance = SlurmRms::new(dto, simulator, aci_id, reservation_store)?;
+                let rms_instance = SlurmRms::new(dto, simulator, aci_id, reservation_store);
 
-                Ok(Box::new(rms_instance))
+                match rms_instance {
+                    Ok(rms_instance) => Ok(Box::new(rms_instance)),
+                    Err(e) => panic!("SlurmClusterInitProcessFailed: Error: {:?}", e),
+                }
             }
 
             RmsSystemWrapper::DummyRms(dummy_rms_dto) => {
@@ -34,12 +38,12 @@ impl RmsSystemWrapper {
 
                 match rms_type {
                     RmsDummyType::NullRms => {
-                        let rms_instance = NullRms::try_from((dummy_rms_dto, simulator, aci_id, reservation_store))?;
+                        let rms_instance = RmsNodeSimulator::try_from((dummy_rms_dto, simulator, aci_id, reservation_store))?;
                         Ok(Box::new(rms_instance))
                     }
 
                     RmsDummyType::NullBroker => {
-                        let broker_instance = NullBroker::try_from((dummy_rms_dto, simulator, aci_id, reservation_store))?;
+                        let broker_instance = RmsNetworkSimulator::try_from((dummy_rms_dto, simulator, aci_id, reservation_store))?;
                         Ok(Box::new(broker_instance))
                     }
                 }

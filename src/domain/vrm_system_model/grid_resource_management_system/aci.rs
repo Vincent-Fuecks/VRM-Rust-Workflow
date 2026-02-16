@@ -163,10 +163,6 @@ impl VrmComponent for AcI {
         self.rms_system.get_link_resource_count()
     }
 
-    fn get_router_list(&self) -> Vec<RouterId> {
-        self.rms_system.get_router_list()
-    }
-
     fn can_handel(&self, res: Reservation) -> bool {
         self.rms_system.can_handle_adc_request(res)
     }

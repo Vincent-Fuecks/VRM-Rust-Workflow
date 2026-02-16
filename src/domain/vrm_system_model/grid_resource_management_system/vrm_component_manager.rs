@@ -94,10 +94,6 @@ impl VrmComponentContainer {
     pub fn can_handel(&self, res: Reservation) -> bool {
         self.vrm_component.can_handel(res)
     }
-
-    pub fn get_router_list(&self) -> Vec<RouterId> {
-        self.vrm_component.get_router_list()
-    }
 }
 
 /// Manages a collection of **VrmComponents (ADCs and/or AcIs)** for a specific **ADC**.

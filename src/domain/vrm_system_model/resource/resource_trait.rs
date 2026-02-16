@@ -5,12 +5,6 @@ use crate::domain::vrm_system_model::utils::id::ResourceName;
 use std::any::Any;
 
 pub trait Resource: std::fmt::Debug + Send {
-    /// Returns true if this specific resource can handle the reservation
-    fn can_handle_adc_capacity_request(&self, res: Reservation) -> bool;
-
-    /// Returns true if this specific resource can handle the reservation
-    fn can_handle_aci_capacity_request(&self, reservation_store: ReservationStore, reservation_id: ReservationId) -> bool;
-
     /// Returns the capacity
     fn get_capacity(&self) -> i64;
 

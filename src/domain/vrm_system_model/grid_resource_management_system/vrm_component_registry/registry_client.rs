@@ -59,9 +59,6 @@ impl RegistryClient {
                 VrmMessage::GetLinkResourceCount(reply) => {
                     let _ = reply.send(component.get_link_resource_count());
                 }
-                VrmMessage::GetRouterList(reply) => {
-                    let _ = reply.send(component.get_router_list());
-                }
                 VrmMessage::CanHandel { reservation, reply_to } => {
                     let _ = reply_to.send(component.can_handel(reservation));
                 }

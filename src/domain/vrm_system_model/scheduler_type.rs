@@ -1,5 +1,6 @@
 use crate::domain::simulator::simulator::SystemSimulator;
 use crate::domain::vrm_system_model::reservation::reservation_store::{self, ReservationStore};
+use crate::domain::vrm_system_model::resource::resource_store::{self, ResourceStore};
 use crate::domain::vrm_system_model::schedule::slotted_schedule::network_slotted_schedule::NetworkSlottedSchedule;
 use crate::domain::vrm_system_model::schedule::slotted_schedule::network_slotted_schedule::topology::NetworkTopology;
 use crate::domain::vrm_system_model::schedule::slotted_schedule::slotted_schedule::SlottedSchedule;
@@ -23,7 +24,7 @@ pub enum SchedulerType {
     UnlimitedSchedule,
 
     // Network Scheduler
-    SlottedScheduleNetwork { topology: NetworkTopology },
+    SlottedScheduleNetwork { topology: NetworkTopology, resource_store: ResourceStore },
 }
 #[derive(Debug, Clone)]
 pub struct ScheduleContext {
@@ -71,7 +72,7 @@ impl SchedulerType {
 
                 Box::new(SlottedSchedule::new(slotted_schedule_ctx, ctx.capacity, ctx.reservation_store, ctx.simulator))
             }
-            Self::SlottedScheduleNetwork { topology } => {
+            Self::SlottedScheduleNetwork { topology, resource_store } => {
                 let slotted_schedule_ctx = SlottedScheduleContext::new(
                     ctx.id,
                     ctx.simulator.get_current_time_in_s(),
@@ -82,7 +83,13 @@ impl SchedulerType {
                     ctx.reservation_store.clone(),
                 );
 
-                Box::new(NetworkSlottedSchedule::new(slotted_schedule_ctx, topology.clone(), ctx.reservation_store, ctx.simulator))
+                Box::new(NetworkSlottedSchedule::new(
+                    slotted_schedule_ctx,
+                    topology.clone(),
+                    ctx.reservation_store,
+                    resource_store.clone(),
+                    ctx.simulator,
+                ))
             }
             Self::SlottedSchedule12 => {
                 let number_of_real_slots = (ctx.number_of_slots * (ctx.slot_width + 11)) / 12;
@@ -131,12 +138,12 @@ impl SchedulerType {
         }
     }
 
-    pub fn get_network_scheduler_variant(&self, topology: NetworkTopology) -> SchedulerType {
+    pub fn get_network_scheduler_variant(&self, topology: NetworkTopology, resource_store: ResourceStore) -> SchedulerType {
         match self {
-            Self::SlottedSchedule => SchedulerType::SlottedScheduleNetwork { topology },
+            Self::SlottedSchedule => SchedulerType::SlottedScheduleNetwork { topology, resource_store },
             _ => {
                 log::error!("The specified Scheduler {:?} is not implemented as NetworkScheduler. Default to SlottedSchedule", self);
-                SchedulerType::SlottedScheduleNetwork { topology }
+                SchedulerType::SlottedScheduleNetwork { topology, resource_store }
             }
         }
     }
