@@ -7,6 +7,7 @@ use crate::domain::vrm_system_model::reservation::reservation::Reservation;
 use crate::domain::vrm_system_model::reservation::reservation::ReservationState;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationId;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationStore;
+use crate::domain::vrm_system_model::rms::rms::RmsLoadMetric;
 use crate::domain::vrm_system_model::schedule::slotted_schedule::slotted_schedule::SlottedSchedule;
 use crate::domain::vrm_system_model::schedule::slotted_schedule::slotted_schedule::schedule_context::SlottedScheduleContext;
 use crate::domain::vrm_system_model::scheduler_trait::Schedule;
@@ -618,7 +619,7 @@ impl VrmComponentManager {
     ///
     /// # Returns
     /// A `LoadMetric` struct containing utilization, start/end times, and capacity details.
-    pub fn get_load_metric(&self, start: i64, end: i64, shadow_schedule_id: Option<ShadowScheduleId>) -> LoadMetric {
+    pub fn get_load_metric(&self, start: i64, end: i64, shadow_schedule_id: Option<ShadowScheduleId>) -> RmsLoadMetric {
         let mut total_possible_reserved_capacity = 0.0;
         let mut total_average_reserved_capacity = 0.0;
         let mut earliest_start = i64::MAX;
@@ -676,7 +677,7 @@ impl VrmComponentManager {
     ///
     /// # Returns
     /// A `LoadMetric` representing the average reserved capacity and utilization across the simulation.
-    pub fn get_simulation_load_metric(&mut self, shadow_schedule_id: Option<ShadowScheduleId>) -> LoadMetric {
+    pub fn get_simulation_load_metric(&mut self, shadow_schedule_id: Option<ShadowScheduleId>) -> RmsLoadMetric {
         let mut total_possible_reserved_capacity = 0.0;
         let mut total_average_reserved_capacity = 0.0;
         let mut earliest_start = i64::MAX;

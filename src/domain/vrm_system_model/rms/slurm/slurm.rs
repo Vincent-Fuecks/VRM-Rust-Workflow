@@ -1,19 +1,17 @@
 use reqwest::blocking::Client;
 use reqwest::header::{HeaderMap, HeaderValue};
 
+use std::collections::HashMap;
 use std::i64;
-use std::{
-    any::Any,
-    collections::{HashMap, HashSet},
-    str::FromStr,
-    sync::Arc,
-};
+use std::{any::Any, str::FromStr, sync::Arc};
 
-use crate::domain::vrm_system_model::reservation::reservation::ReservationState;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationId;
+use crate::domain::vrm_system_model::resource::node_resource::NodeResource;
 use crate::domain::vrm_system_model::resource::resource_store::ResourceStore;
-use crate::domain::vrm_system_model::rms::advance_reservation_trait::AdvanceReservationRms;
-use crate::domain::vrm_system_model::utils::id::ResourceName;
+use crate::domain::vrm_system_model::rms::rms_node_network_trait::Helper;
+use crate::domain::vrm_system_model::scheduler_trait::Schedule;
+use crate::domain::vrm_system_model::scheduler_type::ScheduleContext;
+use crate::domain::vrm_system_model::utils::id::{ResourceName, ShadowScheduleId, SlottedScheduleId};
 use crate::{
     api::rms_config_dto::rms_dto::SlurmRmsDto,
     domain::{
@@ -21,7 +19,7 @@ use crate::{
         vrm_system_model::{
             reservation::reservation_store::ReservationStore,
             rms::{
-                rms::{Rms, RmsBase, RmsContext},
+                rms::{Rms, RmsBase},
                 slurm::{response::slurm_node::SlurmNodesResponse, slurm_endpoint::SlurmEndpoint},
             },
             schedule::slotted_schedule::network_slotted_schedule::topology::NetworkTopology,
@@ -34,10 +32,14 @@ use crate::{
 #[derive(Debug)]
 pub struct SlurmRms {
     pub base: RmsBase,
-    client: Client,
+    pub node_schedule: Box<dyn Schedule>,
+    pub network_schedule: Box<dyn Schedule>,
+    pub node_shadow_schedule: HashMap<ShadowScheduleId, Box<dyn Schedule>>,
+    pub network_shadow_schedule: HashMap<ShadowScheduleId, Box<dyn Schedule>>,
     pub slurm_url: String,
     pub user_name: String,
     pub jwt_token: String,
+    client: Client,
 }
 
 #[derive(Debug, Clone)]
@@ -46,6 +48,48 @@ pub struct SlurmTopology {
     pub switches: Vec<RouterId>,
     pub nodes: Vec<ResourceName>,
     pub link_speed: i64,
+}
+
+impl Helper for SlurmRms {
+    fn get_node_shadow_schedule(&self) -> &HashMap<ShadowScheduleId, Box<dyn Schedule>> {
+        &self.node_shadow_schedule
+    }
+
+    fn get_mut_network_shadow_schedule(&mut self) -> &mut HashMap<ShadowScheduleId, Box<dyn Schedule>> {
+        &mut self.network_shadow_schedule
+    }
+
+    fn get_network_shadow_schedule(&self) -> &HashMap<ShadowScheduleId, Box<dyn Schedule>> {
+        &self.node_shadow_schedule
+    }
+
+    fn get_mut_node_shadow_schedule(&mut self) -> &mut HashMap<ShadowScheduleId, Box<dyn Schedule>> {
+        &mut self.node_shadow_schedule
+    }
+
+    fn get_node_schedule(&self) -> &Box<dyn Schedule> {
+        &self.node_schedule
+    }
+
+    fn get_mut_node_schedule(&mut self) -> &mut Box<dyn Schedule> {
+        &mut self.node_schedule
+    }
+
+    fn get_network_schedule(&self) -> &Box<dyn Schedule> {
+        &self.network_schedule
+    }
+
+    fn get_mut_network_schedule(&mut self) -> &mut Box<dyn Schedule> {
+        &mut self.network_schedule
+    }
+
+    fn set_node_schedule(&mut self, new_node_schedule: Box<dyn Schedule>) {
+        self.node_schedule = new_node_schedule;
+    }
+
+    fn set_network_schedule(&mut self, new_network_schedule: Box<dyn Schedule>) {
+        self.network_schedule = new_network_schedule;
+    }
 }
 
 impl Rms for SlurmRms {
@@ -59,6 +103,27 @@ impl Rms for SlurmRms {
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn get_mut_active_schedule(&mut self, shadow_schedule_id: Option<ShadowScheduleId>, reservation_id: ReservationId) -> &mut Box<dyn Schedule> {
+        if self.base.reservation_store.is_link(reservation_id) {
+            match shadow_schedule_id {
+                Some(id) => self.network_shadow_schedule.get_mut(&id).expect("network_shadow_schedule contains ShadowSchedule."),
+                None => &mut self.network_schedule,
+            }
+        } else if self.base.reservation_store.is_node(reservation_id) {
+            match shadow_schedule_id {
+                Some(id) => self.node_shadow_schedule.get_mut(&id).expect("node_shadow_schedule contains ShadowSchedule."),
+                None => &mut self.node_schedule,
+            }
+        } else {
+            panic!(
+                "RmsSimulatorErrorNoScheduleForReservation: The rms RmsSimulator has no Scheduler for Reservation type {:?}. ReservationName: {:?} ShadowScheduleId {:?}",
+                self.base.reservation_store.get_type(reservation_id),
+                self.base.reservation_store.get_name_for_key(reservation_id),
+                shadow_schedule_id
+            );
+        }
     }
 }
 
@@ -84,6 +149,30 @@ impl SlurmRms {
             let (nodes, links) = SlurmRms::get_nodes_and_links(&dto, &nodes_response);
             let resource_store = ResourceStore::new();
 
+            // Setup Node Schedule
+            let mut schedule_capacity = 0;
+
+            // Add nodes to ResourceStore
+            for node in nodes.iter() {
+                schedule_capacity += node.cpus;
+                resource_store.add_node(NodeResource::new(node.name.clone(), node.cpus));
+            }
+
+            let name = format!("AcI: {}, RmsType: {}, RmsName: {}", aci_id, "Slurm".to_string(), dto.id);
+            let schedule_context = ScheduleContext {
+                id: SlottedScheduleId::new(name.clone()),
+                number_of_slots: dto.num_of_slots,
+                slot_width: dto.slot_width,
+                capacity: schedule_capacity,
+                simulator: simulator.clone(),
+                reservation_store: reservation_store.clone(),
+            };
+
+            let scheduler_type = SchedulerType::from_str(&dto.scheduler_typ)?;
+            let node_schedule = scheduler_type.get_instance(schedule_context);
+
+            // Setup Network Schedule
+            // Adds Links to Resource Store
             let topology = NetworkTopology::new(
                 &links,
                 &nodes,
@@ -95,24 +184,32 @@ impl SlurmRms {
                 resource_store.clone(),
             );
 
-            let mut scheduler_type = SchedulerType::from_str(&dto.scheduler_typ)?;
-            scheduler_type = scheduler_type.get_network_scheduler_variant(topology, resource_store.clone());
-
-            let rms_context = RmsContext {
-                aci_id: aci_id,
-                rms_type: "SLURM".to_string(),
-                schedule_capacity: i64::MAX,
+            let schedule_context = ScheduleContext {
+                id: SlottedScheduleId::new(name.clone()),
+                number_of_slots: dto.num_of_slots,
                 slot_width: dto.slot_width,
-                num_of_slots: dto.num_of_slots,
-                nodes: nodes,
-                reservation_store,
-                simulator,
-                schedule_type: scheduler_type,
+                capacity: i64::MAX,
+                simulator: simulator.clone(),
+                reservation_store: reservation_store.clone(),
             };
 
-            let base = RmsBase::new(rms_context, resource_store);
+            let mut scheduler_type = SchedulerType::from_str(&dto.scheduler_typ)?;
+            scheduler_type = scheduler_type.get_network_scheduler_variant(topology, resource_store.clone());
+            let network_schedule = scheduler_type.get_instance(schedule_context);
 
-            Ok(SlurmRms { base: base, client, jwt_token: dto.jwt_token, slurm_url: dto.slurm_url, user_name: dto.user_name })
+            let base = RmsBase::new(aci_id, "Slurm".to_string(), reservation_store, resource_store.clone());
+
+            Ok(SlurmRms {
+                base: base,
+                node_schedule,
+                network_schedule,
+                node_shadow_schedule: HashMap::new(),
+                network_shadow_schedule: HashMap::new(),
+                jwt_token: dto.jwt_token,
+                slurm_url: dto.slurm_url,
+                user_name: dto.user_name,
+                client,
+            })
         } else {
             let body_text = response.text();
             panic!(
@@ -125,21 +222,6 @@ impl SlurmRms {
                 status,
                 body_text
             );
-        }
-    }
-}
-
-impl AdvanceReservationRms for SlurmRms {
-    fn can_rms_handle_reservation(&self, reservation_id: ReservationId) -> bool {
-        if self.get_base().reservation_store.is_link(reservation_id) || self.get_base().reservation_store.is_node(reservation_id) {
-            true
-        } else {
-            log::debug!(
-                "The Reservation {:?} was submitted to the SlurmRms, which is either a NodeReservation or LinkReservation",
-                self.get_base().reservation_store.get_name_for_key(reservation_id)
-            );
-            self.get_base().reservation_store.update_state(reservation_id, ReservationState::Rejected);
-            false
         }
     }
 }

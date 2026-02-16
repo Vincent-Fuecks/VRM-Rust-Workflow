@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::domain::vrm_system_model::{
     grid_resource_management_system::{adc::ADC, vrm_component_trait::VrmComponent},
     reservation::{
@@ -7,8 +5,9 @@ use crate::domain::vrm_system_model::{
         reservation::{Reservation, ReservationState},
         reservation_store::ReservationId,
     },
+    rms::rms::RmsLoadMetric,
     utils::{
-        id::{ComponentId, RouterId, ShadowScheduleId},
+        id::{ComponentId, ShadowScheduleId},
         load_buffer::LoadMetric,
     },
 };
@@ -161,11 +160,11 @@ impl VrmComponent for ADC {
         }
     }
 
-    fn get_load_metric(&self, start: i64, end: i64, shadow_schedule_id: Option<ShadowScheduleId>) -> LoadMetric {
+    fn get_load_metric(&self, start: i64, end: i64, shadow_schedule_id: Option<ShadowScheduleId>) -> RmsLoadMetric {
         self.manager.get_load_metric(start, end, shadow_schedule_id)
     }
 
-    fn get_load_metric_up_to_date(&mut self, start: i64, end: i64, shadow_schedule_id: Option<ShadowScheduleId>) -> LoadMetric {
+    fn get_load_metric_up_to_date(&mut self, start: i64, end: i64, shadow_schedule_id: Option<ShadowScheduleId>) -> RmsLoadMetric {
         self.manager.get_load_metric(start, end, shadow_schedule_id)
     }
 
@@ -173,7 +172,7 @@ impl VrmComponent for ADC {
         self.manager.get_satisfaction(start, end, shadow_schedule_id)
     }
 
-    fn get_simulation_load_metric(&mut self, shadow_schedule_id: Option<ShadowScheduleId>) -> LoadMetric {
+    fn get_simulation_load_metric(&mut self, shadow_schedule_id: Option<ShadowScheduleId>) -> RmsLoadMetric {
         self.manager.get_simulation_load_metric(shadow_schedule_id)
     }
 
@@ -230,11 +229,11 @@ impl VrmComponent for ADC {
         // Perform Reserve
         if self.reservation_store.is_workflow(reservation_id) {
             // "Option Dance" with WorkflowScheduler
-            if let Some(mut scheduler) = self.workflow_scheduler.take() {
+            if let Some(mut workflow_scheduler) = self.workflow_scheduler.take() {
                 // Performs all reservation tracking like self.manager.not_committed_reservations
-                scheduler.reserve(reservation_id, self);
+                workflow_scheduler.reserve(reservation_id, self);
 
-                self.workflow_scheduler = Some(scheduler);
+                self.workflow_scheduler = Some(workflow_scheduler);
             } else {
                 log::error!("WorkflowScheduler is missing or currently in use (recursive call?) for ADC {:?}", self.id);
                 self.reservation_store.update_state(reservation_id, ReservationState::Rejected);

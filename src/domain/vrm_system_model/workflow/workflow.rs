@@ -884,7 +884,7 @@ impl ReservationTrait for Workflow {
         self
     }
 
-    fn get_typ(&self) -> ReservationTyp {
+    fn get_type(&self) -> ReservationTyp {
         ReservationTyp::Workflow
     }
 }
@@ -896,7 +896,7 @@ impl Workflow {
      * @param res Reservation belonging to a Request(Reservation) in the Workflow
      */
     pub fn update_reservation(&mut self, reservation_store: ReservationStore, reservation_id: ReservationId) {
-        match reservation_store.get_typ(reservation_id) {
+        match reservation_store.get_type(reservation_id) {
             Some(ReservationTyp::Link) => {
                 self.update_workflow_assigned_start_and_end(reservation_store.clone(), reservation_id);
             }

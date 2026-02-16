@@ -6,7 +6,8 @@ use crate::domain::vrm_system_model::reservation::probe_reservations::ProbeReser
 use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationState};
 use crate::domain::vrm_system_model::reservation::reservation_store::{ReservationId, ReservationStore};
 use crate::domain::vrm_system_model::rms::advance_reservation_trait::AdvanceReservationRms;
-use crate::domain::vrm_system_model::utils::id::{AciId, AdcId, ClientId, ComponentId, RouterId, ShadowScheduleId};
+use crate::domain::vrm_system_model::rms::rms::RmsLoadMetric;
+use crate::domain::vrm_system_model::utils::id::{AciId, AdcId, ClientId, ComponentId, ShadowScheduleId};
 use crate::domain::vrm_system_model::utils::load_buffer::LoadMetric;
 use crate::domain::vrm_system_model::utils::statistics::ANALYTICS_TARGET;
 use crate::error::ConversionError;
@@ -306,7 +307,7 @@ impl VrmComponent for AcI {
     }
 
     fn delete_shadow_schedule(&mut self, shadow_schedule_id: ShadowScheduleId) -> bool {
-        if self.rms_system.delete_shadow_schedule(shadow_schedule_id.clone()) {
+        if self.rms_system.delete_shadow_schedule(&shadow_schedule_id) {
             let aci_id = self.id.clone();
             if self.shadow_schedule_reservations.delete_shadow_schedule(&shadow_schedule_id, &aci_id) {
                 return true;
@@ -325,11 +326,11 @@ impl VrmComponent for AcI {
         return false;
     }
 
-    fn get_load_metric_up_to_date(&mut self, start: i64, end: i64, shadow_schedule_id: Option<ShadowScheduleId>) -> LoadMetric {
+    fn get_load_metric_up_to_date(&mut self, start: i64, end: i64, shadow_schedule_id: Option<ShadowScheduleId>) -> RmsLoadMetric {
         self.rms_system.get_load_metric_up_to_date(start, end, shadow_schedule_id)
     }
 
-    fn get_load_metric(&self, start: i64, end: i64, shadow_schedule_id: Option<ShadowScheduleId>) -> LoadMetric {
+    fn get_load_metric(&self, start: i64, end: i64, shadow_schedule_id: Option<ShadowScheduleId>) -> RmsLoadMetric {
         self.rms_system.get_load_metric(start, end, shadow_schedule_id)
     }
 
@@ -337,7 +338,7 @@ impl VrmComponent for AcI {
         self.rms_system.get_fragmentation(start, end, shadow_schedule_id)
     }
 
-    fn get_simulation_load_metric(&mut self, shadow_schedule_id: Option<ShadowScheduleId>) -> LoadMetric {
+    fn get_simulation_load_metric(&mut self, shadow_schedule_id: Option<ShadowScheduleId>) -> RmsLoadMetric {
         self.rms_system.get_simulation_load_metric(shadow_schedule_id)
     }
 
@@ -480,25 +481,47 @@ impl AcI {
                 (start, end, name, cap, workload, state, proceeding, tasks)
             };
 
-            let load_metric = self.rms_system.get_load_metric_up_to_date(start, end, None);
+            let rms_load_metric = self.rms_system.get_load_metric_up_to_date(start, end, None);
 
-            tracing::info!(
-                target: ANALYTICS_TARGET,
-                Time = now,
-                LogDescription = "AcI Operation finished",
-                ComponentType = %self.id,
-                ComponentUtilization = load_metric.utilization,
-                ComponentCapacity = load_metric.possible_capacity,
-                ComponentFragmentation = self.rms_system.get_system_fragmentation(None),
-                ReservationName = %res_name,
-                ReservationCapacity = capacity,
-                ReservationWorkload = workload,
-                ReservationState = ?state,
-                ReservationProceeding = ?proceeding,
-                NumberOfTasks = num_tasks,
-                Command = command,
-                ProcessingTime = processing_time,
-            );
+            if let Some(node_load_metric) = rms_load_metric.node_load_metric {
+                tracing::info!(
+                    target: ANALYTICS_TARGET,
+                    Time = now,
+                    LogDescription = "AcI Operation finished NodeLoadMetric",
+                    ComponentType = %self.id,
+                    ComponentUtilization = node_load_metric.utilization,
+                    ComponentCapacity = node_load_metric.possible_capacity,
+                    ComponentFragmentation = self.rms_system.get_system_fragmentation(None),
+                    ReservationName = %res_name,
+                    ReservationCapacity = capacity,
+                    ReservationWorkload = workload,
+                    ReservationState = ?state,
+                    ReservationProceeding = ?proceeding,
+                    NumberOfTasks = num_tasks,
+                    Command = command,
+                    ProcessingTime = processing_time,
+                );
+            }
+
+            if let Some(network_load_metric) = rms_load_metric.link_load_metric {
+                tracing::info!(
+                    target: ANALYTICS_TARGET,
+                    Time = now,
+                    LogDescription = "AcI Operation finished NetworkLoadMetric",
+                    ComponentType = %self.id,
+                    ComponentUtilization = network_load_metric.utilization,
+                    ComponentCapacity = network_load_metric.possible_capacity,
+                    ComponentFragmentation = self.rms_system.get_system_fragmentation(None),
+                    ReservationName = %res_name,
+                    ReservationCapacity = capacity,
+                    ReservationWorkload = workload,
+                    ReservationState = ?state,
+                    ReservationProceeding = ?proceeding,
+                    NumberOfTasks = num_tasks,
+                    Command = command,
+                    ProcessingTime = processing_time,
+                );
+            }
         } else {
             // Handling in case reservation is missing (e.g. deleted/cleaned up)
 

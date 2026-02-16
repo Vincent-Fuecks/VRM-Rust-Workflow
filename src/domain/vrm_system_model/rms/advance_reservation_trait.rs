@@ -1,9 +1,8 @@
 use crate::domain::vrm_system_model::reservation::probe_reservations::ProbeReservations;
 use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationState};
 use crate::domain::vrm_system_model::reservation::reservation_store::{ReservationId, ReservationStore};
-use crate::domain::vrm_system_model::rms::rms::Rms;
-use crate::domain::vrm_system_model::utils::id::{RouterId, ShadowScheduleId};
-use crate::domain::vrm_system_model::utils::load_buffer::LoadMetric;
+use crate::domain::vrm_system_model::rms::rms::{Rms, RmsLoadMetric};
+use crate::domain::vrm_system_model::utils::id::ShadowScheduleId;
 
 use std::cmp::Ordering;
 
@@ -41,19 +40,7 @@ pub trait AdvanceReservationRms: Rms + Send {
     /// # Errors
     ///
     /// Logs an error if a shadow schedule with the given ID already exists.
-    fn create_shadow_schedule(&mut self, shadow_schedule_id: &ShadowScheduleId) -> bool {
-        if self.get_shadow_schedule_keys().contains(shadow_schedule_id) {
-            log::error!(
-                "Creating new shadow schedule is not possible because shadow schedule id ({}) does already exist. Please first delete the old shadow schedule.",
-                shadow_schedule_id
-            );
-            return false;
-        }
-
-        let new_shadow_schedule = self.get_base_mut().schedule.clone_box();
-        self.get_base_mut().shadow_schedules.insert(shadow_schedule_id.clone(), new_shadow_schedule);
-        return true;
-    }
+    fn create_shadow_schedule(&mut self, shadow_schedule_id: &ShadowScheduleId) -> bool;
 
     /// Commits a specific **Shadow Schedule**, replacing the master schedule.
     ///
@@ -73,17 +60,7 @@ pub trait AdvanceReservationRms: Rms + Send {
     /// # Note
     ///
     /// After a successful commit, the `shadow_schedule_id` is consumed and no longer available.
-    fn commit_shadow_schedule(&mut self, shadow_schedule_id: &ShadowScheduleId) -> bool {
-        let new_schedule = self.get_base_mut().shadow_schedules.remove(shadow_schedule_id);
-
-        if new_schedule.is_some() {
-            self.get_base_mut().schedule = new_schedule.unwrap();
-            return true;
-        }
-
-        log::error!("Finding and removing shadow schedule with id {} was not possible", shadow_schedule_id.clone());
-        return false;
-    }
+    fn commit_shadow_schedule(&mut self, shadow_schedule_id: &ShadowScheduleId) -> bool;
 
     /// Calculates the fragmentation of the schedule within a specific time range.
     ///
@@ -96,12 +73,7 @@ pub trait AdvanceReservationRms: Rms + Send {
     /// * `end` - The end of the time window in VRM time (seconds).
     /// * `shadow_schedule_id` - If `Some`, analyzes the specified shadow schedule.
     ///                          If `None`, analyzes the master schedule.
-    fn get_fragmentation(&mut self, start: i64, end: i64, shadow_schedule_id: Option<ShadowScheduleId>) -> f64 {
-        match shadow_schedule_id {
-            Some(id) => self.get_mut_shadow_schedule(id).get_fragmentation(start, end),
-            None => self.get_mut_master_schedule().get_fragmentation(start, end),
-        }
-    }
+    fn get_fragmentation(&mut self, start: i64, end: i64, shadow_schedule_id: Option<ShadowScheduleId>) -> f64;
 
     /// Calculates the global fragmentation of the entire schedule.
     ///
@@ -113,12 +85,7 @@ pub trait AdvanceReservationRms: Rms + Send {
     /// # Returns
     ///
     /// A value between `0.0` (best case) and `1.0` (worst case).
-    fn get_system_fragmentation(&mut self, shadow_schedule_id: Option<ShadowScheduleId>) -> f64 {
-        match shadow_schedule_id {
-            Some(id) => self.get_mut_shadow_schedule(id).get_system_fragmentation(),
-            None => self.get_mut_master_schedule().get_system_fragmentation(),
-        }
-    }
+    fn get_system_fragmentation(&mut self, shadow_schedule_id: Option<ShadowScheduleId>) -> f64;
 
     /// Retrieves load metrics for a specific time range.
     ///
@@ -132,12 +99,7 @@ pub trait AdvanceReservationRms: Rms + Send {
     /// # Returns
     ///
     /// A [`LoadMetric`] containing the calculated utilization metrics.
-    fn get_load_metric_up_to_date(&mut self, start: i64, end: i64, shadow_schedule_id: Option<ShadowScheduleId>) -> LoadMetric {
-        match shadow_schedule_id {
-            Some(id) => self.get_mut_shadow_schedule(id).get_load_metric_up_to_date(start, end),
-            None => self.get_mut_master_schedule().get_load_metric_up_to_date(start, end),
-        }
-    }
+    fn get_load_metric_up_to_date(&mut self, start: i64, end: i64, shadow_schedule_id: Option<ShadowScheduleId>) -> RmsLoadMetric;
 
     /// Retrieves load metrics for a specific time range.
     ///
@@ -151,12 +113,7 @@ pub trait AdvanceReservationRms: Rms + Send {
     /// # Returns
     ///
     /// A [`LoadMetric`] containing the calculated utilization metrics.
-    fn get_load_metric(&self, start: i64, end: i64, shadow_schedule_id: Option<ShadowScheduleId>) -> LoadMetric {
-        match shadow_schedule_id {
-            Some(id) => self.get_shadow_schedule(id).get_load_metric(start, end),
-            None => self.get_master_schedule().get_load_metric(start, end),
-        }
-    }
+    fn get_load_metric(&self, start: i64, end: i64, shadow_schedule_id: Option<ShadowScheduleId>) -> RmsLoadMetric;
 
     /// Retrieves load metrics for the total simulation.
     ///
@@ -168,12 +125,7 @@ pub trait AdvanceReservationRms: Rms + Send {
     /// # Returns
     ///
     /// A [`LoadMetric`] containing the calculated utilization metrics.
-    fn get_simulation_load_metric(&mut self, shadow_schedule_id: Option<ShadowScheduleId>) -> LoadMetric {
-        match shadow_schedule_id {
-            Some(id) => self.get_mut_shadow_schedule(id).get_simulation_load_metric(),
-            None => self.get_mut_master_schedule().get_simulation_load_metric(),
-        }
-    }
+    fn get_simulation_load_metric(&mut self, shadow_schedule_id: Option<ShadowScheduleId>) -> RmsLoadMetric;
 
     /// Probes the RMS for possible reservation configurations.
     ///
@@ -194,14 +146,9 @@ pub trait AdvanceReservationRms: Rms + Send {
     /// If no candidates are found, an empty list is returned.
     /// TODO is the state of all reservation changed in the ReservationStore?
     fn probe(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> ProbeReservations {
-        if self.can_rms_handle_reservation(reservation_id) {
-            match shadow_schedule_id {
-                Some(id) => self.get_mut_shadow_schedule(id).probe(reservation_id),
-                None => self.get_mut_master_schedule().probe(reservation_id),
-            }
-        } else {
-            return ProbeReservations::new(reservation_id, self.get_base().reservation_store.clone());
-        }
+        let active_schedule = self.get_mut_active_schedule(shadow_schedule_id, reservation_id);
+
+        active_schedule.probe(reservation_id)
     }
 
     /// Submits a reservation request to the local RMS.
@@ -222,14 +169,8 @@ pub trait AdvanceReservationRms: Rms + Send {
     /// * `None` if the reservation was rejected (e.g., due to conflicts). The state
     ///   will be `ReservationState::Rejected`
     fn reserve(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> Option<ReservationId> {
-        if self.can_rms_handle_reservation(reservation_id) {
-            match shadow_schedule_id {
-                Some(id) => self.get_mut_shadow_schedule(id).reserve(reservation_id),
-                None => self.get_mut_master_schedule().reserve(reservation_id),
-            }
-        } else {
-            None
-        }
+        let active_schedule = self.get_mut_active_schedule(shadow_schedule_id, reservation_id);
+        active_schedule.reserve(reservation_id)
     }
 
     /// Finalizes a reservation, marking it as committed.
@@ -251,13 +192,10 @@ pub trait AdvanceReservationRms: Rms + Send {
     ///
     /// The `ReservationId` of the committed job.
     fn commit(&mut self, reservation_id: ReservationId) -> ReservationId {
-        log::info!("RmsNull committed reservation with id: {:?}.  Please verify if specific RMS logic is required.", reservation_id);
-        if self.can_rms_handle_reservation(reservation_id) {
-            self.set_reservation_state(reservation_id, ReservationState::Committed);
-            return reservation_id;
-        } else {
-            return reservation_id;
-        }
+        log::info!("Rms committed reservation with id: {:?}.  Please verify if specific RMS logic is required.", reservation_id);
+
+        self.set_reservation_state(reservation_id, ReservationState::Committed);
+        return reservation_id;
     }
 
     /// Destroys the specified **Shadow Schedule**.
@@ -267,13 +205,7 @@ pub trait AdvanceReservationRms: Rms + Send {
     /// # Arguments
     ///
     /// * `shadow_schedule_id` - The unique identifier of the shadow schedule to remove.
-    fn delete_shadow_schedule(&mut self, shadow_schedule_id: ShadowScheduleId) -> bool {
-        if self.get_base_mut().shadow_schedules.remove(&shadow_schedule_id).is_none() {
-            log::error!("Removing shadow schedule was not possible. Shadow schedule id ({}) was not found", shadow_schedule_id);
-            return false;
-        }
-        return true;
-    }
+    fn delete_shadow_schedule(&mut self, shadow_schedule_id: &ShadowScheduleId) -> bool;
 
     /// Probes for the single best reservation candidate based on a comparator.
     ///
@@ -293,14 +225,9 @@ pub trait AdvanceReservationRms: Rms + Send {
         comparator: &mut dyn FnMut(ReservationId, ReservationId) -> Ordering,
         shadow_schedule_id: Option<ShadowScheduleId>,
     ) -> Option<ReservationId> {
-        if self.can_rms_handle_reservation(request_id) {
-            match shadow_schedule_id {
-                Some(id) => self.get_mut_shadow_schedule(id).probe_best(request_id, comparator),
-                None => self.get_mut_master_schedule().probe_best(request_id, comparator),
-            }
-        } else {
-            return None;
-        }
+        let active_scheduler = self.get_mut_active_schedule(shadow_schedule_id, request_id);
+
+        active_scheduler.probe_best(request_id, comparator)
     }
 
     /// TODO Returned in java the ReservationId, If a failure occurred.
@@ -315,21 +242,13 @@ pub trait AdvanceReservationRms: Rms + Send {
     /// * `reservation_id` - The ID of the job to delete.
     /// * `shadow_schedule_id` - If `Some`, deletes from the specified shadow schedule.   
     fn delete_task(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) {
-        if self.can_rms_handle_reservation(reservation_id) {
-            match shadow_schedule_id {
-                Some(id) => self.get_mut_shadow_schedule(id).delete_reservation(reservation_id),
-                None => self.get_mut_master_schedule().delete_reservation(reservation_id),
-            }
-        }
+        let active_scheduler = self.get_mut_active_schedule(shadow_schedule_id, reservation_id);
+        active_scheduler.delete_reservation(reservation_id);
     }
 
-    fn can_handle_adc_request(&self, res: Reservation) -> bool {
-        self.get_base().resource_store.can_handle_adc_request(res)
-    }
+    fn can_handle_adc_request(&self, res: Reservation) -> bool;
 
-    fn can_handle_aci_request(&self, reservation_store: ReservationStore, reservation_id: ReservationId) -> bool {
-        self.get_base().resource_store.can_handle_aci_request(reservation_store, reservation_id)
-    }
+    fn can_handle_aci_request(&self, reservation_store: ReservationStore, reservation_id: ReservationId) -> bool;
 
     fn get_total_link_capacity(&self) -> i64 {
         self.get_base().resource_store.get_total_link_capacity()
@@ -346,6 +265,4 @@ pub trait AdvanceReservationRms: Rms + Send {
     fn get_link_resource_count(&self) -> usize {
         self.get_base().resource_store.get_num_of_links()
     }
-
-    fn can_rms_handle_reservation(&self, reservation_id: ReservationId) -> bool;
 }

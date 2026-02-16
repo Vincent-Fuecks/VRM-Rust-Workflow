@@ -54,7 +54,7 @@ impl ReservationTrait for LinkReservation {
         self
     }
 
-    fn get_typ(&self) -> ReservationTyp {
+    fn get_type(&self) -> ReservationTyp {
         ReservationTyp::Link
     }
 }

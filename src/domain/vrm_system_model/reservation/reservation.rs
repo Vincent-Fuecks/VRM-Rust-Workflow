@@ -81,6 +81,20 @@ impl Reservation {
             _ => None,
         }
     }
+
+    pub fn is_link(&self) -> bool {
+        match self {
+            Reservation::Link(l) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_node(&self) -> bool {
+        match self {
+            Reservation::Node(n) => true,
+            _ => false,
+        }
+    }
 }
 
 impl ReservationTrait for Reservation {
@@ -100,7 +114,7 @@ impl ReservationTrait for Reservation {
         self
     }
 
-    fn get_typ(&self) -> ReservationTyp {
+    fn get_type(&self) -> ReservationTyp {
         match self {
             Reservation::Workflow(_) => ReservationTyp::Workflow,
             Reservation::Link(_) => ReservationTyp::Link,
@@ -117,7 +131,7 @@ pub trait ReservationTrait: std::fmt::Debug + Any + Send + Sync {
 
     fn as_any(&self) -> &dyn Any;
 
-    fn get_typ(&self) -> ReservationTyp;
+    fn get_type(&self) -> ReservationTyp;
 
     fn get_name(&self) -> ReservationName {
         self.get_base().name.clone()

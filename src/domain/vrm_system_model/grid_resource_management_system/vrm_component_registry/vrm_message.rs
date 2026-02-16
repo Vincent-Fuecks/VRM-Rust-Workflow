@@ -2,6 +2,7 @@ use crate::domain::vrm_system_model::reservation::probe_reservations::ProbeReser
 use crate::domain::vrm_system_model::reservation::reservation::Reservation;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationId;
 use crate::domain::vrm_system_model::reservation::reservations::Reservations;
+use crate::domain::vrm_system_model::rms::rms::RmsLoadMetric;
 use crate::domain::vrm_system_model::utils::id::{ComponentId, RouterId, ShadowScheduleId};
 use crate::domain::vrm_system_model::utils::load_buffer::LoadMetric;
 
@@ -37,11 +38,11 @@ pub enum VrmMessage {
 
     CommitShadowSchedule { id: ShadowScheduleId, reply_to: mpsc::Sender<bool> },
 
-    GetLoadMetricUpToDate { start: i64, end: i64, shadow_schedule_id: Option<ShadowScheduleId>, reply_to: mpsc::Sender<LoadMetric> },
+    GetLoadMetricUpToDate { start: i64, end: i64, shadow_schedule_id: Option<ShadowScheduleId>, reply_to: mpsc::Sender<RmsLoadMetric> },
 
-    GetLoadMetric { start: i64, end: i64, shadow_schedule_id: Option<ShadowScheduleId>, reply_to: mpsc::Sender<LoadMetric> },
+    GetLoadMetric { start: i64, end: i64, shadow_schedule_id: Option<ShadowScheduleId>, reply_to: mpsc::Sender<RmsLoadMetric> },
 
-    GetSimulationLoadMetric { shadow_schedule_id: Option<ShadowScheduleId>, reply_to: mpsc::Sender<LoadMetric> },
+    GetSimulationLoadMetric { shadow_schedule_id: Option<ShadowScheduleId>, reply_to: mpsc::Sender<RmsLoadMetric> },
 
     Shutdown,
 }

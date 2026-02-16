@@ -9,6 +9,7 @@ use crate::domain::vrm_system_model::reservation::probe_reservations::ProbeReser
 use crate::domain::vrm_system_model::reservation::reservation::Reservation;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationId;
 use crate::domain::vrm_system_model::reservation::reservations::Reservations;
+use crate::domain::vrm_system_model::rms::rms::RmsLoadMetric;
 use crate::domain::vrm_system_model::utils::id::{ComponentId, RouterId, ShadowScheduleId};
 use crate::domain::vrm_system_model::utils::load_buffer::LoadMetric;
 
@@ -114,15 +115,15 @@ impl VrmComponent for VrmComponentProxy {
         self.call(|tx| VrmMessage::CommitShadowSchedule { id: shadow_schedule_id, reply_to: tx })
     }
 
-    fn get_load_metric_up_to_date(&mut self, start: i64, end: i64, shadow_schedule_id: Option<ShadowScheduleId>) -> LoadMetric {
+    fn get_load_metric_up_to_date(&mut self, start: i64, end: i64, shadow_schedule_id: Option<ShadowScheduleId>) -> RmsLoadMetric {
         self.call(|tx| VrmMessage::GetLoadMetricUpToDate { start, end, shadow_schedule_id, reply_to: tx })
     }
 
-    fn get_load_metric(&self, start: i64, end: i64, shadow_schedule_id: Option<ShadowScheduleId>) -> LoadMetric {
+    fn get_load_metric(&self, start: i64, end: i64, shadow_schedule_id: Option<ShadowScheduleId>) -> RmsLoadMetric {
         self.call(|tx| VrmMessage::GetLoadMetric { start, end, shadow_schedule_id, reply_to: tx })
     }
 
-    fn get_simulation_load_metric(&mut self, shadow_schedule_id: Option<ShadowScheduleId>) -> LoadMetric {
+    fn get_simulation_load_metric(&mut self, shadow_schedule_id: Option<ShadowScheduleId>) -> RmsLoadMetric {
         self.call(|tx| VrmMessage::GetSimulationLoadMetric { shadow_schedule_id, reply_to: tx })
     }
 }

@@ -399,7 +399,7 @@ impl ReservationStore {
     pub fn is_workflow(&self, reservation_id: ReservationId) -> bool {
         if let Some(handle) = self.get(reservation_id) {
             let res = handle.read().unwrap();
-            return matches!(res.get_typ(), ReservationTyp::Workflow);
+            return matches!(res.get_type(), ReservationTyp::Workflow);
         } else {
             log::error!("Get reservation (id: {:?}) was not possible.", reservation_id);
             return false;
@@ -409,7 +409,7 @@ impl ReservationStore {
     pub fn is_link(&self, reservation_id: ReservationId) -> bool {
         if let Some(handle) = self.get(reservation_id) {
             let res = handle.read().unwrap();
-            return matches!(res.get_typ(), ReservationTyp::Link);
+            return matches!(res.get_type(), ReservationTyp::Link);
         } else {
             log::error!("Get reservation (id: {:?}) was not possible.", reservation_id);
             return false;
@@ -419,7 +419,7 @@ impl ReservationStore {
     pub fn is_node(&self, reservation_id: ReservationId) -> bool {
         if let Some(handle) = self.get(reservation_id) {
             let res = handle.read().unwrap();
-            return matches!(res.get_typ(), ReservationTyp::Node);
+            return matches!(res.get_type(), ReservationTyp::Node);
         } else {
             log::error!("Get reservation (id: {:?}) was not possible.", reservation_id);
             return false;
@@ -436,10 +436,10 @@ impl ReservationStore {
         }
     }
 
-    pub fn get_typ(&self, reservation_id: ReservationId) -> Option<ReservationTyp> {
+    pub fn get_type(&self, reservation_id: ReservationId) -> Option<ReservationTyp> {
         if let Some(handle) = self.get(reservation_id) {
             let res = handle.read().unwrap();
-            return Some(res.get_typ());
+            return Some(res.get_type());
         } else {
             log::error!("Get reservation (id: {:?}) was not possible.", reservation_id);
             return None;
@@ -621,7 +621,7 @@ impl ReservationStore {
             // We attempt to read the reservation name directly from the object
             match res_handle.read() {
                 Ok(res) => {
-                    log::error!("  -> ID: {:?} | Name: {:?} | State: {:?} | Type: {:?}", id, res.get_name(), res.get_state(), res.get_typ());
+                    log::error!("  -> ID: {:?} | Name: {:?} | State: {:?} | Type: {:?}", id, res.get_name(), res.get_state(), res.get_type());
                 }
                 Err(_) => {
                     log::error!("  -> ID: {:?} | [Lock Poisoned]", id);

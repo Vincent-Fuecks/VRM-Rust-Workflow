@@ -87,7 +87,7 @@ impl ReservationTrait for NodeReservation {
         self
     }
 
-    fn get_typ(&self) -> ReservationTyp {
+    fn get_type(&self) -> ReservationTyp {
         ReservationTyp::Node
     }
 }
