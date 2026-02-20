@@ -30,7 +30,7 @@
                 "numOfSlots": 60,
                 "slurmUrl": "http://localhost:6820", 
                 "userName": "root", 
-                "jwtToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjIwODY1ODk0NzIsImlhdCI6MTc3MTIyOTQ3Miwic3VuIjoic2x1cm0ifQ.ad_ZNZZyToubh_ZfB1y2WMIjEMRL_4JvZ82fUTXN5s8",
+                "jwtToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjIwODY2NzUwNTYsImlhdCI6MTc3MTMxNTA1Niwic3VuIjoic2x1cm0ifQ.iSxnySch-UG0tyroSBNuNdLPxKoNOHqnrSoMr4ptN2I",
                 "topology" : [
                     {
                         "switchName": "s0",

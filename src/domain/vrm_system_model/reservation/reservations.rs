@@ -23,7 +23,7 @@ impl Reservations {
     // TODO maybe insert Real Reservation into store?
     // TODO Change handler_id?
     pub fn insert(&mut self, id: ReservationId) {
-        if self.reservations.insert(id) {
+        if !self.reservations.insert(id) {
             panic!(
                 "ErrorSchedulerReservationWasSubmittedMultipleTimes: The Reservation {:?} was already present in the schedule.",
                 self.reservation_store.get_name_for_key(id)
@@ -75,12 +75,21 @@ impl Reservations {
     }
 
     // Log all reservations
-    pub fn dump_reservation(&self) {
+    pub fn dump_reservation(&self, _res_id_leads_to_error: ReservationId) {
         log::error!("=== RESERVATION RESERVATION(s) DUMP ({} entries) ===", self.reservations.len());
+
         for reservation_id in &self.reservations {
-            log::error!("  -> ID: {:?} | Name: {:?}", reservation_id, self.reservation_store.get_name_for_key(reservation_id.clone()));
+            log::error!(
+                "  -> ID: {:?} | Name: {:?} | State: {:?} | Type: {:?}",
+                reservation_id,
+                self.reservation_store.get_name_for_key(reservation_id.clone()),
+                self.reservation_store.get_state(reservation_id.clone()),
+                self.reservation_store.get_type(reservation_id.clone()),
+            );
         }
         log::error!("=== END OF DUMP ===");
+
+        //self.reservation_store.dump_store_contents(res_id_leads_to_error);
     }
 
     pub fn is_empty(&self) -> bool {

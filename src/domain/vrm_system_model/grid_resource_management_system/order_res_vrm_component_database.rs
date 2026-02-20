@@ -42,7 +42,7 @@ impl OrderResVrmComponentDatabase {
         for res_id in probe_reservations.get_ids() {
             let (component_id, shadow_schedule_id) = probe_reservations.get_origin_information(res_id);
 
-            if component_id.is_none() && shadow_schedule_id.is_none() {
+            if component_id.is_some() && shadow_schedule_id.is_none() {
                 self.store.insert(res_id, component_id.unwrap());
             } else {
                 panic!(

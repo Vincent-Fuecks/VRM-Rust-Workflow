@@ -475,53 +475,43 @@ impl AcI {
                 let state = res.get_base_reservation().get_state();
                 let proceeding = res.get_base_reservation().get_reservation_proceeding();
 
-                // TODO Java implementation also proceeded workflows if so, num_task should not be always be 1 (implement get_task_count())
-                let tasks = 1;
+                let mut tasks = 1;
+                if res.is_workflow() {
+                    tasks = res.as_workflow().unwrap().get_all_reservation_ids().len()
+                }
 
                 (start, end, name, cap, workload, state, proceeding, tasks)
             };
 
             let rms_load_metric = self.rms_system.get_load_metric_up_to_date(start, end, None);
 
-            if let Some(node_load_metric) = rms_load_metric.node_load_metric {
-                tracing::info!(
-                    target: ANALYTICS_TARGET,
-                    Time = now,
-                    LogDescription = "AcI Operation finished NodeLoadMetric",
-                    ComponentType = %self.id,
-                    ComponentUtilization = node_load_metric.utilization,
-                    ComponentCapacity = node_load_metric.possible_capacity,
-                    ComponentFragmentation = self.rms_system.get_system_fragmentation(None),
-                    ReservationName = %res_name,
-                    ReservationCapacity = capacity,
-                    ReservationWorkload = workload,
-                    ReservationState = ?state,
-                    ReservationProceeding = ?proceeding,
-                    NumberOfTasks = num_tasks,
-                    Command = command,
-                    ProcessingTime = processing_time,
-                );
-            }
+            let node_utilization = rms_load_metric.node_load_metric.as_ref().map(|n| Some(n.utilization)).unwrap_or(None);
 
-            if let Some(network_load_metric) = rms_load_metric.link_load_metric {
-                tracing::info!(
-                    target: ANALYTICS_TARGET,
-                    Time = now,
-                    LogDescription = "AcI Operation finished NetworkLoadMetric",
-                    ComponentType = %self.id,
-                    ComponentUtilization = network_load_metric.utilization,
-                    ComponentCapacity = network_load_metric.possible_capacity,
-                    ComponentFragmentation = self.rms_system.get_system_fragmentation(None),
-                    ReservationName = %res_name,
-                    ReservationCapacity = capacity,
-                    ReservationWorkload = workload,
-                    ReservationState = ?state,
-                    ReservationProceeding = ?proceeding,
-                    NumberOfTasks = num_tasks,
-                    Command = command,
-                    ProcessingTime = processing_time,
-                );
-            }
+            let node_possible_capacity = rms_load_metric.node_load_metric.as_ref().map(|n| Some(n.possible_capacity)).unwrap_or(None);
+
+            let network_utilization = rms_load_metric.link_load_metric.as_ref().map(|n| Some(n.utilization)).unwrap_or(None);
+
+            let network_possible_capacity = rms_load_metric.link_load_metric.as_ref().map(|n| Some(n.possible_capacity)).unwrap_or(None);
+
+            tracing::info!(
+                target: ANALYTICS_TARGET,
+                Time = now,
+                LogDescription = "AcI Operation finished NodeLoadMetric",
+                ComponentType = %self.id,
+                NodeComponentUtilization = node_utilization,
+                NodeComponentCapacity = node_possible_capacity,
+                NetworkComponentUtilization = network_utilization,
+                NetworkComponentCapacity = network_possible_capacity,
+                ComponentFragmentation = self.rms_system.get_system_fragmentation(None),
+                ReservationName = %res_name,
+                ReservationCapacity = capacity,
+                ReservationWorkload = workload,
+                ReservationState = ?state,
+                ReservationProceeding = ?proceeding,
+                NumberOfTasks = num_tasks,
+                Command = command,
+                ProcessingTime = processing_time,
+            );
         } else {
             // Handling in case reservation is missing (e.g. deleted/cleaned up)
 

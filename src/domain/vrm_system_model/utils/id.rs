@@ -65,6 +65,8 @@ pub struct ShadowScheduleTag;
 pub struct ClientTag;
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Copy)]
 pub struct ComponentTag;
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Copy)]
+pub struct ProbeReservationTag;
 
 // Workflow Domain Tags
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Copy, Serialize, Deserialize)]
@@ -90,6 +92,7 @@ pub type AdcId = Id<AdcTag>;
 pub type ShadowScheduleId = Id<ShadowScheduleTag>;
 pub type ClientId = Id<ClientTag>;
 pub type ComponentId = Id<ComponentTag>;
+pub type ProbeReservationId = Id<ProbeReservationTag>;
 
 // Workflow Domain Aliases
 pub type WorkflowId = Id<WorkflowTag>;

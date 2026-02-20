@@ -3,16 +3,18 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use crate::domain::vrm_system_model::reservation::{
-    reservation::ReservationState,
-    reservation_store::{NotificationListener, ReservationId},
+use crate::domain::vrm_system_model::{
+    reservation::{
+        reservation::ReservationState,
+        reservation_store::{NotificationListener, ReservationId},
+    },
+    utils::id::ReservationName,
 };
 
 /// Listener that implements the "Abo" (subscription) system to keep
 /// open_reservations in sync with the ReservationStore state.
 #[derive(Debug)]
 pub struct VrmStateListener {
-    // Shared thread-safe container for open reservations
     open_reservations: Arc<RwLock<HashSet<ReservationId>>>,
 }
 
@@ -31,45 +33,43 @@ impl VrmStateListener {
     }
 }
 
+// TODO What should happen by State change?
 impl NotificationListener for VrmStateListener {
-    fn on_reservation_change(&self, key: ReservationId, new_state: ReservationState) {
-        // We first check if we know this reservation (mimicking Java's !containsSameName check)
-        {
-            let guard = self.open_reservations.read().unwrap();
-            // In the java version, the check is done before the switch.
-            // Here, for optimization, we might only care if we are trying to remove it,
-            // but to strictly follow the logging logic:
-            if !guard.contains(&key) && new_state != ReservationState::Committed {
-                // Note: We skip this warning for COMMITTED because in this Rust impl,
-                // the VrmManager explicitly adds it to the list *after* commit in process_reservation,
-                // whereas this callback might happen during the commit process itself.
-                // However, for DELETED/FINISHED/etc, it should be in the list.
-                // log::warn!("Received state change for unknown Reservation {:?}.", key);
-            }
-        }
-
+    fn on_reservation_change(
+        &self,
+        reservation_id: ReservationId,
+        res_name: ReservationName,
+        old_state: ReservationState,
+        new_state: ReservationState,
+    ) {
         match new_state {
-            // Invalid states for an active reservation update in this context
-            ReservationState::Open | ReservationState::ProbeAnswer | ReservationState::ReserveAnswer => {
-                log::error!("Reservation {:?} was set back to an invalid state: {:?}", key, new_state);
+            ReservationState::Open => {
+                log::info!("State Change of Reservation ID: {:?} | Name: {:?} | {:?}->{:?}", reservation_id, res_name, old_state, new_state);
             }
-            // No change for Committed (it remains open)
+            ReservationState::ProbeAnswer => {
+                log::info!("State Change of Reservation ID: {:?} | Name: {:?} | {:?}->{:?}", reservation_id, res_name, old_state, new_state);
+            }
+            ReservationState::ReserveAnswer => {
+                log::info!("State Change of Reservation ID: {:?} | Name: {:?} | {:?}->{:?}", reservation_id, res_name, old_state, new_state);
+            }
             ReservationState::Committed => {
-                // Java: "no change"
+                log::info!("State Change of Reservation ID: {:?} | Name: {:?} | {:?}->{:?}", reservation_id, res_name, old_state, new_state);
             }
-            // Removal states
-            ReservationState::Deleted | ReservationState::Rejected => {
-                log::info!("Reservation {:?} was deleted/rejected.", key);
+            ReservationState::Deleted => {
+                log::info!("State Change of Reservation ID: {:?} | Name: {:?} | {:?}->{:?}", reservation_id, res_name, old_state, new_state);
                 let mut guard = self.open_reservations.write().unwrap();
-                guard.remove(&key);
+                guard.remove(&reservation_id);
+            }
+            ReservationState::Rejected => {
+                log::info!("State Change of Reservation ID: {:?} | Name: {:?} | {:?}->{:?}", reservation_id, res_name, old_state, new_state);
+                let mut guard = self.open_reservations.write().unwrap();
+                guard.remove(&reservation_id);
             }
             ReservationState::Finished => {
-                log::info!("Reservation {:?} finished successfully.", key);
+                log::info!("Reservation {:?} finished successfully.", reservation_id);
                 let mut guard = self.open_reservations.write().unwrap();
-                guard.remove(&key);
+                guard.remove(&reservation_id);
             }
-            // Catch-all for other states if any
-            _ => {}
         }
     }
 }

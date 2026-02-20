@@ -14,13 +14,19 @@ use crate::domain::vrm_system_model::workflow::workflow_node::WorkflowNode;
 
 // TODO Move in separate file
 pub trait NotificationListener: Send + Sync + Debug {
-    fn on_reservation_change(&self, key: ReservationId, new_state: ReservationState);
+    fn on_reservation_change(
+        &self,
+        reservation_id: ReservationId,
+        res_name: ReservationName,
+        old_state: ReservationState,
+        new_state: ReservationState,
+    );
 }
 
 #[derive(Debug, Clone)]
 struct NoOpenListener;
 impl NotificationListener for NoOpenListener {
-    fn on_reservation_change(&self, _: ReservationId, _: ReservationState) {}
+    fn on_reservation_change(&self, _: ReservationId, _: ReservationName, _: ReservationState, _: ReservationState) {}
 }
 
 new_key_type! {
@@ -459,6 +465,19 @@ impl ReservationStore {
         return None;
     }
 
+    pub fn get_workflow_res_ids(&self, reservation_id: ReservationId) -> Option<Vec<ReservationId>> {
+        if let Some(handle) = self.get(reservation_id) {
+            let res = handle.read().unwrap();
+            if let Some(workflow) = res.as_any().downcast_ref::<Workflow>() {
+                return Some(workflow.get_all_reservation_ids());
+            } else {
+                log::error!("Reservation {:?} is not a Workflow", reservation_id);
+            }
+        }
+
+        return None;
+    }
+
     /// Evaluates if a specific reservation has reached or exceeded a target
     /// level of commitment in the distributed lifecycle.
     ///
@@ -536,6 +555,8 @@ impl ReservationStore {
     /// Update the state of a reservation.
     /// Triggers the notification listeners.
     pub fn update_state(&self, id: ReservationId, new_state: ReservationState) {
+        let old_state = self.get_state(id);
+
         let should_notify = {
             let guard = self.inner.read().unwrap();
             if let Some(res_lock) = guard.slots.get(id) {
@@ -554,7 +575,7 @@ impl ReservationStore {
             };
 
             for listener in listeners {
-                listener.on_reservation_change(id, new_state);
+                listener.on_reservation_change(id, self.get_name_for_key(id).unwrap(), old_state, new_state);
             }
         }
     }
@@ -619,12 +640,19 @@ impl ReservationStore {
 
         for (id, res_handle) in &guard.slots {
             // We attempt to read the reservation name directly from the object
-            match res_handle.read() {
+            match res_handle.try_read() {
                 Ok(res) => {
-                    log::error!("  -> ID: {:?} | Name: {:?} | State: {:?} | Type: {:?}", id, res.get_name(), res.get_state(), res.get_type());
+                    log::error!(
+                        "  -> ID: {:?} | Name: {:?} | State: {:?} | Type: {:?} | Precceding: {:?}",
+                        id,
+                        res.get_name(),
+                        res.get_state(),
+                        res.get_type(),
+                        res.get_reservation_proceeding()
+                    );
                 }
                 Err(_) => {
-                    log::error!("  -> ID: {:?} | [Lock Poisoned]", id);
+                    log::error!("  -> ID: {:?} | [Lock Busy/Deadlocked]", id);
                 }
             }
         }

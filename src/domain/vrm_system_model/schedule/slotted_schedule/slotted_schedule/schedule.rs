@@ -41,9 +41,9 @@ impl Schedule for SlottedSchedule {
                 self.reservation_store.set_frag_delta(candidate_id, frag_delta);
 
                 match reserve_answer {
-                    Some(_) => {}
+                    Some(reserve_answer) => self.delete_reservation(reserve_answer),
                     None => {
-                        self.delete_reservation(candidate_id.clone());
+                        panic!("Error in cleaning SlottedSchedule form probe request.")
                     }
                 }
             }
@@ -77,6 +77,7 @@ impl Schedule for SlottedSchedule {
             }
             None => {
                 self.ctx.active_reservations.set_state(&reservation_id, ReservationState::Rejected);
+                // TODO Del Reservation form Slots ProbeReservation
                 probe_reservations.reject_all_probe_reservations();
                 return Some(reservation_id);
             }

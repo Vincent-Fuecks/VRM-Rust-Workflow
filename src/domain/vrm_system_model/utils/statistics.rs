@@ -9,6 +9,7 @@ use tracing::{Event, Subscriber};
 use tracing_subscriber::Layer;
 use tracing_subscriber::layer::Context;
 use tracing_subscriber::prelude::*;
+
 /// The target string to filter for analytics events.
 pub const ANALYTICS_TARGET: &str = "analytics";
 
@@ -46,10 +47,16 @@ pub enum StatParameter {
     ComponentName,
 
     /// Overall or estimated capacity of the component
-    ComponentCapacity,
+    NodeComponentCapacity,
 
     /// Load of component
-    ComponentUtilization,
+    NodeComponentUtilization,
+
+    /// Overall or estimated capacity of the component
+    NetworkComponentCapacity,
+
+    /// Load of component
+    NetworkComponentUtilization,
 
     /// Fragmentation of component
     ComponentFragmentation,
@@ -125,8 +132,10 @@ impl StatParameter {
             "LogDescription" => Some(Self::LogDescription),
             "ComponentType" => Some(Self::ComponentType),
             "ComponentName" => Some(Self::ComponentName),
-            "ComponentCapacity" => Some(Self::ComponentCapacity),
-            "ComponentUtilization" => Some(Self::ComponentUtilization),
+            "NodeComponentCapacity" => Some(Self::NodeComponentCapacity),
+            "NodeComponentUtilization" => Some(Self::NodeComponentUtilization),
+            "NetworkComponentCapacity" => Some(Self::NetworkComponentCapacity),
+            "NetworkComponentUtilization" => Some(Self::NetworkComponentUtilization),
             "ComponentFragmentation" => Some(Self::ComponentFragmentation),
             "ReservationName" => Some(Self::ReservationName),
             "ReservationCapacity" => Some(Self::ReservationCapacity),

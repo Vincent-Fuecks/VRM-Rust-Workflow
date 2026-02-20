@@ -190,12 +190,18 @@ impl ResourceStore {
     /// Returns true if a resource can handle the reservation
     pub fn can_handle_adc_request(&self, res: Reservation) -> bool {
         match res.as_link() {
-            Some(link_reservation) => self.can_handle_link_request(
-                link_reservation.get_start_point(),
-                link_reservation.get_end_point(),
-                link_reservation.is_moldable(),
-                link_reservation.get_reserved_capacity(),
-            ),
+            Some(link_reservation) => {
+                if self.can_handle_link_request(
+                    link_reservation.get_start_point(),
+                    link_reservation.get_end_point(),
+                    link_reservation.is_moldable(),
+                    link_reservation.get_reserved_capacity(),
+                ) {
+                    log::debug!("Rms can handle Reservation {:?} of type {:?}", res.get_name(), res.get_type());
+                    return true;
+                }
+                return false;
+            }
             None => self.can_handle_node_request(res.is_moldable(), res.get_reserved_capacity()),
         }
     }
@@ -204,12 +210,21 @@ impl ResourceStore {
     /// Returns true if a resource can handle the reservation
     pub fn can_handle_aci_request(&self, reservation_store: ReservationStore, reservation_id: ReservationId) -> bool {
         if reservation_store.is_link(reservation_id) {
-            return self.can_handle_link_request(
+            if self.can_handle_link_request(
                 reservation_store.get_start_point(reservation_id),
                 reservation_store.get_end_point(reservation_id),
                 reservation_store.is_moldable(reservation_id),
                 reservation_store.get_reserved_capacity(reservation_id),
-            );
+            ) {
+                log::debug!(
+                    "Rms can handle Reservation {:?} of type {:?}",
+                    reservation_store.get_name_for_key(reservation_id),
+                    reservation_store.get_type(reservation_id)
+                );
+                return true;
+            } else {
+                return false;
+            };
         } else {
             return self
                 .can_handle_node_request(reservation_store.is_moldable(reservation_id), reservation_store.get_reserved_capacity(reservation_id));

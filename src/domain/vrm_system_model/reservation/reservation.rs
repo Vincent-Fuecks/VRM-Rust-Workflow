@@ -1,10 +1,10 @@
 use serde::{Deserialize, Serialize};
-use std::{any::Any, env::Args, ops::Not};
+use std::{any::Any, ops::Not};
 
 use crate::domain::vrm_system_model::{
     reservation::{link_reservation::LinkReservation, node_reservation::NodeReservation},
     utils::id::{ClientId, ComponentId, ReservationName, RouterId},
-    workflow::{self, workflow::Workflow},
+    workflow::workflow::Workflow,
 };
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -62,6 +62,14 @@ impl Reservation {
         }
     }
 
+    /// Returns  reference to the Workflow if this is a Workflow reservation.
+    pub fn as_workflow(&self) -> Option<&Workflow> {
+        match self {
+            Reservation::Workflow(w) => Some(w),
+            _ => None,
+        }
+    }
+
     pub fn as_node(&self) -> Option<&NodeReservation> {
         match self {
             Reservation::Node(n) => Some(n),
@@ -84,16 +92,32 @@ impl Reservation {
 
     pub fn is_link(&self) -> bool {
         match self {
-            Reservation::Link(l) => true,
+            Reservation::Link(_) => true,
             _ => false,
         }
     }
 
     pub fn is_node(&self) -> bool {
         match self {
-            Reservation::Node(n) => true,
+            Reservation::Node(_) => true,
             _ => false,
         }
+    }
+
+    pub fn is_workflow(&self) -> bool {
+        match self {
+            Reservation::Workflow(_) => true,
+            _ => false,
+        }
+    }
+
+    // Only allowed for ProbeReservations
+    pub fn set_name(&mut self, new_name: String) {
+        if self.get_state() == ReservationState::ProbeAnswer {
+            self.get_base_mut_reservation().name = ReservationName::new(new_name);
+            return;
+        }
+        panic!("Not allowed for this ReservationState.")
     }
 }
 

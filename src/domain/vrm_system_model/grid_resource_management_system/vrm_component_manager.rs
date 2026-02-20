@@ -339,23 +339,39 @@ impl VrmComponentManager {
     }
 
     // TODO Rename, if all use this function
-    // Queues asks all child systems if they can handel request.
-    // Returns true if one child system can handel request otherwise this function returns false.
+    // Queues asks all child systems if they can handel all request.
+    // Returns true if one of the child systems can handel requests otherwise this function returns false.
     pub fn can_handel(&self, reservation_id: ReservationId) -> bool {
-        for (_, container) in &self.vrm_components {
-            if let Some(res) = self.reservation_store.get_reservation_snapshot(reservation_id) {
-                if container.can_handel(res) {
-                    return true;
+        let res_ids = if self.reservation_store.is_workflow(reservation_id) {
+            self.reservation_store.get_workflow_res_ids(reservation_id).unwrap_or_default()
+        } else {
+            vec![reservation_id]
+        };
+        for res_id in res_ids {
+            let mut found_handeler_for_this_id = false;
+
+            if let Some(res) = self.reservation_store.get_reservation_snapshot(res_id) {
+                for container in self.vrm_components.values() {
+                    if container.can_handel(res.clone()) {
+                        found_handeler_for_this_id = true;
+                        break;
+                    }
                 }
             } else {
                 log::debug!(
-                    "ReservationSnapShotFailed: ADC {} requested can_handel request of reservation {:?}",
+                    "ReservationSnapShotFailed: ADC {} requested can_handle of {:?}",
                     self.adc_id,
-                    self.reservation_store.get_name_for_key(reservation_id)
+                    self.reservation_store.get_name_for_key(res_id)
                 );
             }
+
+            // End Task/Sub-Task of Workflow can not be handled by any VrmComponent
+            if !found_handeler_for_this_id {
+                return false;
+            }
         }
-        return false;
+
+        return true;
     }
 
     /// Get the total capacity of all connected VrmComponents
@@ -607,6 +623,60 @@ impl VrmComponentManager {
         return if total_capacity > 0.0 { satisfaction_sum / total_capacity } else { 0.0 };
     }
 
+    fn calculate_averge_load_metric(
+        &self,
+        shadow_schedule_id: Option<ShadowScheduleId>,
+        metricis: Vec<(ComponentId, Option<LoadMetric>)>,
+    ) -> Option<LoadMetric> {
+        let mut total_possible_reserved_capacity = 0.0;
+        let mut total_average_reserved_capacity = 0.0;
+        let mut earliest_start = i64::MAX;
+        let mut latest_end = i64::MIN;
+        let mut num_of_valid_components = 0;
+
+        for metric in metricis {
+            if let (id, Some(load_matic)) = metric {
+                if load_matic.start_time < 0 {
+                    log::debug!(
+                        "Get Load Metric with negative start time is not allowed. ADC: {}, child VrmComponent:  {} with ShadowScheduleId: {:?}",
+                        self.adc_id,
+                        id,
+                        shadow_schedule_id
+                    );
+                } else {
+                    total_average_reserved_capacity += load_matic.avg_reserved_capacity;
+                    total_possible_reserved_capacity += load_matic.possible_capacity;
+                    num_of_valid_components += 1;
+
+                    if earliest_start > load_matic.start_time {
+                        earliest_start = load_matic.start_time;
+                    }
+
+                    if latest_end < load_matic.end_time {
+                        latest_end = load_matic.end_time;
+                    }
+                }
+            }
+        }
+
+        let mut utilization: f64 = 0.0;
+        if total_possible_reserved_capacity > 0.0 {
+            utilization = total_average_reserved_capacity / total_possible_reserved_capacity;
+        }
+
+        if num_of_valid_components > 0 {
+            return Some(LoadMetric::new(
+                earliest_start,
+                latest_end,
+                total_average_reserved_capacity / num_of_valid_components as f64,
+                total_possible_reserved_capacity / num_of_valid_components as f64,
+                utilization,
+            ));
+        } else {
+            return None;
+        }
+    }
+
     /// Computes the **Load Metric** for a specific time range.
     /// This method aggregates the load of all directly and indirectly connected AcIs.
     /// **Note:** Only jobs submitted via this ADC are typically counted; actual load on the physical resource
@@ -620,53 +690,19 @@ impl VrmComponentManager {
     /// # Returns
     /// A `LoadMetric` struct containing utilization, start/end times, and capacity details.
     pub fn get_load_metric(&self, start: i64, end: i64, shadow_schedule_id: Option<ShadowScheduleId>) -> RmsLoadMetric {
-        let mut total_possible_reserved_capacity = 0.0;
-        let mut total_average_reserved_capacity = 0.0;
-        let mut earliest_start = i64::MAX;
-        let mut latest_end = i64::MIN;
-        let mut num_of_valid_components = 0;
+        let mut node_metricis = Vec::new();
+        let mut network_metricis = Vec::new();
 
         for (id, container) in self.vrm_components.iter() {
             let load_matic = container.vrm_component.get_load_metric(start, end, shadow_schedule_id.clone());
-
-            if load_matic.start_time < 0 {
-                log::debug!(
-                    "Get Load Metric with negative start time is not allowed. ADC: {}, child VrmComponent:  {} with ShadowScheduleId: {:?}",
-                    self.adc_id,
-                    id,
-                    shadow_schedule_id
-                );
-            } else {
-                total_average_reserved_capacity += load_matic.avg_reserved_capacity;
-                total_possible_reserved_capacity += load_matic.possible_capacity;
-                num_of_valid_components += 1;
-
-                if earliest_start > load_matic.start_time {
-                    earliest_start = load_matic.start_time;
-                }
-
-                if latest_end < load_matic.end_time {
-                    latest_end = load_matic.end_time;
-                }
-            }
+            node_metricis.push((id.clone(), load_matic.node_load_metric));
+            network_metricis.push((id.clone(), load_matic.link_load_metric));
         }
 
-        let mut utilization: f64 = 0.0;
-        if total_possible_reserved_capacity > 0.0 {
-            utilization = total_average_reserved_capacity / total_possible_reserved_capacity;
-        }
-
-        if num_of_valid_components > 0 {
-            return LoadMetric::new(
-                earliest_start,
-                latest_end,
-                total_average_reserved_capacity / num_of_valid_components as f64,
-                total_possible_reserved_capacity / num_of_valid_components as f64,
-                utilization,
-            );
-        } else {
-            return LoadMetric::new(earliest_start, latest_end, 0.0, 0.0, utilization);
-        }
+        return RmsLoadMetric {
+            node_load_metric: self.calculate_averge_load_metric(shadow_schedule_id.clone(), node_metricis),
+            link_load_metric: self.calculate_averge_load_metric(shadow_schedule_id.clone(), network_metricis),
+        };
     }
 
     /// Computes the **Load Metric** for the entire simulation timeline.
@@ -678,53 +714,19 @@ impl VrmComponentManager {
     /// # Returns
     /// A `LoadMetric` representing the average reserved capacity and utilization across the simulation.
     pub fn get_simulation_load_metric(&mut self, shadow_schedule_id: Option<ShadowScheduleId>) -> RmsLoadMetric {
-        let mut total_possible_reserved_capacity = 0.0;
-        let mut total_average_reserved_capacity = 0.0;
-        let mut earliest_start = i64::MAX;
-        let mut latest_end = i64::MIN;
-        let mut num_of_valid_components = 0;
+        let mut node_metricis = Vec::new();
+        let mut network_metricis = Vec::new();
 
         for (id, container) in self.vrm_components.iter_mut() {
             let load_matic = container.vrm_component.get_simulation_load_metric(shadow_schedule_id.clone());
-
-            if load_matic.start_time < 0 {
-                log::debug!(
-                    "Get Load Metric with negative start time is not allowed. ADC: {}, child VrmComponent:  {} with ShadowScheduleId: {:?}",
-                    self.adc_id,
-                    id,
-                    shadow_schedule_id
-                );
-            } else {
-                total_average_reserved_capacity += load_matic.avg_reserved_capacity;
-                total_possible_reserved_capacity += load_matic.possible_capacity;
-                num_of_valid_components += 1;
-
-                if earliest_start > load_matic.start_time {
-                    earliest_start = load_matic.start_time;
-                }
-
-                if latest_end < load_matic.end_time {
-                    latest_end = load_matic.end_time;
-                }
-            }
+            node_metricis.push((id.clone(), load_matic.node_load_metric));
+            network_metricis.push((id.clone(), load_matic.link_load_metric));
         }
 
-        let mut utilization: f64 = 0.0;
-        if total_possible_reserved_capacity > 0.0 {
-            utilization = total_average_reserved_capacity / total_possible_reserved_capacity;
-        }
-
-        if num_of_valid_components > 0 {
-            return LoadMetric::new(
-                earliest_start,
-                latest_end,
-                total_average_reserved_capacity / num_of_valid_components as f64,
-                total_possible_reserved_capacity / num_of_valid_components as f64,
-                utilization,
-            );
-        } else {
-            return LoadMetric::new(earliest_start, latest_end, 0.0, 0.0, utilization);
-        }
+        return RmsLoadMetric {
+            node_load_metric: self.calculate_averge_load_metric(shadow_schedule_id.clone(), node_metricis),
+            link_load_metric: self.calculate_averge_load_metric(shadow_schedule_id.clone(), network_metricis),
+        };
     }
 
     pub fn probe(
@@ -877,21 +879,33 @@ impl VrmComponentManager {
                 let state = res.get_base_reservation().get_state();
                 let proceeding = res.get_base_reservation().get_reservation_proceeding();
 
-                // TODO Java implementation also proceeded workflows if so, num_task should not be always be 1 (implement get_task_count())
-                let tasks = 42;
+                let mut tasks = 1;
+                if res.is_workflow() {
+                    tasks = res.as_workflow().unwrap().get_all_reservation_ids().len()
+                }
 
                 (start, end, name, cap, workload, state, proceeding, tasks)
             };
 
-            let load_metric = self.get_load_metric(start, end, None);
+            let rms_load_metric = self.get_load_metric(start, end, None);
+
+            let node_utilization = rms_load_metric.node_load_metric.as_ref().map(|n| Some(n.utilization)).unwrap_or(None);
+
+            let node_possible_capacity = rms_load_metric.node_load_metric.as_ref().map(|n| Some(n.possible_capacity)).unwrap_or(None);
+
+            let network_utilization = rms_load_metric.link_load_metric.as_ref().map(|n| Some(n.utilization)).unwrap_or(None);
+
+            let network_possible_capacity = rms_load_metric.link_load_metric.as_ref().map(|n| Some(n.possible_capacity)).unwrap_or(None);
 
             tracing::info!(
                 target: ANALYTICS_TARGET,
                 Time = now,
                 LogDescription = "AcI Operation finished",
                 ComponentType = %self.adc_id.clone(),
-                ComponentUtilization = load_metric.utilization,
-                ComponentCapacity = load_metric.possible_capacity,
+                NodeComponentUtilization = node_utilization,
+                NodeComponentCapacity = node_possible_capacity,
+                NetworkComponentUtilization = network_utilization,
+                NetworkComponentCapacity = network_possible_capacity,
                 ComponentFragmentation = self.get_system_satisfaction(None),
                 ReservationName = %res_name,
                 ReservationCapacity = capacity,

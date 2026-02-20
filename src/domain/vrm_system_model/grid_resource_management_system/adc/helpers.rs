@@ -4,12 +4,18 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+use tokio_util::io::simplex::new;
+
 use crate::domain::vrm_system_model::{
     grid_resource_management_system::{
         adc::ADC, order_res_vrm_component_database::OrderResVrmComponentDatabase, vrm_component_manager::DUMMY_COMPONENT_ID,
         vrm_component_order::VrmComponentOrder, vrm_component_registry::vrm_component_proxy::VrmComponentProxy, vrm_component_trait::VrmComponent,
     },
-    reservation::{reservation::ReservationState, reservation_store::ReservationId},
+    reservation::{
+        probe_reservations::{self, ProbeReservations},
+        reservation::ReservationState,
+        reservation_store::ReservationId,
+    },
     utils::{
         id::{ComponentId, ReservationName, ShadowScheduleId},
         statistics::ANALYTICS_TARGET,
@@ -182,6 +188,8 @@ impl ADC {
     where
         F: Fn(ReservationId, ReservationId) -> Ordering + 'static,
     {
+        let mut all_probe_reservations = ProbeReservations::new(reservation_id, self.reservation_store.clone());
+
         let mut order_grid_component_res_database = OrderResVrmComponentDatabase::new(reservation_order, self.vrm_component_order.get_comparator());
 
         for component_id in self.manager.get_random_ordered_vrm_components() {
@@ -201,7 +209,7 @@ impl ADC {
                         log::error!("Invalid Answer.");
                     }
                 }
-
+                all_probe_reservations.add_probe_reservations(probe_reservations.clone());
                 order_grid_component_res_database.put_all(probe_reservations);
             }
         }
@@ -231,10 +239,11 @@ impl ADC {
                 if self.reservation_store.is_reservation_state_at_least(candidate_id, ReservationState::ReserveAnswer) {
                     log::error!("Reserve of reservation {:?} in local schedule of GridComponent {:?} failed.", candidate_id, component_id);
                 }
+                all_probe_reservations.reject_all_probe_reservations_except(candidate_id);
                 return Some(candidate_id);
             }
         }
-
+        all_probe_reservations.reject_all_probe_reservations();
         return None;
     }
 
@@ -277,21 +286,33 @@ impl ADC {
                 let state = res.get_base_reservation().get_state();
                 let proceeding = res.get_base_reservation().get_reservation_proceeding();
 
-                // TODO Java implementation also proceeded workflows if so, num_task should not be always be 1 (implement get_task_count())
-                let tasks = 42;
+                let mut tasks = 1;
+                if res.is_workflow() {
+                    tasks = res.as_workflow().unwrap().get_all_reservation_ids().len()
+                }
 
                 (start, end, name, cap, workload, state, proceeding, tasks)
             };
 
-            let load_metric = self.manager.get_load_metric(start, end, None);
+            let rms_load_metric = self.manager.get_load_metric(start, end, None);
+
+            let node_utilization = rms_load_metric.node_load_metric.as_ref().map(|n| Some(n.utilization)).unwrap_or(None);
+
+            let node_possible_capacity = rms_load_metric.node_load_metric.as_ref().map(|n| Some(n.possible_capacity)).unwrap_or(None);
+
+            let network_utilization = rms_load_metric.link_load_metric.as_ref().map(|n| Some(n.utilization)).unwrap_or(None);
+
+            let network_possible_capacity = rms_load_metric.link_load_metric.as_ref().map(|n| Some(n.possible_capacity)).unwrap_or(None);
 
             tracing::info!(
                 target: ANALYTICS_TARGET,
                 Time = now,
                 LogDescription = "AcI Operation finished",
                 ComponentType = %self.id,
-                ComponentUtilization = load_metric.utilization,
-                ComponentCapacity = load_metric.possible_capacity,
+                NodeComponentUtilization = node_utilization,
+                NodeComponentCapacity = node_possible_capacity,
+                NetworkComponentUtilization = network_utilization,
+                NetworkComponentCapacity = network_possible_capacity,
                 ComponentFragmentation = self.manager.get_system_satisfaction(None),
                 ReservationName = %res_name,
                 ReservationCapacity = capacity,
