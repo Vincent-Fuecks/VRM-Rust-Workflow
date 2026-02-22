@@ -2,8 +2,8 @@ use crate::api::rms_config_dto::rms_dto::DummyRmsDto;
 use crate::domain::vrm_system_model::reservation::reservation::ReservationState;
 use crate::domain::vrm_system_model::reservation::reservation_store::{ReservationId, ReservationStore};
 use crate::domain::vrm_system_model::resource::resource_store::ResourceStore;
-use crate::domain::vrm_system_model::schedule::slotted_schedule::network_slotted_schedule::topology::{Link, Node};
-use crate::domain::vrm_system_model::scheduler_trait::Schedule;
+use crate::domain::vrm_system_model::schedule::schedule_trait::Schedule;
+use crate::domain::vrm_system_model::schedule::slotted_schedule::strategy::link::topology::{Link, Node};
 use crate::domain::vrm_system_model::utils::id::{AciId, ResourceName, RmsId, RouterId, ShadowScheduleId};
 use crate::domain::vrm_system_model::utils::load_buffer::LoadMetric;
 

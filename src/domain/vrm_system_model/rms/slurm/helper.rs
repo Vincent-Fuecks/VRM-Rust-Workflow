@@ -4,7 +4,7 @@ use crate::{
     api::rms_config_dto::rms_dto::SlurmRmsDto,
     domain::vrm_system_model::{
         rms::slurm::{response::slurm_node::SlurmNodesResponse, slurm::SlurmRms},
-        schedule::slotted_schedule::network_slotted_schedule::topology::{Link, Node},
+        schedule::slotted_schedule::strategy::link::topology::{Link, Node},
         utils::id::{ResourceName, RouterId},
     },
 };

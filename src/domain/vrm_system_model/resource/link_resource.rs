@@ -1,10 +1,9 @@
 use std::any::Any;
 
-use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationTrait};
-use crate::domain::vrm_system_model::reservation::reservation_store::{ReservationId, ReservationStore};
 use crate::domain::vrm_system_model::resource::resource_trait::Resource;
 use crate::domain::vrm_system_model::resource::resources::BaseResource;
-use crate::domain::vrm_system_model::schedule::slotted_schedule::slotted_schedule::SlottedSchedule;
+use crate::domain::vrm_system_model::schedule::slotted_schedule::slotted_schedule_context::SlottedScheduleContext;
+use crate::domain::vrm_system_model::schedule::slotted_schedule::strategy::node::node_strategy::NodeStrategy;
 use crate::domain::vrm_system_model::utils::id::{ResourceName, RouterId};
 
 // TODO Naming is of should be just Link
@@ -15,11 +14,11 @@ pub struct LinkResource {
     pub target: RouterId,
 
     /// The schedule manages bandwidth for this link.
-    pub schedule: SlottedSchedule,
+    pub schedule: SlottedScheduleContext<NodeStrategy>,
 }
 
 impl LinkResource {
-    pub fn new(name: ResourceName, source: RouterId, target: RouterId, capacity: i64, schedule: SlottedSchedule) -> Self {
+    pub fn new(name: ResourceName, source: RouterId, target: RouterId, capacity: i64, schedule: SlottedScheduleContext<NodeStrategy>) -> Self {
         let base = BaseResource::new(name, capacity);
 
         Self { base, source, target, schedule }

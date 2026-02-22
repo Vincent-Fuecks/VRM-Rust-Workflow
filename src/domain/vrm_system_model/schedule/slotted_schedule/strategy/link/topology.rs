@@ -1,9 +1,9 @@
 use crate::domain::simulator::simulator::SystemSimulator;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationStore;
 use crate::domain::vrm_system_model::resource::link_resource::LinkResource;
-use crate::domain::vrm_system_model::resource::resource_store::{LinkResourceId, NodeResourceId, ResourceStore};
-use crate::domain::vrm_system_model::schedule::slotted_schedule::slotted_schedule::SlottedSchedule;
-use crate::domain::vrm_system_model::schedule::slotted_schedule::slotted_schedule::schedule_context::SlottedScheduleContext;
+use crate::domain::vrm_system_model::resource::resource_store::{LinkResourceId, ResourceStore};
+use crate::domain::vrm_system_model::schedule::slotted_schedule::SlottedScheduleNodes;
+use crate::domain::vrm_system_model::schedule::slotted_schedule::strategy::node::node_strategy::NodeStrategy;
 use crate::domain::vrm_system_model::utils::id::{AciId, ResourceName, RouterId, SlottedScheduleId};
 
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -361,18 +361,18 @@ impl NetworkTopology {
 
         for link in links.iter() {
             let link_schedule_name = format!("Schedule LinkResource {} -> {}", link.source, link.target);
+            let node_strategy = NodeStrategy::default();
 
-            let slotted_schedule_ctx = SlottedScheduleContext::new(
+            let link_schedule = SlottedScheduleNodes::new(
                 SlottedScheduleId::new(link_schedule_name),
-                simulator.get_current_time_in_s(),
                 num_of_slots,
                 slot_width,
                 link.capacity,
                 true,
+                node_strategy,
                 reservation_store.clone(),
+                simulator.clone(),
             );
-
-            let link_schedule = SlottedSchedule::new(slotted_schedule_ctx, link.capacity, reservation_store.clone(), simulator.clone());
 
             let link_resouce_name = ResourceName::new(link.id.clone());
             let link_resource = LinkResource::new(

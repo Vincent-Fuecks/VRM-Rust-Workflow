@@ -28,6 +28,13 @@ impl ProbeReservations {
     pub fn add_reservation(&mut self, reservation: Reservation) {
         let probe_reservation_id = ProbeReservationId::new(format!("{}-{}", reservation.get_name(), self.reservation_idx));
 
+        // Check if Reservation is valid
+        if reservation.get_assigned_start() < reservation.get_booking_interval_start()
+            || reservation.get_assigned_end() > reservation.get_booking_interval_end()
+        {
+            log::error!("ProbeReservationIsNotValid");
+        }
+
         if self.local_reservation_store.insert(probe_reservation_id, reservation).is_some() {
             panic!("Can not add two ProbeReservations with the same name to the local store.");
         }

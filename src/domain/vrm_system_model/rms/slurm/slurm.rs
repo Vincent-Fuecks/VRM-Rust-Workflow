@@ -9,7 +9,8 @@ use crate::domain::vrm_system_model::reservation::reservation_store::Reservation
 use crate::domain::vrm_system_model::resource::node_resource::NodeResource;
 use crate::domain::vrm_system_model::resource::resource_store::ResourceStore;
 use crate::domain::vrm_system_model::rms::rms_node_network_trait::Helper;
-use crate::domain::vrm_system_model::scheduler_trait::Schedule;
+use crate::domain::vrm_system_model::schedule::schedule_trait::Schedule;
+use crate::domain::vrm_system_model::schedule::slotted_schedule::strategy::link::topology::NetworkTopology;
 use crate::domain::vrm_system_model::scheduler_type::ScheduleContext;
 use crate::domain::vrm_system_model::utils::id::{ResourceName, ShadowScheduleId, SlottedScheduleId};
 use crate::{
@@ -22,7 +23,6 @@ use crate::{
                 rms::{Rms, RmsBase},
                 slurm::{response::slurm_node::SlurmNodesResponse, slurm_endpoint::SlurmEndpoint},
             },
-            schedule::slotted_schedule::network_slotted_schedule::topology::NetworkTopology,
             scheduler_type::SchedulerType,
             utils::id::{AciId, RouterId},
         },

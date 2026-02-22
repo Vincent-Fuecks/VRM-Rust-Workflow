@@ -11,7 +11,13 @@ use crate::domain::vrm_system_model::{
         reservation_store::{ReservationId, ReservationStore},
     },
     resource::{link_resource::LinkResource, node_resource::NodeResource, resource_trait::Resource},
-    schedule::slotted_schedule::slotted_schedule::SlottedSchedule,
+    schedule::{
+        schedule_trait::Schedule,
+        slotted_schedule::{
+            slotted_schedule_context::SlottedScheduleContext,
+            strategy::{node::node_strategy::NodeStrategy, strategy_trait::SlottedScheduleStrategy},
+        },
+    },
     utils::id::{ResourceName, RouterId},
 };
 
@@ -138,9 +144,9 @@ impl ResourceStore {
         guard.links.len()
     }
 
-    pub fn with_mut_schedule<F, R>(&self, link_id: LinkResourceId, f: F) -> R
+    pub fn with_mut_slotted_schedule_strategy<F, R>(&self, link_id: LinkResourceId, f: F) -> R
     where
-        F: FnOnce(&mut SlottedSchedule) -> R,
+        F: FnOnce(&mut SlottedScheduleContext<NodeStrategy>) -> R,
     {
         if let Some(handle) = self.get_mut_link(link_id) {
             let mut link = handle.write().unwrap();

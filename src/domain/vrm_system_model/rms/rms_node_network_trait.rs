@@ -11,7 +11,7 @@ use crate::domain::vrm_system_model::{
         rms_simulator::rms_simulator::RmsSimulator,
         slurm::slurm::SlurmRms,
     },
-    scheduler_trait::Schedule,
+    schedule::schedule_trait::Schedule,
     utils::id::ShadowScheduleId,
 };
 

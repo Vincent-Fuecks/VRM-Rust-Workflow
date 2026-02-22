@@ -6,17 +6,15 @@ use crate::{
         simulator::simulator::SystemSimulator,
         vrm_system_model::{
             reservation::{
-                reservation::{Reservation, ReservationTrait},
+                reservation::ReservationTrait,
                 reservation_store::{ReservationId, ReservationStore},
             },
             resource::{node_resource::NodeResource, resource_store::ResourceStore},
             rms::{
-                advance_reservation_trait::AdvanceReservationRms,
-                rms::{Rms, RmsBase, RmsLoadMetric},
+                rms::{Rms, RmsBase},
                 rms_node_network_trait::Helper,
             },
-            schedule::slotted_schedule::network_slotted_schedule::topology::NetworkTopology,
-            scheduler_trait::Schedule,
+            schedule::{schedule_trait::Schedule, slotted_schedule::strategy::link::topology::NetworkTopology},
             scheduler_type::{ScheduleContext, SchedulerType},
             utils::id::{AciId, ShadowScheduleId, SlottedScheduleId},
         },

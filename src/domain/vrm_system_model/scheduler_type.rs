@@ -1,11 +1,12 @@
 use crate::domain::simulator::simulator::SystemSimulator;
-use crate::domain::vrm_system_model::reservation::reservation_store::{self, ReservationStore};
-use crate::domain::vrm_system_model::resource::resource_store::{self, ResourceStore};
-use crate::domain::vrm_system_model::schedule::slotted_schedule::network_slotted_schedule::NetworkSlottedSchedule;
-use crate::domain::vrm_system_model::schedule::slotted_schedule::network_slotted_schedule::topology::NetworkTopology;
-use crate::domain::vrm_system_model::schedule::slotted_schedule::slotted_schedule::SlottedSchedule;
-use crate::domain::vrm_system_model::schedule::slotted_schedule::slotted_schedule::schedule_context::SlottedScheduleContext;
-use crate::domain::vrm_system_model::scheduler_trait::Schedule;
+use crate::domain::vrm_system_model::reservation::reservation_store::ReservationStore;
+use crate::domain::vrm_system_model::resource::resource_store::ResourceStore;
+use crate::domain::vrm_system_model::schedule::schedule_trait::Schedule;
+use crate::domain::vrm_system_model::schedule::slotted_schedule::slotted_schedule_context::SlottedScheduleContext;
+use crate::domain::vrm_system_model::schedule::slotted_schedule::strategy::link::link_strategy::{self, LinkStrategy};
+use crate::domain::vrm_system_model::schedule::slotted_schedule::strategy::link::topology::NetworkTopology;
+use crate::domain::vrm_system_model::schedule::slotted_schedule::strategy::node::node_strategy::{self, NodeStrategy};
+use crate::domain::vrm_system_model::schedule::slotted_schedule::{SlottedScheduleLinks, SlottedScheduleNodes};
 use crate::domain::vrm_system_model::utils::id::SlottedScheduleId;
 
 use crate::error::ConversionError;
@@ -17,14 +18,12 @@ pub enum SchedulerType {
     // Node Scheduler
     FreeListSchedule,
     SlottedSchedule,
-
-    SlottedScheduleResubmitFrag,
     SlottedSchedule12,
     SlottedSchedule12000,
     UnlimitedSchedule,
 
-    // Network Scheduler
-    SlottedScheduleNetwork { topology: NetworkTopology, resource_store: ResourceStore },
+    // Link Scheduler
+    SlottedScheduleLinks { topology: NetworkTopology, resource_store: ResourceStore },
 }
 #[derive(Debug, Clone)]
 pub struct ScheduleContext {
@@ -43,7 +42,6 @@ impl FromStr for SchedulerType {
         match s {
             "FreeListSchedule" => Ok(SchedulerType::FreeListSchedule),
             "SlottedSchedule" => Ok(SchedulerType::SlottedSchedule),
-            "SlottedScheduleResubmitFrag" => Ok(SchedulerType::SlottedScheduleResubmitFrag),
             "SlottedSchedule12" => Ok(SchedulerType::SlottedSchedule12),
             "SlottedSchedule12000" => Ok(SchedulerType::SlottedSchedule12000),
             "UnlimitedSchedule" => Ok(SchedulerType::UnlimitedSchedule),
@@ -60,77 +58,66 @@ impl SchedulerType {
                 todo!()
             }
             Self::SlottedSchedule => {
-                let slotted_schedule_ctx = SlottedScheduleContext::new(
+                let node_strategy = NodeStrategy::default();
+                let node_schedule = SlottedScheduleNodes::new(
                     ctx.id,
-                    ctx.simulator.get_current_time_in_s(),
                     ctx.number_of_slots,
                     ctx.slot_width,
                     ctx.capacity,
                     true,
+                    node_strategy,
                     ctx.reservation_store.clone(),
+                    ctx.simulator.clone(),
                 );
 
-                Box::new(SlottedSchedule::new(slotted_schedule_ctx, ctx.capacity, ctx.reservation_store, ctx.simulator))
+                Box::new(node_schedule)
             }
-            Self::SlottedScheduleNetwork { topology, resource_store } => {
-                let slotted_schedule_ctx = SlottedScheduleContext::new(
+            Self::SlottedScheduleLinks { topology, resource_store } => {
+                let link_strategy = LinkStrategy::new(topology.clone(), resource_store.clone());
+                let link_schedule = SlottedScheduleLinks::new(
                     ctx.id,
-                    ctx.simulator.get_current_time_in_s(),
                     ctx.number_of_slots,
                     ctx.slot_width,
                     ctx.capacity,
                     true,
+                    link_strategy,
                     ctx.reservation_store.clone(),
+                    ctx.simulator.clone(),
                 );
 
-                Box::new(NetworkSlottedSchedule::new(
-                    slotted_schedule_ctx,
-                    topology.clone(),
-                    ctx.reservation_store,
-                    resource_store.clone(),
-                    ctx.simulator,
-                ))
+                Box::new(link_schedule)
             }
             Self::SlottedSchedule12 => {
                 let number_of_real_slots = (ctx.number_of_slots * (ctx.slot_width + 11)) / 12;
-                let slotted_schedule_ctx = SlottedScheduleContext::new(
+                let node_strategy = NodeStrategy::default();
+                let node_schedule = SlottedScheduleNodes::new(
                     ctx.id,
-                    ctx.simulator.get_current_time_in_s(),
                     number_of_real_slots,
+                    ctx.slot_width,
                     12,
-                    ctx.capacity,
                     true,
+                    node_strategy,
                     ctx.reservation_store.clone(),
+                    ctx.simulator.clone(),
                 );
 
-                Box::new(SlottedSchedule::new(slotted_schedule_ctx, ctx.capacity, ctx.reservation_store, ctx.simulator))
+                Box::new(node_schedule)
             }
             Self::SlottedSchedule12000 => {
                 let number_of_real_slots = (ctx.number_of_slots * (ctx.slot_width + 11999)) / 12000;
-                let slotted_schedule_ctx = SlottedScheduleContext::new(
+                let node_strategy = NodeStrategy::default();
+                let node_schedule = SlottedScheduleNodes::new(
                     ctx.id,
-                    ctx.simulator.get_current_time_in_s(),
                     number_of_real_slots,
-                    1200,
-                    ctx.capacity,
-                    true,
-                    ctx.reservation_store.clone(),
-                );
-
-                Box::new(SlottedSchedule::new(slotted_schedule_ctx, ctx.capacity, ctx.reservation_store, ctx.simulator))
-            }
-            Self::SlottedScheduleResubmitFrag => {
-                let slotted_schedule_ctx = SlottedScheduleContext::new(
-                    ctx.id,
-                    ctx.simulator.get_current_time_in_s(),
-                    ctx.number_of_slots,
                     ctx.slot_width,
-                    ctx.capacity,
-                    false,
+                    1200,
+                    true,
+                    node_strategy,
                     ctx.reservation_store.clone(),
+                    ctx.simulator.clone(),
                 );
 
-                Box::new(SlottedSchedule::new(slotted_schedule_ctx, ctx.capacity, ctx.reservation_store, ctx.simulator))
+                Box::new(node_schedule)
             }
             Self::UnlimitedSchedule => {
                 todo!()
@@ -140,10 +127,10 @@ impl SchedulerType {
 
     pub fn get_network_scheduler_variant(&self, topology: NetworkTopology, resource_store: ResourceStore) -> SchedulerType {
         match self {
-            Self::SlottedSchedule => SchedulerType::SlottedScheduleNetwork { topology, resource_store },
+            Self::SlottedSchedule => SchedulerType::SlottedScheduleLinks { topology, resource_store },
             _ => {
                 log::error!("The specified Scheduler {:?} is not implemented as NetworkScheduler. Default to SlottedSchedule", self);
-                SchedulerType::SlottedScheduleNetwork { topology, resource_store }
+                SchedulerType::SlottedScheduleLinks { topology, resource_store }
             }
         }
     }

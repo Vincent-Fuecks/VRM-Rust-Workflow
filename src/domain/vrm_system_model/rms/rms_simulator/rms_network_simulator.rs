@@ -5,8 +5,8 @@ use crate::domain::vrm_system_model::reservation::reservation_store::{Reservatio
 use crate::domain::vrm_system_model::resource::resource_store::ResourceStore;
 use crate::domain::vrm_system_model::rms::advance_reservation_trait::AdvanceReservationRms;
 use crate::domain::vrm_system_model::rms::rms::{Rms, RmsBase, RmsLoadMetric};
-use crate::domain::vrm_system_model::schedule::slotted_schedule::network_slotted_schedule::topology::NetworkTopology;
-use crate::domain::vrm_system_model::scheduler_trait::Schedule;
+use crate::domain::vrm_system_model::schedule::schedule_trait::Schedule;
+use crate::domain::vrm_system_model::schedule::slotted_schedule::strategy::link::topology::NetworkTopology;
 use crate::domain::vrm_system_model::scheduler_type::{ScheduleContext, SchedulerType};
 use crate::domain::vrm_system_model::utils::id::{AciId, ShadowScheduleId, SlottedScheduleId};
 use crate::error::ConversionError;

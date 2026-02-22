@@ -1,20 +1,24 @@
-use crate::domain::vrm_system_model::reservation::probe_reservations::ProbeReservations;
-use crate::domain::vrm_system_model::reservation::reservation::ReservationState;
-use crate::domain::vrm_system_model::reservation::reservation_store::{ReservationId, ReservationStore};
-use crate::domain::vrm_system_model::reservation::reservations::Reservations;
-use crate::domain::vrm_system_model::schedule::slotted_schedule::slotted_schedule::slot::Slot;
-use crate::domain::vrm_system_model::utils::id::SlottedScheduleId;
-use crate::domain::vrm_system_model::utils::load_buffer::{GlobalLoadContext, LoadBuffer};
-
 use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::i64;
 use std::sync::Arc;
 
+use crate::domain::simulator::simulator::SystemSimulator;
+use crate::domain::vrm_system_model::reservation::probe_reservations::ProbeReservations;
+use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationState, ReservationTrait};
+use crate::domain::vrm_system_model::reservation::reservation_store::{ReservationId, ReservationStore};
+use crate::domain::vrm_system_model::reservation::reservations::Reservations;
+use crate::domain::vrm_system_model::schedule::slotted_schedule::slot::Slot;
+use crate::domain::vrm_system_model::schedule::slotted_schedule::strategy::strategy_trait::SlottedScheduleStrategy;
+use crate::domain::vrm_system_model::utils::id::SlottedScheduleId;
+use crate::domain::vrm_system_model::utils::load_buffer::{GlobalLoadContext, LoadBuffer};
+
 const FRAGMENTATION_POWER: f64 = 2.0;
 
 #[derive(Debug, Clone)]
-pub struct SlottedScheduleContext {
+pub struct SlottedScheduleContext<S: SlottedScheduleStrategy> {
+    pub strategy: S,
+
     /// **Unique identifier** for this SlottedSchedule.
     pub id: SlottedScheduleId,
 
@@ -55,17 +59,21 @@ pub struct SlottedScheduleContext {
 
     /// A flag indicating whether fragmentation calculation is required for the **prob requests**.
     pub is_frag_needed: bool,
+
+    pub reservation_store: ReservationStore,
+    pub simulator: Arc<dyn SystemSimulator>,
 }
 
-impl SlottedScheduleContext {
+impl<S: SlottedScheduleStrategy> SlottedScheduleContext<S> {
     pub fn new(
         id: SlottedScheduleId,
-        current_time: i64,
         number_of_real_slots: i64,
         slot_width: i64,
         capacity: i64,
         use_quadratic_mean_fragmentation: bool,
+        strategy: S,
         reservation_store: ReservationStore,
+        simulator: Arc<dyn SystemSimulator>,
     ) -> Self {
         let mut slots: Vec<Slot> = Vec::new();
 
@@ -76,6 +84,7 @@ impl SlottedScheduleContext {
         }
 
         let mut slotted_context = SlottedScheduleContext {
+            strategy,
             id: SlottedScheduleId::new(id),
             slots: slots,
             slot_width: slot_width,
@@ -90,9 +99,11 @@ impl SlottedScheduleContext {
             use_quadratic_mean_fragmentation: use_quadratic_mean_fragmentation,
             // TODO Always false
             is_frag_needed: false,
+            reservation_store,
+            simulator,
         };
 
-        slotted_context.update(current_time);
+        slotted_context.update();
 
         return slotted_context;
     }
@@ -194,7 +205,8 @@ impl SlottedScheduleContext {
     /// This process deletes all reservations that have expired (assigned end time is past the new start time)
     /// and moves the load from the now-expired slots into the `load_buffer` for historical tracking.
     /// Note: Utilized by the SlottedSchedule and NetworkSlottedSchedule
-    pub fn update(&mut self, current_time: i64) {
+    pub fn update(&mut self) {
+        let current_time = self.simulator.get_current_time_in_s();
         let new_start_slot_index = self.get_slot_index(current_time);
 
         if self.start_slot_index < new_start_slot_index {
@@ -264,7 +276,8 @@ impl SlottedScheduleContext {
     }
 
     /// Performs the actual deletion of the reservation in the SlottedScheduleContext
-    pub fn delete_reservation(&mut self, id: ReservationId, current_time: i64) {
+    pub fn delete_reservation(&mut self, id: ReservationId) {
+        let current_time = self.simulator.get_current_time_in_s();
         // Can not delete already finished reservations
         let task_finished: bool = self.active_reservations.get_assigned_end(&id) <= current_time;
 
@@ -325,22 +338,17 @@ impl SlottedScheduleContext {
             return None;
         }
 
-        let mut best_candidate = probe_reservations.get_res_id_with_first_start_slot(request_id).expect("Error getting random reservation.").clone();
+        // let mut best_candidate = probe_reservations.get_res_id_with_first_start_slot(request_id).expect("Error getting random reservation.").clone();
+        return None;
+        // TODO
+        // for candidate_id in probe_reservations.get_ids() {
+        //     if comparator(best_candidate.clone(), candidate_id) == Ordering::Greater {
+        //         best_candidate = candidate_id.clone();
+        //     }
+        // }
 
-        for candidate_id in probe_reservations.get_ids() {
-            if comparator(best_candidate.clone(), candidate_id) == Ordering::Greater {
-                best_candidate = candidate_id.clone();
-            }
-        }
-
-        probe_reservations.reject_all_probe_reservations_except(best_candidate);
-        return Some(best_candidate);
-    }
-
-    /// Inserts a new reservation requirement into the specified slot.
-    pub fn insert_reservation_into_slot(&mut self, key: &ReservationId, requirement: i64, slot_index: i64) {
-        let slot = self.get_mut_slot(slot_index).expect("Slot was not found.");
-        slot.insert_reservation(requirement, key.clone());
+        // probe_reservations.reject_all_probe_reservations_except(best_candidate);
+        // return Some(best_candidate);
     }
 
     /// Retrieves the current resource load (reserved capacity) for a slot at a given index.
@@ -357,5 +365,119 @@ impl SlottedScheduleContext {
                 return 0;
             }
         }
+    }
+}
+
+impl<S: SlottedScheduleStrategy> SlottedScheduleContext<S> {
+    /// Searches for all possible time slots in the schedule where the given reservation request can be fully satisfied.
+    ///
+    /// This method performs the core **scheduling probe** for resource availability. It iterates through
+    /// possible start times within the request's booking interval, clips the search to the scheduling window,
+    /// and check for feasibility.
+    ///
+    /// # Returns
+    /// Returns a `Reservations` object containing a map of all feasible reservations (candidates) found.
+    /// Each candidate represents a valid assignment time within the schedule's constraints.
+    pub fn calculate_schedule(&mut self, id: ReservationId) -> ProbeReservations {
+        let mut request_start_boundary: i64 = self.active_reservations.get_booking_interval_start(&id);
+        let mut request_end_boundary: i64 = self.active_reservations.get_booking_interval_end(&id);
+        let initial_duration: i64 = self.active_reservations.get_task_duration(&id);
+
+        if request_start_boundary == i64::MIN {
+            request_start_boundary = 0;
+        }
+
+        if request_end_boundary == i64::MIN {
+            request_end_boundary = i64::MAX;
+        }
+
+        let mut search_results = ProbeReservations::new(id, self.reservation_store.clone());
+
+        if !self.active_reservations.get_is_moldable(&id)
+            && S::get_capacity(self) > 0
+            && S::get_capacity(self) < self.active_reservations.get_reserved_capacity(&id)
+        {
+            return search_results;
+        }
+
+        let mut earliest_start_index: i64 = self.get_slot_index(request_start_boundary);
+        earliest_start_index = self.get_effective_slot_index(earliest_start_index);
+
+        let mut latest_start_index: i64 = self.get_slot_index(request_end_boundary - initial_duration);
+        latest_start_index = self.get_effective_slot_index(latest_start_index);
+
+        for slot_start_index in earliest_start_index..=latest_start_index {
+            if let Some(res_candidate) = self.try_fit_reservation(id, slot_start_index, request_end_boundary) {
+                // TODO
+                // search_results.add_only_reservation(res_candidate);
+            }
+        }
+        return search_results;
+    }
+
+    // TODO False implementation should not update the self.active_reservations
+    fn try_fit_reservation(&mut self, candidate_id: ReservationId, slot_start_index: i64, request_end_boundary: i64) -> Option<Reservation> {
+        // TODO Should be not need, because res is a clone and unlike in the java implementation not the same object.
+        // candidate.adjust_capacity(candidate.get_reserved_capacity());
+
+        let mut current_required_capacity = self.active_reservations.get_reserved_capacity(&candidate_id);
+
+        let mut current_duration: i64 = self.active_reservations.get_task_duration(&candidate_id);
+        let mut start_time = self.get_slot_start_time(slot_start_index);
+
+        self.active_reservations.get_booking_interval_start(&candidate_id);
+
+        if start_time < self.active_reservations.get_booking_interval_start(&candidate_id) {
+            start_time = self.active_reservations.get_booking_interval_start(&candidate_id);
+        }
+
+        let mut end_time = start_time + current_duration;
+        let mut current_end_slot_index = self.get_slot_index(end_time);
+        let mut is_feasible: bool = true;
+        let mut current_slot_index: i64 = slot_start_index;
+
+        while current_slot_index <= current_end_slot_index {
+            let available_capacity: i64 = S::adjust_requirement_to_slot_capacity(self, current_slot_index, current_required_capacity, candidate_id);
+
+            if available_capacity == 0 && current_required_capacity != 0 {
+                is_feasible = false;
+                break;
+            }
+
+            if !self.active_reservations.get_is_moldable(&candidate_id) && available_capacity != current_required_capacity {
+                is_feasible = false;
+                break;
+            }
+
+            if available_capacity < current_required_capacity {
+                self.active_reservations.adjust_capacity(&candidate_id, available_capacity);
+                current_required_capacity = available_capacity;
+                current_duration = self.active_reservations.get_task_duration(&candidate_id);
+
+                end_time = start_time + current_duration;
+
+                if false == self.is_time_in_scheduling_window(end_time) || end_time > request_end_boundary {
+                    is_feasible = false;
+                    break;
+                }
+
+                current_end_slot_index = self.get_slot_index(end_time);
+            }
+
+            current_slot_index += 1;
+        }
+
+        if is_feasible {
+            let mut res_candidate_clone = self.active_reservations.get_reservation_snapshot(&candidate_id);
+
+            res_candidate_clone.set_booking_interval_start(start_time);
+            res_candidate_clone.set_booking_interval_end(end_time);
+            res_candidate_clone.set_assigned_start(start_time);
+            res_candidate_clone.set_assigned_end(end_time);
+            res_candidate_clone.set_state(ReservationState::ProbeAnswer);
+            return Some(res_candidate_clone);
+        }
+
+        return None;
     }
 }

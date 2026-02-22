@@ -7,7 +7,7 @@ use crate::domain::vrm_system_model::reservation::reservation_store::Reservation
 use crate::domain::vrm_system_model::utils::load_buffer::LoadMetric;
 
 // TODO Sync is potentially unsafe; if total struct Sync than this should be redundant
-pub trait Schedule: Debug + Send + Sync + Any {
+pub trait Schedule: Debug + Send + Sync {
     /// Calculates the resource **fragmentation score** over a specific, user-defined time range.
     ///
     /// # Arguments

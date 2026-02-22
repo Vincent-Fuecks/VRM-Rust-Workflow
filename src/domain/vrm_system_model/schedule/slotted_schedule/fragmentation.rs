@@ -1,10 +1,18 @@
 use crate::domain::vrm_system_model::{
-    reservation::reservation_store::ReservationId, schedule::slotted_schedule::slotted_schedule::SlottedSchedule, scheduler_trait::Schedule,
+    reservation::reservation_store::ReservationId,
+    schedule::{
+        schedule_trait::Schedule,
+        slotted_schedule::{
+            SlottedScheduleNodes,
+            slotted_schedule_context::SlottedScheduleContext,
+            strategy::{node::node_strategy::NodeStrategy, strategy_trait::SlottedScheduleStrategy},
+        },
+    },
 };
 
 const FRAGMENTATION_POWER: f64 = 2.0;
 
-impl SlottedSchedule {
+impl<S: SlottedScheduleStrategy + Clone + 'static> SlottedScheduleContext<S> {
     /// Computes the **Fragmentation Index** of the schedule over a specific time range using
     /// the **Quadratic Mean** method.
     ///
@@ -16,9 +24,9 @@ impl SlottedSchedule {
     /// A `f64` representing the calculated fragmentation index, where **0.0** is best (least fragmented)
     /// and **1.0** is worst (most fragmented).
     pub fn get_fragmentation_quadratic_mean(&self, start_slot_index: i64, end_slot_index: i64) -> f64 {
-        let mut quad_sum_per_free_block: Vec<f64> = vec![0.0; (self.capacity + 1) as usize];
-        let mut sum_per_free_block: Vec<f64> = vec![0.0; (self.capacity + 1) as usize];
-        let mut current_free_block_len: Vec<i64> = vec![0; (self.capacity + 1) as usize];
+        let mut quad_sum_per_free_block: Vec<f64> = vec![0.0; (S::get_capacity(self) + 1) as usize];
+        let mut sum_per_free_block: Vec<f64> = vec![0.0; (S::get_capacity(self) + 1) as usize];
+        let mut current_free_block_len: Vec<i64> = vec![0; (S::get_capacity(self) + 1) as usize];
 
         // Add all free slots which end in the investigated time range.
         self.add_block_which_end_in_range(
@@ -44,13 +52,13 @@ impl SlottedSchedule {
         current_free_block_len: &mut Vec<i64>,
     ) {
         for slot_index in start_slot_index..=end_slot_index {
-            let free_capacity = self.capacity - self.ctx.get_slot_load(slot_index);
+            let free_capacity = S::get_capacity(self) - self.get_slot_load(slot_index);
 
             for capacity in 1..=free_capacity {
                 current_free_block_len[capacity as usize] += 1;
             }
 
-            for capacity in free_capacity + 1..=self.capacity {
+            for capacity in free_capacity + 1..=S::get_capacity(self) {
                 if current_free_block_len[capacity as usize] > 0 {
                     quad_sum_per_free_block[capacity as usize] += f64::powf(current_free_block_len[capacity as usize] as f64, FRAGMENTATION_POWER);
 
@@ -67,7 +75,7 @@ impl SlottedSchedule {
         sum_per_free_block: &mut Vec<f64>,
         current_free_block_len: &mut Vec<i64>,
     ) {
-        for capacity in 1..=self.capacity {
+        for capacity in 1..=S::get_capacity(self) {
             if current_free_block_len[capacity as usize] > 0 {
                 quad_sum_per_free_block[capacity as usize] += f64::powf(current_free_block_len[capacity as usize] as f64, FRAGMENTATION_POWER);
                 sum_per_free_block[capacity as usize] += current_free_block_len[capacity as usize] as f64;
@@ -79,7 +87,7 @@ impl SlottedSchedule {
     fn calculate_avg_fragmentation(&self, quad_sum_per_free_block: &Vec<f64>, sum_per_free_block: &Vec<f64>) -> f64 {
         let mut block_fragmentation: Vec<f64> = Vec::new();
 
-        for capacity in 1..=self.capacity {
+        for capacity in 1..=S::get_capacity(self) {
             if sum_per_free_block[capacity as usize] > 0.0 {
                 let frag: f64 = quad_sum_per_free_block[capacity as usize] / sum_per_free_block[capacity as usize].powf(FRAGMENTATION_POWER);
 
@@ -116,14 +124,14 @@ impl SlottedSchedule {
     /// A `f64` representing the RFI, typically between **0.0** (good) and **1.0** (bad).
     /// Returns **0.0** if the range is completely empty.
     pub fn get_fragmentation_resubmit(&self, start_slot_index: i64, end_slot_index: i64) -> f64 {
-        log::warn!("In SlottedSchedule id: {}, fragmentation resubmit is requested.", self.ctx.id);
+        log::warn!("In SlottedSchedule id: {}, fragmentation resubmit is requested.", self.id);
 
         let mut free_capacity_in_range: i64 = 0;
         let mut range_in_use: bool = false;
 
         for slot_index in start_slot_index..=end_slot_index {
-            let next_slot_load: i64 = self.ctx.get_slot_load(slot_index);
-            free_capacity_in_range += self.capacity - next_slot_load;
+            let next_slot_load: i64 = self.get_slot_load(slot_index);
+            free_capacity_in_range += S::get_capacity(self) - next_slot_load;
 
             if next_slot_load > 0 {
                 range_in_use = true;
@@ -134,23 +142,23 @@ impl SlottedSchedule {
             return 0.0;
         }
 
-        let mut remaining_capacity: i64 = free_capacity_in_range * self.ctx.slot_width;
+        let mut remaining_capacity: i64 = free_capacity_in_range * self.slot_width;
         let mut rejected_capacity: i64 = 0;
 
         let mut test_schedule = self.clone();
 
         while remaining_capacity > 0 {
-            if self.ctx.active_reservations.is_empty() {
+            if self.active_reservations.is_empty() {
                 log::error!("Simulation of single resubmission failed, because active reservations are empty while remaining_capacity > 0.");
                 return 0.0;
             }
 
             // This loop ensures we select a reservation that AT LEAST PARTLY overlaps the range.
             let random_reservation_id: ReservationId = loop {
-                let id = self.ctx.active_reservations.get_random_id().expect("No random ReservationId was found in test SlottedSchedule.");
+                let id = self.active_reservations.get_random_id().expect("No random ReservationId was found in test SlottedSchedule.");
 
-                let is_non_overlapping = self.ctx.active_reservations.get_assigned_start(&id) > self.ctx.get_slot_end_time(end_slot_index)
-                    || self.ctx.active_reservations.get_assigned_end(&id) < self.ctx.get_slot_start_time(start_slot_index);
+                let is_non_overlapping = self.active_reservations.get_assigned_start(&id) > self.get_slot_end_time(end_slot_index)
+                    || self.active_reservations.get_assigned_end(&id) < self.get_slot_start_time(start_slot_index);
 
                 if !is_non_overlapping {
                     break id;
@@ -160,16 +168,15 @@ impl SlottedSchedule {
             match test_schedule.reserve(random_reservation_id) {
                 // Could not book again
                 Some(id) => {
-                    remaining_capacity -= self.ctx.active_reservations.get_reserved_capacity(&id);
-                    rejected_capacity +=
-                        self.ctx.active_reservations.get_reserved_capacity(&id) * self.ctx.active_reservations.get_task_duration(&id);
+                    remaining_capacity -= self.active_reservations.get_reserved_capacity(&id);
+                    rejected_capacity += self.active_reservations.get_reserved_capacity(&id) * self.active_reservations.get_task_duration(&id);
                 }
                 // Success
                 None => {
-                    remaining_capacity -= self.ctx.active_reservations.get_reserved_capacity(&random_reservation_id);
+                    remaining_capacity -= self.active_reservations.get_reserved_capacity(&random_reservation_id);
                 }
             }
         }
-        return (rejected_capacity as f64) / ((free_capacity_in_range * self.ctx.slot_width) as f64);
+        return (rejected_capacity as f64) / ((free_capacity_in_range * self.slot_width) as f64);
     }
 }
