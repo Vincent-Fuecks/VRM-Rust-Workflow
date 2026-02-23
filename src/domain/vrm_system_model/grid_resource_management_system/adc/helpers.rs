@@ -12,7 +12,7 @@ use crate::domain::vrm_system_model::{
         vrm_component_order::VrmComponentOrder, vrm_component_registry::vrm_component_proxy::VrmComponentProxy, vrm_component_trait::VrmComponent,
     },
     reservation::{
-        probe_reservations::{self, ProbeReservations},
+        probe_reservations::{self, ProbeReservationComparator, ProbeReservations},
         reservation::ReservationState,
         reservation_store::ReservationId,
     },
@@ -72,7 +72,7 @@ impl ADC {
                         res_id,
                         Some(shadow_id.clone()),
                         &mut HashMap::new(), // dummy db for internal tracking
-                        VrmComponentOrder::OrderStartFirst,
+                        ProbeReservationComparator::ESTReservationCompare,
                         |_, _| Ordering::Equal,
                     );
                 }
@@ -178,72 +178,64 @@ impl ADC {
     /// This implements a "Best Fit" strategy, useful for optimizing resource utilization or
     /// meeting Earliest Finish Time (EFT) constraints.
     /// TODO should be moved to VrmComponentManager
-    pub fn submit_task_at_best_vrm_component<F>(
+    pub fn submit_task_at_best_vrm_component(
         &mut self,
         reservation_id: ReservationId,
         shadow_schedule_id: Option<ShadowScheduleId>,
         grid_component_res_database: &mut HashMap<ReservationId, ComponentId>,
-        reservation_order: F,
-    ) -> Option<ReservationId>
-    where
-        F: Fn(ReservationId, ReservationId) -> Ordering + 'static,
-    {
-        let mut all_probe_reservations = ProbeReservations::new(reservation_id, self.reservation_store.clone());
-
-        let mut order_grid_component_res_database = OrderResVrmComponentDatabase::new(reservation_order, self.vrm_component_order.get_comparator());
+        probe_reservation_comparator: ProbeReservationComparator,
+    ) -> Option<ReservationId> {
+        // TODO Should be config
+        let try_n_probe_reservations = 5;
+        let mut probe_reservations = ProbeReservations::new(reservation_id, self.reservation_store.clone());
 
         for component_id in self.manager.get_random_ordered_vrm_components() {
             let res_snapshot = self.reservation_store.get_reservation_snapshot(reservation_id).unwrap();
 
             if self.manager.can_component_handel(component_id.clone(), res_snapshot) {
-                let probe_reservations = self.manager.get_vrm_component_mut(component_id.clone()).probe(reservation_id, shadow_schedule_id.clone());
+                let probe_res = self.manager.get_vrm_component_mut(component_id.clone()).probe(reservation_id, shadow_schedule_id.clone());
 
-                // Do not trust answer of lower GridComponent
-                // Validation of probe answers
-                for prob_reservation_id in probe_reservations.get_ids() {
-                    if self.reservation_store.get_assigned_start(prob_reservation_id)
-                        < self.reservation_store.get_booking_interval_start(prob_reservation_id)
-                        || self.reservation_store.get_assigned_end(prob_reservation_id)
-                            > self.reservation_store.get_booking_interval_end(prob_reservation_id)
-                    {
-                        log::error!("Invalid Answer.");
+                probe_reservations.add_probe_reservations(probe_res);
+            }
+        }
+
+        for _ in 0..=try_n_probe_reservations {
+            if probe_reservations.prompt_best(reservation_id, probe_reservation_comparator.clone()) {
+                // 1. Prepare the gate
+                let gate = self.sync_registry.create_gate(reservation_id);
+
+                // 2. Trigger the AcI by updating the store
+                self.reservation_store.update_state(reservation_id, ReservationState::ReserveProbeReservation);
+
+                // TODO Add parameter to a config
+                // 3. BLOCK here. This thread sleeps until AcI calls notify().
+                let result = gate.wait_with_timeout(std::time::Duration::from_secs(15));
+
+                // 4. Clean up the registry
+                self.sync_registry.remove_gate(reservation_id);
+
+                if result.state == ReservationState::ReserveAnswer {
+                    log::info!("Reservation {:?} successful!", reservation_id);
+
+                    // Update local schedule
+                    self.manager.reserve_without_check(result.aci_id.clone().unwrap(), reservation_id);
+
+                    // Register new schedule Sub-Task
+                    // Update grid_component_res_database for rollback and for ADC to keep track
+                    // Update Transaction Log
+                    if grid_component_res_database.contains_key(&reservation_id) {
+                        log::error!(
+                            "ErrorReservationWasReservedInMultipleGridComponents: The reservation {:?} was multiple times to the GirdComponent {} submitted.",
+                            self.reservation_store.get_name_for_key(reservation_id),
+                            result.aci_id.clone().unwrap(),
+                        );
                     }
+
+                    grid_component_res_database.insert(reservation_id, result.aci_id.unwrap());
+                    return Some(reservation_id);
                 }
-                all_probe_reservations.add_probe_reservations(probe_reservations.clone());
-                order_grid_component_res_database.put_all(probe_reservations);
             }
         }
-
-        // Choose reservation candidate with EFT and reserve it
-        for reservation_id in order_grid_component_res_database.sorted_key_set(&self.manager) {
-            let component_id = order_grid_component_res_database.store.get(&reservation_id).unwrap();
-
-            let candidate_id = self.manager.reserve(component_id.clone(), reservation_id, None);
-
-            if self.reservation_store.is_reservation_state_at_least(candidate_id, ReservationState::ReserveAnswer) {
-                // Register new schedule Sub-Task
-                // Update grid_component_res_database for rollback and for ADC to keep track
-                // Update Transaction Log
-                if grid_component_res_database.contains_key(&candidate_id) {
-                    log::error!(
-                        "ErrorReservationWasReservedInMultipleGridComponents: The reservation {:?} was multiple times to the GirdComponent {} submitted.",
-                        self.reservation_store.get_name_for_key(candidate_id),
-                        component_id
-                    );
-                }
-                grid_component_res_database.insert(candidate_id, component_id.clone());
-
-                // Update local schedule
-                self.manager.reserve_without_check(component_id.clone(), candidate_id);
-
-                if self.reservation_store.is_reservation_state_at_least(candidate_id, ReservationState::ReserveAnswer) {
-                    log::error!("Reserve of reservation {:?} in local schedule of GridComponent {:?} failed.", candidate_id, component_id);
-                }
-                all_probe_reservations.reject_all_probe_reservations_except(candidate_id);
-                return Some(candidate_id);
-            }
-        }
-        all_probe_reservations.reject_all_probe_reservations();
         return None;
     }
 

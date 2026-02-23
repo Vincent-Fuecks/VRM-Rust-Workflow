@@ -1,6 +1,7 @@
 use crate::domain::vrm_system_model::grid_resource_management_system::adc::ADC;
 use crate::domain::vrm_system_model::grid_resource_management_system::scheduler::workflow_scheduler::{WorkflowScheduler, WorkflowSchedulerBase};
 use crate::domain::vrm_system_model::grid_resource_management_system::scheduler_comparator::eft_reservation_compare::EFTReservationCompare;
+use crate::domain::vrm_system_model::reservation::probe_reservations::ProbeReservationComparator;
 use crate::domain::vrm_system_model::reservation::reservations::Reservations;
 use std::any::Any;
 use std::collections::HashMap;
@@ -397,10 +398,12 @@ impl HEFTSyncWorkflowScheduler {
     ) -> Option<ReservationId> {
         // Request all GirdComponents for reservation candidates and sort them according to EFT (earliest finishing time)
 
-        let comparator = EFTReservationCompare::new(self.base.reservation_store.clone());
-        let reservation_order = move |id0: ReservationId, id1: ReservationId| comparator.compare(id0, id1);
-
-        let candidate_id = adc.submit_task_at_best_vrm_component(reservation_id, None, grid_component_res_database, reservation_order);
+        let candidate_id = adc.submit_task_at_best_vrm_component(
+            reservation_id,
+            None,
+            grid_component_res_database,
+            ProbeReservationComparator::EFTReservationCompare,
+        );
 
         if !candidate_id.is_none()
             && self.base.reservation_store.is_reservation_state_at_least(candidate_id.unwrap(), ReservationState::ReserveAnswer)

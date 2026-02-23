@@ -20,9 +20,9 @@
                   "taskPath": "",
                   "outputPath": "/data/logs/sim.out",
                   "errorPath": "/data/logs/sim.err",
-                  "duration": 1800,
+                  "duration": 50,
                   "isMoldable": false, 
-                  "cpus": 8,
+                  "cpus": 2,
                   "dependencies":
                     {
                       "data": [],
@@ -32,7 +32,7 @@
                     {
                       "name": "preprocessed_data",
                       "file": "preprocessed.h5",
-                      "size": 10000
+                      "size": 50
                     }
                   ],
                   "dataIn": [
@@ -45,9 +45,9 @@
                 },
               "linkReservation":
                 {
-                  "startPoint": "", 
-                  "endPoint": "",
-                  "amount": 100,
+                  "startPoint": "A", 
+                  "endPoint": "B",
+                  "amount": 50,
                   "bandwidth" : 10
                 }
             },
@@ -61,9 +61,9 @@
                   "taskPath": "",
                   "outputPath": "/data/logs/sim.out",
                   "errorPath": "/data/logs/sim.err",
-                  "duration": 1800,
+                  "duration": 50,
                   "isMoldable": false, 
-                  "cpus": 8,
+                  "cpus": 4,
                   "dependencies":
                     {
                       "data": [],
@@ -73,7 +73,7 @@
                     {
                       "name": "preprocessed_data",
                       "file": "preprocessed.h5",
-                      "size": 10000
+                      "size": 50
                     }
                   ],
                   "dataIn": [
@@ -86,9 +86,9 @@
                 },
               "linkReservation":
                 {
-                  "startPoint": "", 
-                  "endPoint": "",
-                  "amount": 100,
+                  "startPoint": "B", 
+                  "endPoint": "A",
+                  "amount": 50,
                   "bandwidth" : 10
                 }
             },
@@ -102,9 +102,9 @@
                   "taskPath": "",
                   "outputPath": "/data/logs/sim.out",
                   "errorPath": "/data/logs/sim.err",
-                  "duration": 1800,
+                  "duration": 50,
                   "isMoldable": false, 
-                  "cpus": 8,
+                  "cpus": 4,
                   "dependencies":
                     {
                       "data": [],
@@ -114,7 +114,7 @@
                     {
                       "name": "preprocessed_data",
                       "file": "preprocessed.h5",
-                      "size": 10000
+                      "size": 50
                     }
                   ],
                   "dataIn": [
@@ -127,8 +127,8 @@
                 },
               "linkReservation":
                 {
-                  "startPoint": "", 
-                  "endPoint": "",
+                  "startPoint": "C", 
+                  "endPoint": "B",
                   "amount": 100,
                   "bandwidth" : 10
                 }
@@ -143,9 +143,9 @@
                   "taskPath": "",
                   "outputPath": "/data/logs/sim.out",
                   "errorPath": "/data/logs/sim.err",
-                  "duration": 1800,
+                  "duration": 10,
                   "isMoldable": false, 
-                  "cpus": 8,
+                  "cpus": 5,
                   "dependencies":
                     {
                       "data": ["B"],
@@ -155,7 +155,7 @@
                     {
                       "name": "preprocessed_data",
                       "file": "preprocessed.h5",
-                      "size": 10000
+                      "size": 50
                     }
                   ],
                   "dataIn": [
@@ -168,9 +168,9 @@
                 },
               "linkReservation":
                 {
-                  "startPoint": "", 
-                  "endPoint": "",
-                  "amount": 100,
+                  "startPoint": "D", 
+                  "endPoint": "E",
+                  "amount": 50,
                   "bandwidth" : 10
                 }
             },
@@ -184,9 +184,9 @@
                   "taskPath": "",
                   "outputPath": "/data/logs/sim.out",
                   "errorPath": "/data/logs/sim.err",
-                  "duration": 1800,
+                  "duration": 100,
                   "isMoldable": false, 
-                  "cpus": 8,
+                  "cpus": 4,
                   "dependencies":
                     {
                       "data": [],
@@ -196,7 +196,7 @@
                     {
                       "name": "preprocessed_data",
                       "file": "preprocessed.h5",
-                      "size": 10000
+                      "size": 100
                     }
                   ],
                   "dataIn": [
@@ -209,8 +209,8 @@
                 },
               "linkReservation":
                 {
-                  "startPoint": "", 
-                  "endPoint": "",
+                  "startPoint": "E", 
+                  "endPoint": "D",
                   "amount": 100,
                   "bandwidth" : 10
                 }

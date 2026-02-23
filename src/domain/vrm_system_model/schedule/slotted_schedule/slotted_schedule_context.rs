@@ -474,7 +474,7 @@ impl<S: SlottedScheduleStrategy> SlottedScheduleContext<S> {
             res_candidate_clone.set_booking_interval_end(end_time);
             res_candidate_clone.set_assigned_start(start_time);
             res_candidate_clone.set_assigned_end(end_time);
-            res_candidate_clone.set_state(ReservationState::ProbeAnswer);
+            res_candidate_clone.set_state(ReservationState::ProbeReservation);
             return Some(res_candidate_clone);
         }
 

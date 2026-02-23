@@ -2,11 +2,7 @@ use crate::domain::vrm_system_model::{
     reservation::reservation_store::ReservationId,
     schedule::{
         schedule_trait::Schedule,
-        slotted_schedule::{
-            SlottedScheduleNodes,
-            slotted_schedule_context::SlottedScheduleContext,
-            strategy::{node::node_strategy::NodeStrategy, strategy_trait::SlottedScheduleStrategy},
-        },
+        slotted_schedule::{slotted_schedule_context::SlottedScheduleContext, strategy::strategy_trait::SlottedScheduleStrategy},
     },
 };
 

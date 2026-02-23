@@ -6,7 +6,11 @@ use crate::domain::vrm_system_model::{
         vrm_component_manager::{DUMMY_COMPONENT_ID, VrmComponentManager},
         vrm_component_order::VrmComponentOrder,
     },
-    reservation::{reservation::ReservationState, reservation_store::ReservationId},
+    reservation::{
+        probe_reservations::{ProbeReservationComparator, ProbeReservations},
+        reservation::ReservationState,
+        reservation_store::ReservationId,
+    },
     utils::id::{ComponentId, ShadowScheduleId},
 };
 
@@ -176,20 +180,17 @@ impl VrmComponentManager {
         reservation_id: ReservationId,
         shadow_schedule_id: Option<ShadowScheduleId>,
         grid_component_res_database: &mut HashMap<ReservationId, ComponentId>,
-        vrm_component_order: VrmComponentOrder,
+        probe_reservation_comparator: ProbeReservationComparator,
         reservation_order: F,
     ) -> Option<ReservationId>
     where
         F: Fn(ReservationId, ReservationId) -> Ordering + 'static,
     {
-        let mut order_grid_component_res_database = OrderResVrmComponentDatabase::new(reservation_order, vrm_component_order.get_comparator());
+        let try_n_probe_reservations = 5;
+        let mut probe_reservations = ProbeReservations::new(reservation_id, self.reservation_store.clone());
 
         for component_id in self.get_random_ordered_vrm_components() {
-            // NOTE: Must access store via shadow context if ID is present,
-            // but for probing we usually assume the store reference in manager is correct
-            // IF we are inside manager. However, manager has 'reservation_store'.
-            // If shadow_schedule is active, we should theoretically use the shadow store for the snapshot.
-
+            // Get Reservation Clone of the ShadowScheduleId or MasterSchedule
             let res_snapshot = if let Some(sid) = &shadow_schedule_id {
                 if let Some((_, store)) = self.shadow_schedule_reservations.get(sid) {
                     store.get_reservation_snapshot(reservation_id)
@@ -202,67 +203,46 @@ impl VrmComponentManager {
 
             if let Some(res) = res_snapshot {
                 if self.can_component_handel(component_id.clone(), res) {
-                    let probe_reservations = self.get_vrm_component_mut(component_id.clone()).probe(reservation_id, shadow_schedule_id.clone());
+                    probe_reservations
+                        .add_probe_reservations(self.get_vrm_component_mut(component_id.clone()).probe(reservation_id, shadow_schedule_id.clone()));
+                }
+            }
+        }
 
-                    // Validation of probe answers
-                    for prob_reservation_id in probe_reservations.get_ids() {
-                        let (start, end, booking_start, booking_end) = if let Some(sid) = &shadow_schedule_id {
-                            if let Some((_, store)) = self.shadow_schedule_reservations.get(sid) {
-                                (
-                                    store.get_assigned_start(prob_reservation_id),
-                                    store.get_assigned_end(prob_reservation_id),
-                                    store.get_booking_interval_start(prob_reservation_id),
-                                    store.get_booking_interval_end(prob_reservation_id),
-                                )
-                            } else {
-                                (0, 0, 0, 0)
-                            }
-                        } else {
-                            (
-                                self.reservation_store.get_assigned_start(prob_reservation_id),
-                                self.reservation_store.get_assigned_end(prob_reservation_id),
-                                self.reservation_store.get_booking_interval_start(prob_reservation_id),
-                                self.reservation_store.get_booking_interval_end(prob_reservation_id),
-                            )
-                        };
+        for _ in 0..=try_n_probe_reservations {
+            if probe_reservations.prompt_best(reservation_id, probe_reservation_comparator.clone()) {
+                // 1. Prepare the gate
+                let gate = self.sync_registry.create_gate(reservation_id);
 
-                        if start < booking_start || end > booking_end {
-                            log::error!("Invalid Answer.");
-                        }
+                // 2. Trigger the AcI by updating the store
+                self.reservation_store.update_state(reservation_id, ReservationState::ReserveProbeReservation);
+
+                // TODO Add parameter to a config
+                // 3. BLOCK here. This thread sleeps until AcI calls notify().
+                let result = gate.wait_with_timeout(std::time::Duration::from_secs(15));
+
+                // 4. Clean up the registry
+                self.sync_registry.remove_gate(reservation_id);
+
+                // Check if update of local schedule was successful
+                if result.state == ReservationState::ReserveAnswer {
+                    log::info!("Reservation {:?} successful!", reservation_id);
+
+                    // Register new schedule Sub-Task
+                    // Update grid_component_res_database for rollback and for ADC to keep track
+                    // Update Transaction Log
+                    if grid_component_res_database.contains_key(&reservation_id) {
+                        log::error!(
+                            "ErrorReservationWasReservedInMultipleGridComponents: The reservation {:?} was multiple times to the GirdComponent {} submitted.",
+                            self.reservation_store.get_name_for_key(reservation_id),
+                            result.aci_id.clone().unwrap(),
+                        );
                     }
-
-                    order_grid_component_res_database.put_all(probe_reservations);
+                    grid_component_res_database.insert(reservation_id, result.aci_id.unwrap());
+                    return Some(reservation_id);
                 }
             }
         }
-
-        // Choose reservation candidate with EFT and reserve it
-        // Note: sorted_key_set needs a reference to store. The DB uses the one passed.
-        // We might need to adjust the database to accept a store reference if logic requires checking shadow store.
-        for reservation_id in order_grid_component_res_database.sorted_key_set(&self) {
-            let component_id = order_grid_component_res_database.store.get(&reservation_id).unwrap();
-
-            let candidate_id = self.reserve(component_id.clone(), reservation_id, shadow_schedule_id.clone());
-
-            let is_reserved = if let Some(sid) = &shadow_schedule_id {
-                if let Some((_, store)) = self.shadow_schedule_reservations.get(sid) {
-                    store.is_reservation_state_at_least(candidate_id, ReservationState::ReserveAnswer)
-                } else {
-                    false
-                }
-            } else {
-                self.reservation_store.is_reservation_state_at_least(candidate_id, ReservationState::ReserveAnswer)
-            };
-
-            if is_reserved {
-                grid_component_res_database.insert(candidate_id, component_id.clone());
-
-                // Update local schedule
-                self.reserve_without_check(component_id.clone(), candidate_id);
-                return Some(candidate_id);
-            }
-        }
-
         return None;
     }
 

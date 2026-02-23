@@ -1,7 +1,7 @@
 use crate::domain::vrm_system_model::{
     grid_resource_management_system::{adc::ADC, vrm_component_trait::VrmComponent},
     reservation::{
-        probe_reservations::ProbeReservations,
+        probe_reservations::{ProbeReservationComparator, ProbeReservations},
         reservation::{Reservation, ReservationState},
         reservation_store::ReservationId,
     },
@@ -202,8 +202,8 @@ impl VrmComponent for ADC {
         &mut self,
         reservation_id: ReservationId,
         shadow_schedule_id: Option<ShadowScheduleId>,
-        comparator: &mut dyn Fn(ReservationId, ReservationId) -> std::cmp::Ordering,
-    ) -> Option<ReservationId> {
+        probe_reservation_comparator: ProbeReservationComparator,
+    ) -> ProbeReservations {
         todo!()
     }
 

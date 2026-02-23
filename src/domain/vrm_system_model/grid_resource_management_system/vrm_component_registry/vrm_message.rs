@@ -1,10 +1,8 @@
-use crate::domain::vrm_system_model::reservation::probe_reservations::ProbeReservations;
+use crate::domain::vrm_system_model::reservation::probe_reservations::{ProbeReservationComparator, ProbeReservations};
 use crate::domain::vrm_system_model::reservation::reservation::Reservation;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationId;
-use crate::domain::vrm_system_model::reservation::reservations::Reservations;
 use crate::domain::vrm_system_model::rms::rms::RmsLoadMetric;
-use crate::domain::vrm_system_model::utils::id::{ComponentId, RouterId, ShadowScheduleId};
-use crate::domain::vrm_system_model::utils::load_buffer::LoadMetric;
+use crate::domain::vrm_system_model::utils::id::{ComponentId, ShadowScheduleId};
 
 use std::sync::mpsc;
 
@@ -17,32 +15,86 @@ pub enum VrmMessage {
     GetTotalNodeCapacity(mpsc::Sender<i64>),
     GetLinkResourceCount(mpsc::Sender<usize>),
 
-    CanHandel { reservation: Reservation, reply_to: mpsc::Sender<bool> },
+    CanHandel {
+        reservation: Reservation,
+        reply_to: mpsc::Sender<bool>,
+    },
 
-    Probe { reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>, reply_to: mpsc::Sender<ProbeReservations> },
+    Probe {
+        reservation_id: ReservationId,
+        shadow_schedule_id: Option<ShadowScheduleId>,
+        reply_to: mpsc::Sender<ProbeReservations>,
+    },
 
-    // TODO not possible in this form
-    Reserve { reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>, reply_to: mpsc::Sender<ReservationId> },
+    ProbeBest {
+        reservation_id: ReservationId,
+        shadow_schedule_id: Option<ShadowScheduleId>,
+        probe_reservation_comparator: ProbeReservationComparator,
+        reply_to: mpsc::Sender<ProbeReservations>,
+    },
 
-    Commit { reservation_id: ReservationId, reply_to: mpsc::Sender<bool> },
+    Reserve {
+        reservation_id: ReservationId,
+        shadow_schedule_id: Option<ShadowScheduleId>,
+        reply_to: mpsc::Sender<ReservationId>,
+    },
 
-    DeleteTask { reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>, reply_to: mpsc::Sender<ReservationId> },
+    Commit {
+        reservation_id: ReservationId,
+        reply_to: mpsc::Sender<bool>,
+    },
 
-    GetSatisfaction { start: i64, end: i64, shadow_schedule_id: Option<ShadowScheduleId>, reply_to: mpsc::Sender<f64> },
+    DeleteTask {
+        reservation_id: ReservationId,
+        shadow_schedule_id: Option<ShadowScheduleId>,
+        reply_to: mpsc::Sender<ReservationId>,
+    },
 
-    GetSystemSatisfaction { shadow_schedule_id: Option<ShadowScheduleId>, reply_to: mpsc::Sender<f64> },
+    GetSatisfaction {
+        start: i64,
+        end: i64,
+        shadow_schedule_id: Option<ShadowScheduleId>,
+        reply_to: mpsc::Sender<f64>,
+    },
 
-    CreateShadowSchedule { id: ShadowScheduleId, reply_to: mpsc::Sender<bool> },
+    GetSystemSatisfaction {
+        shadow_schedule_id: Option<ShadowScheduleId>,
+        reply_to: mpsc::Sender<f64>,
+    },
 
-    DeleteShadowSchedule { id: ShadowScheduleId, reply_to: mpsc::Sender<bool> },
+    CreateShadowSchedule {
+        id: ShadowScheduleId,
+        reply_to: mpsc::Sender<bool>,
+    },
 
-    CommitShadowSchedule { id: ShadowScheduleId, reply_to: mpsc::Sender<bool> },
+    DeleteShadowSchedule {
+        id: ShadowScheduleId,
+        reply_to: mpsc::Sender<bool>,
+    },
 
-    GetLoadMetricUpToDate { start: i64, end: i64, shadow_schedule_id: Option<ShadowScheduleId>, reply_to: mpsc::Sender<RmsLoadMetric> },
+    CommitShadowSchedule {
+        id: ShadowScheduleId,
+        reply_to: mpsc::Sender<bool>,
+    },
 
-    GetLoadMetric { start: i64, end: i64, shadow_schedule_id: Option<ShadowScheduleId>, reply_to: mpsc::Sender<RmsLoadMetric> },
+    GetLoadMetricUpToDate {
+        start: i64,
+        end: i64,
+        shadow_schedule_id: Option<ShadowScheduleId>,
+        reply_to: mpsc::Sender<RmsLoadMetric>,
+    },
 
-    GetSimulationLoadMetric { shadow_schedule_id: Option<ShadowScheduleId>, reply_to: mpsc::Sender<RmsLoadMetric> },
+    GetLoadMetric {
+        start: i64,
+        end: i64,
+        shadow_schedule_id: Option<ShadowScheduleId>,
+        reply_to: mpsc::Sender<RmsLoadMetric>,
+    },
+
+    GetSimulationLoadMetric {
+        shadow_schedule_id: Option<ShadowScheduleId>,
+        reply_to: mpsc::Sender<RmsLoadMetric>,
+    },
 
     Shutdown,
 }

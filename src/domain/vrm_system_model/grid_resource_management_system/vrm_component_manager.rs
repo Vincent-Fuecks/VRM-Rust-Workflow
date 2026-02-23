@@ -7,10 +7,13 @@ use crate::domain::vrm_system_model::reservation::reservation::Reservation;
 use crate::domain::vrm_system_model::reservation::reservation::ReservationState;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationId;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationStore;
+use crate::domain::vrm_system_model::reservation::reservation_sync_gate::SyncRegistry;
 use crate::domain::vrm_system_model::rms::rms::RmsLoadMetric;
-use crate::domain::vrm_system_model::schedule::slotted_schedule::slotted_schedule::SlottedSchedule;
-use crate::domain::vrm_system_model::schedule::slotted_schedule::slotted_schedule::schedule_context::SlottedScheduleContext;
-use crate::domain::vrm_system_model::scheduler_trait::Schedule;
+use crate::domain::vrm_system_model::schedule::schedule_trait::Schedule;
+use crate::domain::vrm_system_model::schedule::slotted_schedule::SlottedScheduleNodes;
+use crate::domain::vrm_system_model::schedule::slotted_schedule::slotted_schedule_context::SlottedScheduleContext;
+use crate::domain::vrm_system_model::schedule::slotted_schedule::strategy::node::node_strategy;
+use crate::domain::vrm_system_model::schedule::slotted_schedule::strategy::node::node_strategy::NodeStrategy;
 use crate::domain::vrm_system_model::utils::id::RouterId;
 use crate::domain::vrm_system_model::utils::id::{AdcId, ComponentId, ShadowScheduleId, SlottedScheduleId};
 use crate::domain::vrm_system_model::utils::load_buffer::LoadMetric;
@@ -76,18 +79,20 @@ impl VrmComponentContainer {
         let scheduler_id = SlottedScheduleId::new(format!("Scheduler of VrmComponent: {:?}", component_id));
 
         let total_capacity = vrm_component.get_total_capacity();
+        let node_strategy = NodeStrategy::default();
 
-        let slotted_schedule_ctx = SlottedScheduleContext::new(
+        let slotted_schedule_nodes = SlottedScheduleNodes::new(
             scheduler_id,
-            simulator.get_current_time_in_s(),
             number_of_real_slots,
             slot_width,
             total_capacity,
             false,
+            node_strategy,
             reservation_store.clone(),
+            simulator.clone(),
         );
 
-        let schedule = Box::new(SlottedSchedule::new(slotted_schedule_ctx, total_capacity, reservation_store.clone(), simulator));
+        let schedule = Box::new(slotted_schedule_nodes);
 
         Self { vrm_component, reservation_store, schedule, registration_index, total_link_capacity, link_resource_count, failures: 0 }
     }
@@ -147,6 +152,8 @@ pub struct VrmComponentManager {
     pub reservation_store: ReservationStore,
 
     pub simulator: Arc<dyn SystemSimulator>,
+
+    pub sync_registry: SyncRegistry,
 }
 
 impl VrmComponentManager {
@@ -200,6 +207,7 @@ impl VrmComponentManager {
             registration_counter,
             reservation_store: reservation_store.clone(),
             simulator: simulator.clone(),
+            sync_registry: SyncRegistry::new(),
         }
     }
 
@@ -349,7 +357,7 @@ impl VrmComponentManager {
         };
         for res_id in res_ids {
             let mut found_handeler_for_this_id = false;
-
+            self.reservation_store.print_reservation(res_id);
             if let Some(res) = self.reservation_store.get_reservation_snapshot(res_id) {
                 for container in self.vrm_components.values() {
                     if container.can_handel(res.clone()) {
@@ -367,6 +375,11 @@ impl VrmComponentManager {
 
             // End Task/Sub-Task of Workflow can not be handled by any VrmComponent
             if !found_handeler_for_this_id {
+                log::debug!(
+                    "CanNotHandelReservation: Vrm can not handel Reservation {:?} {:?}, because  no VrmComponent was found, which can handel Reservation. Reservation requierments: ",
+                    self.reservation_store.get_name_for_key(res_id),
+                    res_id,
+                );
                 return false;
             }
         }
@@ -758,18 +771,7 @@ impl VrmComponentManager {
             let res_snapshot = self.reservation_store.get_reservation_snapshot(reservation_id).unwrap();
 
             if container.can_handel(res_snapshot) {
-                let mut probe_reservations = container.vrm_component.probe(reservation_id, None);
-
-                // Do not trust answer of lower GridComponent
-                // Validation of probe answers
-                for probe_res_id in probe_reservations.get_ids() {
-                    if self.reservation_store.get_assigned_start(probe_res_id) < self.reservation_store.get_booking_interval_start(probe_res_id)
-                        || self.reservation_store.get_assigned_end(probe_res_id) > self.reservation_store.get_booking_interval_end(probe_res_id)
-                    {
-                        probe_reservations.delete_reservation(probe_res_id);
-                        log::error!("Invalid Answer.");
-                    }
-                }
+                let probe_reservations = container.vrm_component.probe(reservation_id, None);
 
                 probe_results.add_probe_reservations(probe_reservations);
             }
@@ -778,6 +780,7 @@ impl VrmComponentManager {
         if probe_results.is_empty() {
             self.reservation_store.update_state(reservation_id, ReservationState::Rejected);
         }
+
         return probe_results;
     }
 

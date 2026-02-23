@@ -12,7 +12,7 @@ use crate::domain::{
             vrm_component_order::VrmComponentOrder,
             vrm_component_registry::{registry_client::RegistryClient, vrm_component_proxy::VrmComponentProxy},
         },
-        reservation::reservation_store::ReservationStore,
+        reservation::{reservation_store::ReservationStore, reservation_sync_gate::SyncRegistry},
         utils::id::AdcId,
     },
 };
@@ -52,6 +52,8 @@ pub struct ADC {
 
     /// The duration of a single resource slot.
     pub slot_width: i64,
+
+    pub sync_registry: SyncRegistry,
 }
 
 impl ADC {
@@ -87,6 +89,7 @@ impl ADC {
             simulator: simulator,
             num_of_slots: num_of_slots,
             slot_width: slot_width,
+            sync_registry: SyncRegistry::new(),
         }
     }
 }

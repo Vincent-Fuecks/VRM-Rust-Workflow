@@ -4,6 +4,9 @@ use std::fmt::Debug;
 
 use std::sync::{Arc, RwLock};
 
+use crate::domain::vrm_system_model::grid_resource_management_system::aci::AcI;
+use crate::domain::vrm_system_model::grid_resource_management_system::vrm_component_trait::VrmComponent;
+use crate::domain::vrm_system_model::reservation;
 use crate::domain::vrm_system_model::reservation::link_reservation::LinkReservation;
 use crate::domain::vrm_system_model::reservation::reservation::{
     Reservation, ReservationProceeding, ReservationState, ReservationTrait, ReservationTyp,
@@ -15,7 +18,7 @@ use crate::domain::vrm_system_model::workflow::workflow_node::WorkflowNode;
 // TODO Move in separate file
 pub trait NotificationListener: Send + Sync + Debug {
     fn on_reservation_change(
-        &self,
+        &mut self,
         reservation_id: ReservationId,
         res_name: ReservationName,
         old_state: ReservationState,
@@ -26,7 +29,7 @@ pub trait NotificationListener: Send + Sync + Debug {
 #[derive(Debug, Clone)]
 struct NoOpenListener;
 impl NotificationListener for NoOpenListener {
-    fn on_reservation_change(&self, _: ReservationId, _: ReservationName, _: ReservationState, _: ReservationState) {}
+    fn on_reservation_change(&mut self, _: ReservationId, _: ReservationName, _: ReservationState, _: ReservationState) {}
 }
 
 new_key_type! {
@@ -56,7 +59,7 @@ struct StoreInner {
 
     // TODO Probably rework of mechanism is needed.
     /// Listener for changes
-    listeners: Vec<Arc<dyn NotificationListener>>,
+    listeners: Vec<Arc<RwLock<dyn NotificationListener>>>,
 }
 
 impl ReservationStore {
@@ -73,7 +76,7 @@ impl ReservationStore {
     }
 
     /// This allows multiple components to subscribe to state changes.
-    pub fn add_listener(&self, listener: Arc<dyn NotificationListener>) {
+    pub fn add_listener(&self, listener: Arc<RwLock<dyn NotificationListener>>) {
         let mut guard = self.inner.write().expect("RwLock poisoned");
         guard.listeners.push(listener);
     }
@@ -98,6 +101,50 @@ impl ReservationStore {
         }
 
         return key;
+    }
+
+    pub fn add_probe_reservation(&self, reservation: Reservation) -> ReservationId {
+        let mut guard = self.inner.write().unwrap();
+
+        let name = ReservationName::new(format!("{}-ProbeReservation", reservation.get_name().clone()));
+        let key = guard.slots.insert(Arc::new(RwLock::new(reservation)));
+        guard.name_index.insert(name, key);
+
+        return key;
+    }
+
+    pub fn print_reservation(&self, reservation_id: ReservationId) {
+        if let Some(handle) = self.get(reservation_id) {
+            let guard = handle.read().unwrap();
+            match &*guard {
+                Reservation::Link(link_res) => {
+                    log::debug!("LinkReservation {:#?}", link_res);
+                }
+                Reservation::Node(node_res) => {
+                    log::debug!("NodeReservation {:#?}", node_res);
+                }
+                Reservation::Workflow(workflow_res) => {
+                    log::debug!("WorkflowReservation {:#?}", workflow_res);
+                }
+            }
+        } else {
+            log::error!("Get reservation (id: {:?}) was not possible.", reservation_id);
+        }
+    }
+
+    pub fn delete_probe_reservation(&mut self, reservation_id: ReservationId) {
+        if self.get_state(reservation_id) == ReservationState::ProbeReservation {
+            let mut guard = self.inner.write().unwrap();
+            guard.name_index.remove(&self.get_name_for_key(reservation_id).unwrap());
+            guard.slots.remove(reservation_id);
+            return;
+        }
+
+        log::error!(
+            "ReservationStoreDelError: It was not possible to deleate Reservation {:?} from the ReservationStore, because the Reservation was in State {:?} and not in state ReservationState::ProbeReservation can be deleted.",
+            self.get_name_for_key(reservation_id),
+            self.get_state(reservation_id)
+        );
     }
 
     /// Checks if the provided reservation ids are in the ReservationStore
@@ -454,11 +501,16 @@ impl ReservationStore {
 
     pub fn get_upward_rank(&self, reservation_id: ReservationId, average_link_speed: i64) -> Option<Vec<WorkflowNode>> {
         if let Some(handle) = self.get(reservation_id) {
-            let res = handle.read().unwrap();
+            let res = handle.write().unwrap();
+
             if let Some(workflow) = res.as_any().downcast_ref::<Workflow>() {
                 return Some(workflow.clone().calculate_upward_rank(average_link_speed, self));
             } else {
-                log::error!("Reservation {:?} is not a Workflow", reservation_id);
+                log::error!(
+                    "Upward Rank can only be calculated for a Reservation of type Workflow. Reservation {:?} has type {:?}",
+                    self.get_name_for_key(reservation_id),
+                    self.get_type(reservation_id)
+                );
             }
         }
 
@@ -467,11 +519,15 @@ impl ReservationStore {
 
     pub fn get_workflow_res_ids(&self, reservation_id: ReservationId) -> Option<Vec<ReservationId>> {
         if let Some(handle) = self.get(reservation_id) {
-            let res = handle.read().unwrap();
+            let res = handle.write().unwrap();
             if let Some(workflow) = res.as_any().downcast_ref::<Workflow>() {
                 return Some(workflow.get_all_reservation_ids());
             } else {
-                log::error!("Reservation {:?} is not a Workflow", reservation_id);
+                log::error!(
+                    "Getting workflow ids is only possible, if Reservation is of type Workflow. Reservation {:?} has type {:?}",
+                    self.get_name_for_key(reservation_id),
+                    self.get_type(reservation_id)
+                );
             }
         }
 
@@ -575,7 +631,7 @@ impl ReservationStore {
             };
 
             for listener in listeners {
-                listener.on_reservation_change(id, self.get_name_for_key(id).unwrap(), old_state, new_state);
+                listener.write().expect("Lock poisened").on_reservation_change(id, self.get_name_for_key(id).unwrap(), old_state, new_state);
             }
         }
     }

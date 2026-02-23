@@ -65,6 +65,9 @@ impl RegistryClient {
                 VrmMessage::Probe { reservation_id, shadow_schedule_id, reply_to } => {
                     let _ = reply_to.send(component.probe(reservation_id, shadow_schedule_id));
                 }
+                VrmMessage::ProbeBest { reservation_id, shadow_schedule_id, probe_reservation_comparator, reply_to } => {
+                    let _ = reply_to.send(component.probe_best(reservation_id, shadow_schedule_id, probe_reservation_comparator));
+                }
                 VrmMessage::Reserve { reservation_id, shadow_schedule_id, reply_to } => {
                     let _ = reply_to.send(component.reserve(reservation_id, shadow_schedule_id));
                 }

@@ -119,6 +119,10 @@ impl Reservation {
         }
         panic!("Not allowed for this ReservationState.")
     }
+
+    pub fn set_frag_delta(&mut self, frag_delta: f64) {
+        self.get_base_mut().frag_delta = frag_delta;
+    }
 }
 
 impl ReservationTrait for Reservation {
@@ -135,7 +139,11 @@ impl ReservationTrait for Reservation {
     }
 
     fn as_any(&self) -> &dyn Any {
-        self
+        match self {
+            Reservation::Workflow(workflow) => workflow,
+            Reservation::Link(link) => link,
+            Reservation::Node(node) => node,
+        }
     }
 
     fn get_type(&self) -> ReservationTyp {
@@ -308,30 +316,43 @@ impl Clone for Box<dyn ReservationTrait> {
 ///
 /// This state tracks the progress of the reservation from initial request
 /// through processing, commitment, and eventual completion or failure.
-///
-/// The order, from lowest commitment (0) to highest (6).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum ReservationState {
     /// The last request of the reservation was explicitly denied or failed.
-    Rejected,
+    Rejected = 0,
 
     /// The reservation has been successfully cancelled and removed from the system.
-    Deleted,
+    Deleted = 1,
 
     /// The reservation is newly created and has not yet been submitted to any processor.
-    Open,
+    Open = 2,
 
     /// The state represents a successful response to a probing (availability) request.
-    ProbeAnswer,
+    ProbeAnswer = 3,
+
+    /// The state represents the product of a successful probe request of a specific AcI.
+    /// During a probe request, all potential time slots where a reservation on an AcI can run are collected.
+    /// A ProbeReservation represents such a potential reservation within a valid time window
+    /// (these reservations are based on the original Reservation,
+    /// which is stored in the ReservationStore in state ProbeAnswer).
+    /// These reservations are only tracked by the AcI system and are not part of the ReservationStore.
+    /// The only valid state transitions are ReserveProbeReservation, Rejected, and Deleted.
+    /// If the ProbeReservation is promoted to ReserveProbeReservation, it replaces the original ProbeAnswer
+    /// Reservation, and all other ProbeReservations for the original ProbeAnswer Reservation become invalid.
+    ProbeReservation = 4,
+
+    /// The state signals the listerning AcI, that the ProbeAnswer was successful and the Reservation should be
+    /// Reserved -> AcI performs reserve for Reservation
+    ReserveProbeReservation = 5,
 
     /// The state represents a successful response to a resource reservation request.
-    ReserveAnswer,
+    ReserveAnswer = 6,
 
     /// The reservation has been confirmed and resources are formally allocated.
-    Committed,
+    Committed = 7,
 
     /// The execution phase of the job linked to this reservation has been finished successfully.
-    Finished,
+    Finished = 8,
 }
 
 /// Defines the set of primary actions (proceedings) that can be requested for a reservation.

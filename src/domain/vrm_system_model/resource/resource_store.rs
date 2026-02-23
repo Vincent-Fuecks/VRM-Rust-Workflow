@@ -7,6 +7,7 @@ use slotmap::{SlotMap, new_key_type};
 
 use crate::domain::vrm_system_model::{
     reservation::{
+        link_reservation, node_reservation,
         reservation::{Reservation, ReservationTrait},
         reservation_store::{ReservationId, ReservationStore},
     },
@@ -164,6 +165,7 @@ impl ResourceStore {
         res_reserved_capacity: i64,
     ) -> bool {
         if link_source.is_none() || link_target.is_none() {
+            log::debug!("can_handle_link_requestFailed: Because link_source ({:?}) or link_target ({:?}) is none.", link_source, link_target);
             return false;
         }
 
@@ -195,20 +197,27 @@ impl ResourceStore {
     /// TODO Currently also works for Workflows, is this right?
     /// Returns true if a resource can handle the reservation
     pub fn can_handle_adc_request(&self, res: Reservation) -> bool {
-        match res.as_link() {
-            Some(link_reservation) => {
+        match res {
+            Reservation::Link(link_reservation) => {
                 if self.can_handle_link_request(
                     link_reservation.get_start_point(),
                     link_reservation.get_end_point(),
                     link_reservation.is_moldable(),
                     link_reservation.get_reserved_capacity(),
                 ) {
-                    log::debug!("Rms can handle Reservation {:?} of type {:?}", res.get_name(), res.get_type());
+                    log::debug!("Rms can handle Reservation {:?} of type {:?}", link_reservation.get_name(), link_reservation.get_type());
                     return true;
                 }
                 return false;
             }
-            None => self.can_handle_node_request(res.is_moldable(), res.get_reserved_capacity()),
+            Reservation::Node(node_reservation) => {
+                return self.can_handle_node_request(node_reservation.is_moldable(), node_reservation.get_reserved_capacity());
+            }
+
+            Reservation::Workflow(_) => {
+                log::error!("can_handle_adc_request in ResourceStore should not be called by a Reservation {:?} of type Workflow", res.get_name());
+                return false;
+            }
         }
     }
 

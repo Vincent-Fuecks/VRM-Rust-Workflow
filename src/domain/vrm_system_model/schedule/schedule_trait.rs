@@ -2,7 +2,8 @@ use std::any::Any;
 use std::cmp::Ordering;
 use std::fmt::Debug;
 
-use crate::domain::vrm_system_model::reservation::probe_reservations::ProbeReservations;
+use crate::domain::vrm_system_model::reservation::probe_reservations::{ProbeReservationComparator, ProbeReservations};
+use crate::domain::vrm_system_model::reservation::reservation::Reservation;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationId;
 use crate::domain::vrm_system_model::utils::load_buffer::LoadMetric;
 
@@ -62,44 +63,30 @@ pub trait Schedule: Debug + Send + Sync {
     /// Performs a **feasibility probe** to find all possible time slots where a given reservation
     /// request can be accommodated.
     ///
-    /// The probe returns a collection of candidate reservations, each representing a feasible time assignment.
-    /// Additionally is also the system fragmentation impact of each candidate calculated and in
-    /// `frag_delta` of the reservation stored.
+    /// The probe returns ProbeReservation object, which contains all possible found reservation, which
+    /// represent a feasible time assignment.
     ///
     /// # Arguments
-    ///
-    /// * `id` - The `ReservationId` identifying the resource requirements and constraints for the probe.
+    /// * `reservation_id` - The `ReservationId` identifying the resource requirements and constraints for the probe.
     ///
     /// # Returns
     ///
-    /// A `Reservations` collection containing all feasible candidates.
-    fn probe(&mut self, id: ReservationId) -> ProbeReservations;
+    /// A `ProbeReservations` contains all feasible probe candidates.
+    fn probe(&mut self, reservation_id: ReservationId) -> ProbeReservations;
 
     /// Selects the **single best-fitting reservation candidate** from the feasible set,
-    /// determined by a custom comparator function.
+    /// determined by a custom comparator.
     ///
-    /// This method first performs a standard `probe` to get all candidates, and then uses the provided
-    /// comparator to select the optimal scheduling choice (e.g., earliest start time, least fragmentation impact).
-    ///
-    /// # Type Parameters
-    ///
-    /// * `C` - A closure that implements the `FnMut` trait for comparison, taking two reservation ids
-    /// and returning an `Ordering`.
+    /// The probe returns ProbeReservation object, which contains all possible found reservation, which
+    /// represent a feasible time assignment.
     ///
     /// # Arguments
-    ///
-    /// * `request_id` - The `ReservationId` defining the request.
-    /// * `comparator` - The function used to determine which candidate is "best."
+    /// * `reservation_id` - The `ReservationId` identifying the resource requirements and constraints for the probe.
+    /// * `probe_reservation_comparator` - Enum, which is used to determine which candidate is "best."
     ///
     /// # Returns
-    ///
-    /// An `Option` containing the single `ReservationId` that best fits the criteria, or `None` if no feasible candidates were found.
-    /// TODO Output must be changed to ProbeReservation, if System runs distributed --> because information of origen is lost, also deletion must be handled in a way.
-    fn probe_best(
-        &mut self,
-        request_id: ReservationId,
-        comparator: &mut dyn FnMut(ReservationId, ReservationId) -> Ordering,
-    ) -> Option<ReservationId>;
+    /// A `ProbeReservations` contains only the best candidate according to the comparator.
+    fn probe_best(&mut self, reservation_id: ReservationId, probe_reservation_comparator: ProbeReservationComparator) -> ProbeReservations;
 
     /// Attempts to execute a **final reservation** using a provided candidate.
     ///

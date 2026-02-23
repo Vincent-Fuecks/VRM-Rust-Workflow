@@ -9,7 +9,7 @@ use crate::domain::simulator::simulator::Simulator;
 use crate::domain::vrm_system_model::grid_resource_management_system::vrm_component_registry::registry_client::RegistryClient;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationStore;
 
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use crate::api::vrm_system_model_dto::vrm_dto::VrmDto;
 use crate::domain::simulator::simulator::SystemSimulator;
@@ -39,7 +39,7 @@ fn main() {
     let file_path_workflows: &str = "src/data/test/test_workflow_with_simple_co_allocation_graph.json";
     let file_path_vrm: &str = "/home/vincent/Desktop/Repository/VRM-Rust-Workflow/src/data/vrm_with_slurm.json";
     let reservation_store = ReservationStore::new();
-    reservation_store.add_listener(Arc::new(VrmStateListener::new_empty()));
+    reservation_store.add_listener(Arc::new(RwLock::new(VrmStateListener::new_empty())));
 
     let vrm_dto = get_vrm_dto(file_path_vrm).expect("Failed to load VRM DTO");
     let simulator_dto = vrm_dto.simulator.clone();
@@ -59,5 +59,5 @@ fn main() {
     });
 
     // Prevent main from exiting immediately so threads can run
-    std::thread::park();
+    // std::thread::park();
 }

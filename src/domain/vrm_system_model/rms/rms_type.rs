@@ -22,7 +22,7 @@ impl RmsSystemWrapper {
         simulator: Arc<dyn SystemSimulator>,
         aci_id: AciId,
         reservation_store: ReservationStore,
-    ) -> Result<Box<dyn AdvanceReservationRms>, ConversionError> {
+    ) -> Result<Box<dyn AdvanceReservationRms + Send + Sync + 'static>, ConversionError> {
         match dto {
             RmsSystemWrapper::Slurm(dto) => {
                 let rms_instance = SlurmRms::new(dto, simulator, aci_id, reservation_store);

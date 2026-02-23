@@ -3,5 +3,6 @@ pub mod node_reservation;
 pub mod probe_reservations;
 pub mod reservation;
 pub mod reservation_store;
+pub mod reservation_sync_gate;
 pub mod reservations;
 pub mod vrm_state_listener;

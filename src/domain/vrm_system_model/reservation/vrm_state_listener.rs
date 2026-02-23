@@ -36,7 +36,7 @@ impl VrmStateListener {
 // TODO What should happen by State change?
 impl NotificationListener for VrmStateListener {
     fn on_reservation_change(
-        &self,
+        &mut self,
         reservation_id: ReservationId,
         res_name: ReservationName,
         old_state: ReservationState,
@@ -50,6 +50,12 @@ impl NotificationListener for VrmStateListener {
                 log::info!("State Change of Reservation ID: {:?} | Name: {:?} | {:?}->{:?}", reservation_id, res_name, old_state, new_state);
             }
             ReservationState::ReserveAnswer => {
+                log::info!("State Change of Reservation ID: {:?} | Name: {:?} | {:?}->{:?}", reservation_id, res_name, old_state, new_state);
+            }
+            ReservationState::ProbeReservation => {
+                log::info!("State Change of Reservation ID: {:?} | Name: {:?} | {:?}->{:?}", reservation_id, res_name, old_state, new_state);
+            }
+            ReservationState::ReserveProbeReservation => {
                 log::info!("State Change of Reservation ID: {:?} | Name: {:?} | {:?}->{:?}", reservation_id, res_name, old_state, new_state);
             }
             ReservationState::Committed => {

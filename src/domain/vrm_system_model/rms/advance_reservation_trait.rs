@@ -1,4 +1,4 @@
-use crate::domain::vrm_system_model::reservation::probe_reservations::ProbeReservations;
+use crate::domain::vrm_system_model::reservation::probe_reservations::{ProbeReservationComparator, ProbeReservations};
 use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationState};
 use crate::domain::vrm_system_model::reservation::reservation_store::{ReservationId, ReservationStore};
 use crate::domain::vrm_system_model::rms::rms::{Rms, RmsLoadMetric};
@@ -26,7 +26,7 @@ use std::cmp::Ordering;
 /// Operations performed on a shadow schedule (identified by a [`ShadowScheduleId`]) do not affect
 /// the live RMS until [commit_shadow_schedule](Self::commit_shadow_schedule) is called. This is critical
 /// for distributed transactions and "what-if" planning phases in the Grid/VRM system.
-pub trait AdvanceReservationRms: Rms + Send {
+pub trait AdvanceReservationRms: Rms + Send + Sync {
     /// Creates a secondary **Shadow Schedule**.
     ///
     /// Initially, this schedule is an exact clone of the master schedule. It allows for
@@ -222,12 +222,12 @@ pub trait AdvanceReservationRms: Rms + Send {
     fn probe_best(
         &mut self,
         request_id: ReservationId,
-        comparator: &mut dyn FnMut(ReservationId, ReservationId) -> Ordering,
+        probe_reservation_comparator: ProbeReservationComparator,
         shadow_schedule_id: Option<ShadowScheduleId>,
-    ) -> Option<ReservationId> {
+    ) -> ProbeReservations {
         let active_scheduler = self.get_mut_active_schedule(shadow_schedule_id, request_id);
 
-        active_scheduler.probe_best(request_id, comparator)
+        active_scheduler.probe_best(request_id, probe_reservation_comparator)
     }
 
     /// TODO Returned in java the ReservationId, If a failure occurred.

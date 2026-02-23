@@ -1,5 +1,9 @@
 use crate::domain::vrm_system_model::{
-    reservation::{probe_reservations::ProbeReservations, reservation::ReservationState, reservation_store::ReservationId},
+    reservation::{
+        probe_reservations::{ProbeReservationComparator, ProbeReservations},
+        reservation::{Reservation, ReservationState},
+        reservation_store::ReservationId,
+    },
     schedule::{
         schedule_trait::Schedule,
         slotted_schedule::{slotted_schedule_context::SlottedScheduleContext, strategy::strategy_trait::SlottedScheduleStrategy},
@@ -42,36 +46,35 @@ impl<S: SlottedScheduleStrategy> Schedule for SlottedScheduleContext<S> {
     fn probe(&mut self, id: ReservationId) -> ProbeReservations {
         self.update();
 
-        let candidates = self.calculate_schedule(id);
+        let mut candidates = self.calculate_schedule(id);
+
+        if candidates.is_empty() {
+            return candidates;
+        }
+
         let frag_before: f64 = self.get_system_fragmentation();
+        if self.is_frag_needed {
+            for candidate in candidates.get_mut_reservations() {
+                let candidate_id = self.reservation_store.add_probe_reservation(candidate.clone());
+                // Tempory Reserve
+                self.is_frag_cache_up_to_date = false;
+                self.reserve_without_check(candidate_id);
 
-        // TODO
-        // if self.is_frag_needed {
-        //     for candidate_id in candidates.get_ids() {
-        //         let reserve_answer: Option<ReservationId> = self.reserve(candidate_id);
-        //         let frag_delta: f64 = self.get_system_fragmentation() - frag_before;
+                let frag_delta: f64 = self.get_system_fragmentation() - frag_before;
+                candidate.set_frag_delta(frag_delta);
 
-        //         self.reservation_store.set_frag_delta(candidate_id, frag_delta);
-
-        //         match reserve_answer {
-        //             Some(reserve_answer) => self.delete_reservation(reserve_answer),
-        //             None => {
-        //                 panic!("Error in cleaning SlottedSchedule form probe request.")
-        //             }
-        //         }
-        //     }
-        // }
+                // Deleate from Slots and ReservationStore
+                self.delete_reservation(candidate_id);
+                self.reservation_store.delete_probe_reservation(candidate_id);
+            }
+        }
 
         return candidates;
     }
 
-    fn probe_best(
-        &mut self,
-        request_id: ReservationId,
-        comparator: &mut dyn FnMut(ReservationId, ReservationId) -> std::cmp::Ordering,
-    ) -> Option<ReservationId> {
+    fn probe_best(&mut self, request_id: ReservationId, probe_reservation_comparator: ProbeReservationComparator) -> ProbeReservations {
         let mut probe_reservations = self.probe(request_id);
-        return self.get_best_probe_reservation(&mut probe_reservations, request_id, comparator);
+        return probe_reservations.get_best_probe_reservation(request_id, probe_reservation_comparator);
     }
 
     fn delete_reservation(&mut self, reservation_id: ReservationId) {
@@ -87,22 +90,19 @@ impl<S: SlottedScheduleStrategy> Schedule for SlottedScheduleContext<S> {
         self.update();
 
         let mut probe_reservations = self.calculate_schedule(reservation_id);
-        return None;
-        // TODO
-        // match probe_reservations.get_res_id_with_first_start_slot(reservation_id) {
-        //     Some(res_id) => {
-        //         self.ctx.is_frag_cache_up_to_date = false;
-        //         self.reserve_without_check(res_id);
-        //         probe_reservations.reject_all_probe_reservations_except(res_id);
-        //         return None;
-        //     }
-        //     None => {
-        //         self.active_reservations.set_state(&reservation_id, ReservationState::Rejected);
-        //         // TODO Del Reservation form Slots ProbeReservation
-        //         probe_reservations.reject_all_probe_reservations();
-        //         return Some(reservation_id);
-        //     }
-        // }
+        if probe_reservations.is_empty() {
+            self.reservation_store.update_state(reservation_id, ReservationState::Rejected);
+            return None;
+        }
+
+        if probe_reservations.prompt_best(reservation_id, ProbeReservationComparator::ESTReservationCompare) {
+            self.is_frag_cache_up_to_date = false;
+            self.reserve_without_check(reservation_id);
+            return Some(reservation_id);
+        } else {
+            self.active_reservations.set_state(&reservation_id, ReservationState::Rejected);
+            return None;
+        }
     }
 
     fn reserve_without_check(&mut self, reservation_id: ReservationId) {

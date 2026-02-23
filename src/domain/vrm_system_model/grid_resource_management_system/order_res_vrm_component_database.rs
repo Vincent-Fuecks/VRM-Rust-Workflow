@@ -39,18 +39,18 @@ impl OrderResVrmComponentDatabase {
     /// Adds multiple reservations belonging to a single AI.
     /// TODO Should I do something with the ShadowScheduleId?
     pub fn put_all(&mut self, probe_reservations: ProbeReservations) {
-        for res_id in probe_reservations.get_ids() {
-            let (component_id, shadow_schedule_id) = probe_reservations.get_origin_information(res_id);
+        // for res_id in probe_reservations.get_ids() {
+        //     let (component_id, shadow_schedule_id) = probe_reservations.get_origin_information(res_id);
 
-            if component_id.is_some() && shadow_schedule_id.is_none() {
-                self.store.insert(res_id, component_id.unwrap());
-            } else {
-                panic!(
-                    "ErrorProbeReservations: ComponentId {:?} should be Some() and ShadowScheduleId {:?} should be None.",
-                    component_id, shadow_schedule_id
-                );
-            }
-        }
+        //     if component_id.is_some() && shadow_schedule_id.is_none() {
+        //         self.store.insert(res_id, component_id.unwrap());
+        //     } else {
+        //         panic!(
+        //             "ErrorProbeReservations: ComponentId {:?} should be Some() and ShadowScheduleId {:?} should be None.",
+        //             component_id, shadow_schedule_id
+        //         );
+        //     }
+        // }
     }
 
     fn compare_reservations(&self, manager: &VrmComponentManager, res1: ReservationId, res2: ReservationId) -> Ordering {

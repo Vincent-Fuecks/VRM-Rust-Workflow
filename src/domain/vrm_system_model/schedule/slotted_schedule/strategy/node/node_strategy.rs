@@ -1,5 +1,3 @@
-use futures::executor::EnterError;
-
 use crate::domain::vrm_system_model::{
     reservation::reservation_store::ReservationId,
     schedule::slotted_schedule::{slotted_schedule_context::SlottedScheduleContext, strategy::strategy_trait::SlottedScheduleStrategy},
@@ -138,6 +136,6 @@ impl SlottedScheduleStrategy for NodeStrategy {
     }
 
     fn on_delete_reservation(ctx: &mut SlottedScheduleContext<Self>, reservation_id: ReservationId) -> bool {
-        todo!()
+        true
     }
 }
