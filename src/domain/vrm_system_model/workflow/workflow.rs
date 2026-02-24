@@ -98,6 +98,23 @@ impl Workflow {
             }
         }
 
+        // Update ReservationStore information
+        for (_, link) in &data_dependencies {
+            if let Some(res_handle) = reservation_store.get(link.reservation_id) {
+                let mut res = res_handle.write().unwrap();
+                res.as_link_mut().unwrap().set_start_point(Some(link.source_node.clone().unwrap().cast()));
+                res.as_link_mut().unwrap().set_end_point(Some(link.target_node.clone().unwrap().cast()));
+            }
+        }
+
+        for (_, link) in &sync_dependencies {
+            if let Some(res_handle) = reservation_store.get(link.reservation_id) {
+                let mut res = res_handle.write().unwrap();
+                res.as_link_mut().unwrap().set_start_point(Some(link.source_node.clone().unwrap().cast()));
+                res.as_link_mut().unwrap().set_end_point(Some(link.target_node.clone().unwrap().cast()));
+            }
+        }
+
         let workflow = Workflow {
             base,
             nodes,
@@ -234,8 +251,8 @@ impl Workflow {
                     state: ReservationState::Open,
                     request_proceeding: ReservationProceeding::Commit, // Default
                     arrival_time: dto.arrival_time,
-                    booking_interval_start: 0, // TODO Will be set by scheduler
-                    booking_interval_end: 0,   // TODO Will be set by scheduler
+                    booking_interval_start: dto.booking_interval_start,
+                    booking_interval_end: dto.booking_interval_end,
                     assigned_start: 0,
                     assigned_end: 0,
                     task_duration: 1, // Default for links

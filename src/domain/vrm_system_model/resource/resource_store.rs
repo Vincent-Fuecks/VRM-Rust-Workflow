@@ -178,7 +178,7 @@ impl ResourceStore {
             let link = link.read().unwrap();
 
             if link.source != link_source || link.target != link_target {
-                return false;
+                continue;
             } else if link.base.can_handle_adc_capacity_request(is_res_moldable, res_reserved_capacity) {
                 return true;
             }

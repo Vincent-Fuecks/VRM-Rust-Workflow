@@ -35,6 +35,14 @@ impl LinkReservation {
     pub fn get_end_point(&self) -> Option<RouterId> {
         self.end_point.clone()
     }
+
+    pub fn set_start_point(&mut self, start_point: Option<RouterId>) {
+        self.start_point = start_point;
+    }
+
+    pub fn set_end_point(&mut self, end_point: Option<RouterId>) {
+        self.end_point = end_point;
+    }
 }
 
 impl ReservationTrait for LinkReservation {
