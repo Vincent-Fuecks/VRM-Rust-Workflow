@@ -49,7 +49,7 @@ impl VrmComponent for VrmComponentProxy {
     }
 
     fn get_total_node_capacity(&self) -> i64 {
-        self.call(VrmMessage::GetTotalNodeCapacity)
+        self.call(|tx| VrmMessage::GetTotalNodeCapacity(tx))
     }
 
     fn get_link_resource_count(&self) -> usize {

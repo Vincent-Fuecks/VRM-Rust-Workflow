@@ -17,7 +17,7 @@ pub enum RmsDummyType {
 }
 
 impl RmsSystemWrapper {
-    pub fn get_instance(
+    pub async fn get_instance(
         dto: RmsSystemWrapper,
         simulator: Arc<dyn SystemSimulator>,
         aci_id: AciId,
@@ -25,10 +25,10 @@ impl RmsSystemWrapper {
     ) -> Result<Box<dyn AdvanceReservationRms + Send + Sync + 'static>, ConversionError> {
         match dto {
             RmsSystemWrapper::Slurm(dto) => {
-                let rms_instance = SlurmRms::new(dto, simulator, aci_id, reservation_store);
+                let rms_instance = SlurmRms::new(dto, simulator, aci_id, reservation_store).await;
 
                 match rms_instance {
-                    Ok(rms_instance) => Ok(Box::new(rms_instance)),
+                    Ok(rms_instance) => Ok(Box::new(rms_instance) as Box<dyn AdvanceReservationRms + Send + Sync>),
                     Err(e) => panic!("SlurmClusterInitProcessFailed: Error: {:?}", e),
                 }
             }
@@ -39,12 +39,12 @@ impl RmsSystemWrapper {
                 match rms_type {
                     RmsDummyType::NullRms => {
                         let rms_instance = RmsNodeSimulator::try_from((dummy_rms_dto, simulator, aci_id, reservation_store))?;
-                        Ok(Box::new(rms_instance))
+                        Ok(Box::new(rms_instance) as Box<dyn AdvanceReservationRms + Send + Sync>)
                     }
 
                     RmsDummyType::NullBroker => {
                         let broker_instance = RmsNetworkSimulator::try_from((dummy_rms_dto, simulator, aci_id, reservation_store))?;
-                        Ok(Box::new(broker_instance))
+                        Ok(Box::new(broker_instance) as Box<dyn AdvanceReservationRms + Send + Sync>)
                     }
                 }
             }

@@ -7,7 +7,7 @@ use crate::domain::vrm_system_model::grid_resource_management_system::vrm_compon
 use crate::domain::vrm_system_model::grid_resource_management_system::vrm_component_trait::VrmComponent;
 use crate::domain::vrm_system_model::utils::id::ComponentId;
 
-/// The RegistryClient is a thread-safe handle maps ComponentId -> Sender
+/// The RegistryClient maps ComponentId -> Sender
 #[derive(Clone, Debug)]
 pub struct RegistryClient {
     directory: Arc<RwLock<HashMap<ComponentId, mpsc::Sender<VrmMessage>>>>,

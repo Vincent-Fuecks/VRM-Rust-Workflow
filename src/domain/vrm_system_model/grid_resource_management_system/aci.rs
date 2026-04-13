@@ -115,19 +115,16 @@ pub struct AcI {
     sync_registry: SyncRegistry,
 
     simulator: Arc<dyn SystemSimulator>,
-    reservation_store: ReservationStore,
+    pub reservation_store: ReservationStore,
 }
 
-impl TryFrom<(AcIDto, Arc<dyn SystemSimulator>, ReservationStore)> for AcI {
-    type Error = ConversionError;
-
-    fn try_from(args: (AcIDto, Arc<dyn SystemSimulator>, ReservationStore)) -> Result<Self, ConversionError> {
-        let (dto, simulator, reservation_store) = args;
+impl AcI {
+    pub async fn from_dto(dto: AcIDto, simulator: Arc<dyn SystemSimulator>, reservation_store: ReservationStore) -> Result<Self, ConversionError> {
 
         let aci_id = AciId::new(dto.id.clone());
         let adc_id: AdcId = AdcId::new(dto.adc_id);
 
-        let rms_system = RmsSystemWrapper::get_instance(dto.rms_system, simulator.clone(), aci_id.clone(), reservation_store.clone())?;
+        let rms_system = RmsSystemWrapper::get_instance(dto.rms_system, simulator.clone(), aci_id.clone(), reservation_store.clone()).await?;
 
         let vrm_state_listener = VrmStateListener::new_empty();
 
@@ -145,10 +142,6 @@ impl TryFrom<(AcIDto, Arc<dyn SystemSimulator>, ReservationStore)> for AcI {
             simulator: simulator.clone_box().into(),
             reservation_store: reservation_store.clone(),
         })
-
-        // TODO
-        // start background worker thread
-        // Simulator.start(this);
     }
 }
 

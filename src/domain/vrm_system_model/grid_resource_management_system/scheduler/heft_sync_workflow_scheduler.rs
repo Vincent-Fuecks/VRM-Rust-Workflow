@@ -1,6 +1,5 @@
 use crate::domain::vrm_system_model::grid_resource_management_system::adc::ADC;
 use crate::domain::vrm_system_model::grid_resource_management_system::scheduler::workflow_scheduler::{WorkflowScheduler, WorkflowSchedulerBase};
-use crate::domain::vrm_system_model::grid_resource_management_system::scheduler_comparator::eft_reservation_compare::EFTReservationCompare;
 use crate::domain::vrm_system_model::reservation::probe_reservations::ProbeReservationComparator;
 use crate::domain::vrm_system_model::reservation::reservations::Reservations;
 use std::any::Any;

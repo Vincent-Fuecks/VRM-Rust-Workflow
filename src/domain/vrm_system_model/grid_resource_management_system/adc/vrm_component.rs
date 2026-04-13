@@ -8,7 +8,6 @@ use crate::domain::vrm_system_model::{
     rms::rms::RmsLoadMetric,
     utils::{
         id::{ComponentId, ShadowScheduleId},
-        load_buffer::LoadMetric,
     },
 };
 

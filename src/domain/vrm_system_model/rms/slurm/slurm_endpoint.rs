@@ -3,6 +3,8 @@ pub enum SlurmEndpoint {
     Nodes,
     Jobs,
     Config,
+    JobSubmit,
+    Ping,
 }
 
 impl SlurmEndpoint {
@@ -11,6 +13,8 @@ impl SlurmEndpoint {
             Self::Nodes => "/nodes",
             Self::Jobs => "/jobs",
             Self::Config => "/config",
+            Self::JobSubmit => "/job/submit",
+            Self::Ping => "/ping",
         }
     }
 

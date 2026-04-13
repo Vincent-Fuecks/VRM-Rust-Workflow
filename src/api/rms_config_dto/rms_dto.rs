@@ -18,10 +18,17 @@ pub struct SlurmRmsDto {
     pub scheduler_typ: String,
     pub slot_width: i64,
     pub num_of_slots: i64,
-    pub slurm_url: String,
+    pub rest_api_config : SlurmConfigDto,
+    pub topology: Vec<SlurmSwitchDto>,
+}
+
+#[derive(Debug, Deserialize, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SlurmConfigDto {
+    pub base_url: String,
+    pub version: String,
     pub user_name: String,
     pub jwt_token: String,
-    pub topology: Vec<SlurmSwitchDto>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]

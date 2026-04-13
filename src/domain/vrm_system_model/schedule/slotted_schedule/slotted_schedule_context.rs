@@ -408,8 +408,7 @@ impl<S: SlottedScheduleStrategy> SlottedScheduleContext<S> {
 
         for slot_start_index in earliest_start_index..=latest_start_index {
             if let Some(res_candidate) = self.try_fit_reservation(id, slot_start_index, request_end_boundary) {
-                // TODO
-                // search_results.add_only_reservation(res_candidate);
+                search_results.add_reservation(res_candidate);
             }
         }
         return search_results;

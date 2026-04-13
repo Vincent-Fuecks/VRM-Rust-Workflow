@@ -1,5 +1,4 @@
-use reqwest::blocking::Client;
-use reqwest::header::{HeaderMap, HeaderValue};
+use reqwest::header::{self, HeaderMap, HeaderValue};
 
 use std::collections::HashMap;
 use std::i64;
@@ -9,6 +8,8 @@ use crate::domain::vrm_system_model::reservation::reservation_store::Reservation
 use crate::domain::vrm_system_model::resource::node_resource::NodeResource;
 use crate::domain::vrm_system_model::resource::resource_store::ResourceStore;
 use crate::domain::vrm_system_model::rms::rms_node_network_trait::Helper;
+use crate::domain::vrm_system_model::rms::slurm::rms_trait::SlurmRestApi;
+use crate::domain::vrm_system_model::rms::slurm::slurm_rest_client::SlurmRestApiClient;
 use crate::domain::vrm_system_model::schedule::schedule_trait::Schedule;
 use crate::domain::vrm_system_model::schedule::slotted_schedule::strategy::link::topology::NetworkTopology;
 use crate::domain::vrm_system_model::scheduler_type::ScheduleContext;
@@ -36,10 +37,7 @@ pub struct SlurmRms {
     pub network_schedule: Box<dyn Schedule>,
     pub node_shadow_schedule: HashMap<ShadowScheduleId, Box<dyn Schedule>>,
     pub network_shadow_schedule: HashMap<ShadowScheduleId, Box<dyn Schedule>>,
-    pub slurm_url: String,
-    pub user_name: String,
-    pub jwt_token: String,
-    client: Client,
+    pub slurm_rest_client: SlurmRestApiClient,
 }
 
 #[derive(Debug, Clone)]
@@ -128,23 +126,25 @@ impl Rms for SlurmRms {
 }
 
 impl SlurmRms {
-    pub fn new(
+    pub async fn new(
         dto: SlurmRmsDto,
         simulator: Arc<dyn SystemSimulator>,
         aci_id: AciId,
         reservation_store: ReservationStore,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let mut headers = HeaderMap::new();
-        headers.insert("X-SLURM-USER-NAME", HeaderValue::from_str(&dto.user_name)?);
-        headers.insert("X-SLURM-USER-TOKEN", HeaderValue::from_str(&dto.jwt_token)?);
+        headers.insert("X-SLURM-USER-NAME", HeaderValue::from_str(&dto.rest_api_config.user_name)?);
+        headers.insert("X-SLURM-USER-TOKEN", HeaderValue::from_str(&dto.rest_api_config.jwt_token)?);
+        headers.insert(header::CONTENT_TYPE, header::HeaderValue::from_static("application/json"));
+        
 
-        let client = Client::builder().default_headers(headers).build()?;
+        let client = reqwest::Client::builder().default_headers(headers).build()?;
 
-        let response = client.get("http://localhost:6820/slurm/v0.0.41/nodes").send()?;
+        let response = client.get("http://localhost:6820/slurm/v0.0.41/nodes").send().await?;
         let status = response.status();
 
         if status.is_success() {
-            let nodes_response: SlurmNodesResponse = response.json()?;
+            let nodes_response: SlurmNodesResponse = response.json().await?;
 
             let (nodes, links) = SlurmRms::get_nodes_and_links(&dto, &nodes_response);
             let resource_store = ResourceStore::new();
@@ -198,6 +198,7 @@ impl SlurmRms {
             let network_schedule = scheduler_type.get_instance(schedule_context);
 
             let base = RmsBase::new(aci_id, "Slurm".to_string(), reservation_store, resource_store.clone());
+            let rest_api_client = SlurmRestApiClient::new(dto.rest_api_config)?;
 
             Ok(SlurmRms {
                 base: base,
@@ -205,19 +206,16 @@ impl SlurmRms {
                 network_schedule,
                 node_shadow_schedule: HashMap::new(),
                 network_shadow_schedule: HashMap::new(),
-                jwt_token: dto.jwt_token,
-                slurm_url: dto.slurm_url,
-                user_name: dto.user_name,
-                client,
+                slurm_rest_client: rest_api_client,
             })
         } else {
-            let body_text = response.text();
+            let body_text = response.text().await?;
             panic!(
-                "Initialization of Rms by AcI {} of Rms {} failed. Because the returned rms response was not successfull. The following request was unsuccessfull:\nX-SLURM-USER-NAME: <<{}>>\nSlurm-URL: <<{}>>\nSlurm-Requesed-Endpoint: <<{:?}>>\nResponse-Status-Code: <<{}>>\nResponse-Body: <<{:?}>>\n\nPlease also consider, that your provided jwt-token is still valied.",
+                "Initialization of Rms by AcI {} of Rms {} failed. Because the returned rms response was not successful. The following request was unsuccessful:\nX-SLURM-USER-NAME: <<{}>>\nSlurm-URL: <<{}>>\nSlurm-Requested-Endpoint: <<{:?}>>\nResponse-Status-Code: <<{}>>\nResponse-Body: <<{:?}>>\n\nPlease also consider, that your provided jwt-token is still valid.",
                 aci_id,
                 dto.id,
-                dto.user_name,
-                dto.slurm_url,
+                dto.rest_api_config.user_name,
+                dto.rest_api_config.base_url,
                 SlurmEndpoint::Nodes,
                 status,
                 body_text

@@ -28,9 +28,12 @@
                 "schedulerTyp": "SlottedSchedule",
                 "slotWidth": 60,
                 "numOfSlots": 60,
-                "slurmUrl": "http://localhost:6820", 
-                "userName": "root", 
-                "jwtToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjIwOTE0MjU2ODIsImlhdCI6MTc3NjA2NTY4Miwic3VuIjoic2x1cm0ifQ.FYYCgbSPHz54xMkSHg5KSt8d2UbYLTy9jeE3OeDGFDw",
+                "restApiConfig" : {
+                    "baseUrl": "http://localhost:6820", 
+                    "version": "v0.0.41",
+                    "userName": "root", 
+                    "jwtToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjIwOTE0MjU2ODIsImlhdCI6MTc3NjA2NTY4Miwic3VuIjoic2x1cm0ifQ.FYYCgbSPHz54xMkSHg5KSt8d2UbYLTy9jeE3OeDGFDw"
+                },
                 "topology" : [
                     {
                         "switchName": "s0",

@@ -2,6 +2,7 @@ use std::{
     collections::{HashMap, HashSet},
     sync::{Arc, RwLock},
 };
+use anyhow::Ok;
 use tokio::time::{Duration, sleep};
 
 use crate::{
@@ -25,7 +26,7 @@ use crate::{
             },
             utils::id::{AdcId, ComponentId},
         },
-    },
+    }, error::ConversionError,
 };
 
 pub struct VrmManager {
@@ -47,13 +48,13 @@ impl VrmManager {
         VrmManager { adc_master, unprocessed_reservations, open_reservations: Arc::new(RwLock::new(HashSet::new())), reservation_store, simulator }
     }
 
-    pub fn init_vrm_system(
+    pub async fn init_vrm_system(
         dto: VrmDto,
         unprocessed_reservations: Vec<ReservationId>,
         simulator: Arc<dyn SystemSimulator>,
         registry: RegistryClient,
         reservation_store: ReservationStore,
-    ) -> Self {
+    ) -> Result<Self, ConversionError> {
         let open_reservations = Arc::new(RwLock::new(HashSet::new()));
         let listener = Arc::new(RwLock::new(VrmStateListener::new(open_reservations.clone())));
         reservation_store.add_listener(listener);
@@ -62,7 +63,7 @@ impl VrmManager {
 
         // Setup AcI Proxies (spawn all in own thread)
         for aci_dto in dto.aci {
-            let aci = AcI::try_from((aci_dto, simulator.clone(), reservation_store.clone())).expect("Failed to create AcI");
+            let aci = AcI::from_dto(aci_dto, simulator.clone(), reservation_store.clone()).await?;
             let component_box: Box<dyn VrmComponent + Send> = Box::new(aci);
 
             let proxy: VrmComponentProxy = registry.spawn_component(component_box);
@@ -133,13 +134,18 @@ impl VrmManager {
         log::info!("System successfully initialized with {} components.", proxies.len());
 
         match adc_master {
-            Some(adc_master) => VrmManager::new(
+            Some(adc_master) => {
+                let vrm_manager = VrmManager::new(
                 adc_master,
                 reservation_store.get_sorted_res_ids_with_arrival_time(unprocessed_reservations),
                 reservation_store,
                 simulator,
-            ),
-            None => panic!("Failed to find adc master. Possible mismatch of adcMasterId and actual id of the configuration."),
+            );
+
+            return Ok(vrm_manager).map_err(|e| ConversionError::AdcConstructionError("Master-AcI".to_string()));
+
+            }
+            None => Err(ConversionError::UnknownRmsType("Failed to find adc master".to_string())),
         }
     }
 

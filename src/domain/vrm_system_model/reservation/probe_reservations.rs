@@ -2,7 +2,7 @@ use std::{cmp::Ordering, collections::HashMap};
 
 use crate::domain::vrm_system_model::{
     reservation::{
-        reservation::{Reservation, ReservationState, ReservationTrait},
+        reservation::{Reservation, ReservationTrait},
         reservation_store::{ReservationId, ReservationStore},
     },
     utils::id::ProbeReservationId,
@@ -100,7 +100,7 @@ impl ProbeReservations {
         self.reservation_store.update_state(self.original_reservation_id, res_base.get_state());
     }
 
-    /// Finds in the ProbeReservations, the Reservation, which is accordings to the ProbeReservationComparator
+    /// Finds in the ProbeReservations, the Reservation, which is according to the ProbeReservationComparator
     /// the best Reservation und updates the original Reservation with the information of the ProbeReservation.
     ///
     /// Return:
@@ -188,17 +188,4 @@ impl ProbeReservations {
             return false;
         }
     }
-
-    // fn promote_reservation(&mut self, probe_reservation_id: ProbeReservationId) -> bool {
-    //     if let Some(res_to_prompt) = self.local_reservation_store.get(&probe_reservation_id) {
-    //         self.reservation_store.set_booking_interval_start(self.original_reservation_id, res_to_prompt.get_booking_interval_start());
-    //         self.reservation_store.set_booking_interval_end(self.original_reservation_id, res_to_prompt.get_booking_interval_end());
-    //         self.reservation_store.set_assigned_start(self.original_reservation_id, res_to_prompt.get_assigned_start());
-    //         self.reservation_store.set_assigned_end(self.original_reservation_id, res_to_prompt.get_assigned_end());
-    //         self.reservation_store.update_state(self.original_reservation_id, res_to_prompt.get_state());
-    //         return true;
-    //     }
-
-    //     return false;
-    // }
 }
