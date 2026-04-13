@@ -6,17 +6,16 @@ use crate::domain::vrm_system_model::reservation::probe_reservations::{ProbeRese
 use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationState};
 use crate::domain::vrm_system_model::reservation::reservation_store::{NotificationListener, ReservationId, ReservationStore};
 use crate::domain::vrm_system_model::reservation::reservation_sync_gate::SyncRegistry;
-use crate::domain::vrm_system_model::reservation::vrm_state_listener::{self, VrmStateListener};
+use crate::domain::vrm_system_model::reservation::vrm_state_listener::VrmStateListener;
 use crate::domain::vrm_system_model::rms::advance_reservation_trait::AdvanceReservationRms;
 use crate::domain::vrm_system_model::rms::rms::RmsLoadMetric;
 use crate::domain::vrm_system_model::utils::id::{AciId, AdcId, ClientId, ComponentId, ReservationName, ShadowScheduleId};
-use crate::domain::vrm_system_model::utils::load_buffer::LoadMetric;
 use crate::domain::vrm_system_model::utils::statistics::ANALYTICS_TARGET;
 use crate::error::ConversionError;
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap};
 use std::i64;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Clone)]

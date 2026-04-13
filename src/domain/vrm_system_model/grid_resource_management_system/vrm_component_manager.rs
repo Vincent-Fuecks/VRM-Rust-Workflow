@@ -355,9 +355,9 @@ impl VrmComponentManager {
         } else {
             vec![reservation_id]
         };
+
         for res_id in res_ids {
             let mut found_handeler_for_this_id = false;
-            self.reservation_store.print_reservation(res_id);
             if let Some(res) = self.reservation_store.get_reservation_snapshot(res_id) {
                 for container in self.vrm_components.values() {
                     if container.can_handel(res.clone()) {

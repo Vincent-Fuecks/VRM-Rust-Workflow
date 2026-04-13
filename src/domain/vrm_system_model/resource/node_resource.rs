@@ -1,3 +1,4 @@
+use crate::domain::vrm_system_model::resource::resource_trait::FeasibilityRequest;
 use crate::domain::vrm_system_model::resource::{resource_trait::Resource, resources::BaseResource};
 use crate::domain::vrm_system_model::utils::id::ResourceName;
 
@@ -26,5 +27,15 @@ impl Resource for NodeResource {
 
     fn get_name(&self) -> ResourceName {
         self.base.get_name()
+    }
+
+    fn can_handle_request(&self, request: &FeasibilityRequest) -> bool {
+        match request {
+            FeasibilityRequest::Node { capacity, is_moldable } => {
+                // Nodes only care about capacity and moldability
+                self.base.can_handle(*is_moldable, *capacity)
+            }
+            _ => false, // A Node cannot handle a Link request
+        }
     }
 }

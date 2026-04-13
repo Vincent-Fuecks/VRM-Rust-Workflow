@@ -248,6 +248,8 @@ impl NetworkTopology {
     /// Performs preprocessing to identify and cache all paths between Grid Access Points.
     /// This iterates through all router pairs. If both routers are marked as `is_grid_access_point`,
     /// it invokes `calc_k_shortest_paths` and stores the resulting `VirtualLinkResource`.
+    /// 
+    /// Attention: Updates Paths in ReservationStore
     pub fn calc_all_paths(&mut self) {
         let router_ids: Vec<RouterId> = self.routers.keys().cloned().collect();
 
@@ -270,6 +272,8 @@ impl NetworkTopology {
                 }
             }
         }
+        // Adds calculated Paths to ReservationStore
+        self.resource_store.add_k_shortest_paths(self.path_cache.clone());
     }
 
     /// Constructs the adjacency matrix for the network graph.
@@ -319,18 +323,17 @@ impl NetworkTopology {
         return adjacency;
     }
 
-    /// Derives the set of all Routers from the DTO configurations (GirdNodes, LinkResources).
+    /// Derives the set of all Routers from the DTO configurations (GridNodes, LinkResources).
     fn setup_routers(nodes: &Vec<Node>, links: &Vec<Link>) -> HashMap<RouterId, Router> {
         let mut routers: HashMap<RouterId, Router> = HashMap::new();
 
+        // Register leaf nodes (Grid Nodes) as the grid access points.
         for grid_node in nodes.iter() {
-            for router_id in grid_node.connected_to_router.iter() {
-                if !routers.contains_key(&router_id) {
-                    routers.insert(router_id.clone(), Router { id: router_id.clone(), is_grid_access_point: true });
-                }
-            }
+            let node_id = RouterId::new(grid_node.name.clone());
+            routers.insert(node_id.clone(), Router { id: node_id, is_grid_access_point: true });
         }
 
+        // Add remaining topological link nodes/routers without grid access point status.
         for network_link in links.iter() {
             let router_end_point_id = RouterId::new(network_link.target.clone());
             let router_start_point_id = RouterId::new(network_link.source.clone());
@@ -358,7 +361,6 @@ impl NetworkTopology {
         resource_store: ResourceStore,
     ) -> HashSet<LinkResourceId> {
         let mut links_ids: HashSet<LinkResourceId> = HashSet::new();
-
         for link in links.iter() {
             let link_schedule_name = format!("Schedule LinkResource {} -> {}", link.source, link.target);
             let node_strategy = NodeStrategy::default();

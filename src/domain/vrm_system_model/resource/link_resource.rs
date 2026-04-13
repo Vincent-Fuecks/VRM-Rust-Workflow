@@ -1,12 +1,12 @@
 use std::any::Any;
 
-use crate::domain::vrm_system_model::resource::resource_trait::Resource;
+use crate::domain::vrm_system_model::reservation::reservation::ReservationTrait;
+use crate::domain::vrm_system_model::resource::resource_trait::{FeasibilityRequest, Resource};
 use crate::domain::vrm_system_model::resource::resources::BaseResource;
 use crate::domain::vrm_system_model::schedule::slotted_schedule::slotted_schedule_context::SlottedScheduleContext;
 use crate::domain::vrm_system_model::schedule::slotted_schedule::strategy::node::node_strategy::NodeStrategy;
 use crate::domain::vrm_system_model::utils::id::{ResourceName, RouterId};
 
-// TODO Naming is of should be just Link
 #[derive(Debug, Clone)]
 pub struct LinkResource {
     pub base: BaseResource,
@@ -36,5 +36,20 @@ impl Resource for LinkResource {
 
     fn get_name(&self) -> ResourceName {
         self.base.get_name()
+    }
+
+    fn can_handle_request(&self, request: &FeasibilityRequest) -> bool {
+        match request {
+            FeasibilityRequest::Link { source, target, capacity, is_moldable } => {
+                // Links check topology AND capacity
+                log::debug!("LinkResouce check with {:?} source: {:?}, target: {:?}", self.base.name, self.source, self.target);
+                if source.compare(&self.source) && target.compare(&self.target) {
+                    return self.base.can_handle(*is_moldable, *capacity);
+                } else {
+                    return false;
+                }
+            }
+            _ => false, // A Link cannot handle a Node request
+        }
     }
 }

@@ -4,7 +4,6 @@ use crate::domain::vrm_system_model::vrm_manager::VrmManager;
 
 use crate::domain::vrm_system_model::client::client::Clients;
 
-use crate::api::workflow_dto::client_dto::ClientsDto;
 use crate::domain::simulator::simulator::Simulator;
 use crate::domain::vrm_system_model::grid_resource_management_system::vrm_component_registry::registry_client::RegistryClient;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationStore;
@@ -36,7 +35,7 @@ fn main() {
     let log_file_path = "/home/vincent/Desktop/Repository/VRM-Rust-Workflow/statistics/analytics.csv".to_string();
     AnalyticsSystem::init(log_file_path);
 
-    let file_path_workflows: &str = "src/data/test/test_workflow_with_simple_co_allocation_graph.json";
+    let file_path_workflows: &str = "/home/vincent/Desktop/Repository/VRM-Rust-Workflow/src/data/workflow_with_direct_mapping.json";
     let file_path_vrm: &str = "/home/vincent/Desktop/Repository/VRM-Rust-Workflow/src/data/vrm_with_slurm.json";
     let reservation_store = ReservationStore::new();
     reservation_store.add_listener(Arc::new(RwLock::new(VrmStateListener::new_empty())));

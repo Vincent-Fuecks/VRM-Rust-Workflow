@@ -16,12 +16,12 @@ impl SlurmRms {
         let mut node_to_switches: HashMap<ResourceName, Vec<RouterId>> = HashMap::new();
 
         for start_switch in &dto.topology {
-            let switch0 = RouterId::new(format!("Router-{}", start_switch.switch_name.clone()));
+            let switch0 = RouterId::new(start_switch.switch_name.clone());
             for end_switch in &start_switch.switches {
-                let switch1 = RouterId::new(format!("Router-{}", end_switch.clone()));
+                let switch1 = RouterId::new(end_switch.clone());
                 // links are Bidirectional
                 let link = Link {
-                    id: ResourceName::new(format!("Link {}->{}", switch0, switch1)),
+                    id: ResourceName::new(format!("{}->{}", switch0, switch1)),
                     source: switch0.clone(),
                     target: switch1.clone(),
                     capacity: start_switch.link_speed,
@@ -29,7 +29,7 @@ impl SlurmRms {
                 links.push(link);
 
                 let link = Link {
-                    id: ResourceName::new(format!("Link {}->{}", switch1, switch0.clone())),
+                    id: ResourceName::new(format!("{}->{}", switch1, switch0.clone())),
                     source: switch1.clone(),
                     target: switch0.clone(),
                     capacity: start_switch.link_speed,
@@ -39,16 +39,16 @@ impl SlurmRms {
 
             for node in &start_switch.nodes {
                 let link = Link {
-                    id: ResourceName::new(format!("Link-{}->{}", switch0.clone(), node.clone())),
+                    id: ResourceName::new(format!("{}->{}", switch0.clone(), node.clone())),
                     source: switch0.clone(),
-                    target: RouterId::new(format!("Router-{}", node.clone())),
+                    target: RouterId::new(node.clone()),
                     capacity: start_switch.link_speed,
                 };
                 links.push(link);
 
                 let link = Link {
-                    id: ResourceName::new(format!("Link-{}->{}", node.clone(), switch0.clone())),
-                    source: RouterId::new(format!("Router-{}", node.clone())),
+                    id: ResourceName::new(format!("{}->{}", node.clone(), switch0.clone())),
+                    source: RouterId::new(node.clone()),
                     target: switch0.clone(),
                     capacity: start_switch.link_speed,
                 };

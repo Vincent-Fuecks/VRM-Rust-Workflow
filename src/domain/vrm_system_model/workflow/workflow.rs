@@ -7,15 +7,14 @@ use crate::api::workflow_dto::workflow_dto::{TaskDto, WorkflowDto};
 use crate::domain::vrm_system_model::reservation::reservation::{
     Reservation, ReservationBase, ReservationProceeding, ReservationState, ReservationTrait, ReservationTyp,
 };
-use crate::domain::vrm_system_model::reservation::reservation_store::{self, ReservationId, ReservationStore};
+use crate::domain::vrm_system_model::reservation::reservation_store::{ReservationId, ReservationStore};
 use crate::domain::vrm_system_model::reservation::{link_reservation::LinkReservation, node_reservation::NodeReservation};
 use crate::domain::vrm_system_model::utils::id::{
-    ClientId, CoAllocationDependencyId, CoAllocationId, DataDependencyId, ReservationName, SyncDependencyId, WorkflowNodeId, WorkflowNodeTag,
+    ClientId, CoAllocationDependencyId, CoAllocationId, DataDependencyId, ReservationName, SyncDependencyId, WorkflowNodeId,
 };
 use crate::domain::vrm_system_model::workflow::co_allocation::CoAllocation;
 use crate::domain::vrm_system_model::workflow::dependency::{CoAllocationDependency, DataDependency, SyncDependency};
 use crate::domain::vrm_system_model::workflow::workflow_node::WorkflowNode;
-use crate::domain::vrm_system_model::{reservation, workflow};
 use crate::error::Error;
 
 use serde::{Deserialize, Serialize};
@@ -945,7 +944,7 @@ impl Workflow {
 
     /**
      * @return 	List of all Requests(Reservations) in this Workflow. That are all Reservations represented
-     * 			by WorkflowNodes and Dependencys.
+     * 			by WorkflowNodes and Dependencies.
      */
     pub fn get_all_reservation_ids(&self) -> Vec<ReservationId> {
         let mut workflow_res_ids = Vec::new();

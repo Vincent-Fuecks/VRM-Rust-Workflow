@@ -1,6 +1,4 @@
-use crate::domain::vrm_system_model::reservation::reservation::Reservation;
-use crate::domain::vrm_system_model::reservation::reservation_store::{ReservationId, ReservationStore};
-use crate::domain::vrm_system_model::utils::id::ResourceName;
+use crate::domain::vrm_system_model::utils::id::{ResourceName, RouterId};
 
 use std::any::Any;
 
@@ -13,4 +11,11 @@ pub trait Resource: std::fmt::Debug + Send {
 
     /// Return the Id of the Resource
     fn get_name(&self) -> ResourceName;
+
+    fn can_handle_request(&self, request: &FeasibilityRequest) -> bool;
+}
+
+pub enum FeasibilityRequest {
+    Node { capacity: i64, is_moldable: bool },
+    Link { source: RouterId, target: RouterId, capacity: i64, is_moldable: bool },
 }

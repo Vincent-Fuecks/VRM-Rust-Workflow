@@ -23,6 +23,6 @@ pub struct TaskDto {
     pub reservation_state: ReservationStateDto,
     pub request_proceeding: ReservationProceedingDto,
 
-    pub link_reservation: LinkReservationDto,
+    pub link_reservation: Vec<LinkReservationDto>,
     pub node_reservation: NodeReservationDto,
 }

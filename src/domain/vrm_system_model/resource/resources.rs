@@ -1,7 +1,5 @@
 use std::collections::HashSet;
 
-use crate::domain::vrm_system_model::reservation::reservation::Reservation;
-use crate::domain::vrm_system_model::reservation::reservation_store::{ReservationId, ReservationStore};
 use crate::domain::vrm_system_model::resource::link_resource::LinkResource;
 use crate::domain::vrm_system_model::resource::node_resource::NodeResource;
 use crate::domain::vrm_system_model::resource::resource_trait::Resource;
@@ -18,8 +16,18 @@ impl BaseResource {
         Self { name, capacity }
     }
 
-    pub fn can_handle_adc_capacity_request(&self, is_res_moldable: bool, res_reserved_capacity: i64) -> bool {
-        if is_res_moldable && res_reserved_capacity > 0 { res_reserved_capacity <= self.capacity } else { true }
+    /// Check if this resource can handle the task theoretically, does not guarantee that the request an be handeled.
+    /// If reservation not moldable, resource must have the requested capacity.
+    /// If reservation moldable or requested capacity is 0 true is returned.
+    /// Otherwise false is returned.
+    pub fn can_handle(&self, is_res_moldable: bool, res_reserved_capacity: i64) -> bool {
+        log::debug!("Resource: {:?}, has capacity: {:?}", self.name, self.capacity);
+
+        if !is_res_moldable && res_reserved_capacity > 0 {
+            return res_reserved_capacity <= self.capacity;
+        } else {
+            return true;
+        }
     }
 
     pub fn get_name(&self) -> ResourceName {
