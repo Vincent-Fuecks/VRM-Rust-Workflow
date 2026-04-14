@@ -3,7 +3,7 @@ use std::any::Any;
 use serde::{Deserialize, Serialize};
 
 use crate::domain::vrm_system_model::{
-    reservation::reservation::{Reservation, ReservationBase, ReservationProceeding, ReservationState, ReservationTrait, ReservationTyp},
+    reservation::reservation::{ReservationBase, ReservationProceeding, ReservationState, ReservationTrait, ReservationTyp},
     utils::id::{ClientId, ComponentId, ReservationName},
 };
 
@@ -15,7 +15,6 @@ use crate::domain::vrm_system_model::{
 pub struct NodeReservation {
     /// The common base properties shared by all reservations.
     pub base: ReservationBase,
-
     // Node specific fields
     /// File system **path** pointing to the executable for this reservation/task.
     pub task_path: Option<String>,

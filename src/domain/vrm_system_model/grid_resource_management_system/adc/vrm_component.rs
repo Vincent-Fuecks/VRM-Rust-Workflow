@@ -6,7 +6,7 @@ use crate::domain::vrm_system_model::{
         reservation_store::ReservationId,
     },
     rms::rms::RmsLoadMetric,
-    utils::id::{ComponentId, ProbeReservationId, ShadowScheduleId},
+    utils::id::{ComponentId, ShadowScheduleId},
 };
 
 impl VrmComponent for ADC {

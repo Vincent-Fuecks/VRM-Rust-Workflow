@@ -1,9 +1,6 @@
-use std::any::Any;
-use std::cmp::Ordering;
 use std::fmt::Debug;
 
 use crate::domain::vrm_system_model::reservation::probe_reservations::{ProbeReservationComparator, ProbeReservations};
-use crate::domain::vrm_system_model::reservation::reservation::Reservation;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationId;
 use crate::domain::vrm_system_model::utils::load_buffer::LoadMetric;
 

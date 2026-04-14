@@ -135,7 +135,7 @@ impl SlottedScheduleStrategy for NodeStrategy {
         slot.insert_reservation(requirment, reservation_id);
     }
 
-    fn on_delete_reservation(ctx: &mut SlottedScheduleContext<Self>, reservation_id: ReservationId) -> bool {
+    fn on_delete_reservation(_ctx: &mut SlottedScheduleContext<Self>, _reservation_id: ReservationId) -> bool {
         true
     }
 }

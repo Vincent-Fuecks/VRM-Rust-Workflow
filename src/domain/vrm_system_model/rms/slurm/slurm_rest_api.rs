@@ -1,6 +1,6 @@
 use anyhow::{Context, Ok, Result};
 
-use crate::domain::vrm_system_model::rms::slurm::{payload::task_properties::{TaskProperties, TaskSubmission}, response::{delete::SlurmDeleteResponse, task_submit::TaskSubmitResponse, nodes::SlurmNodesResponse, tasks::SlurmTaskResponse}, rms_trait::SlurmRestApi, slurm_endpoint::SlurmEndpoint, slurm_rest_client::SlurmRestApiClient};
+use crate::domain::vrm_system_model::rms::slurm::{payload::task_properties::{TaskSubmission}, response::{delete::SlurmDeleteResponse, task_submit::TaskSubmitResponse, nodes::SlurmNodesResponse, tasks::SlurmTaskResponse}, rms_trait::SlurmRestApi, slurm_endpoint::SlurmEndpoint, slurm_rest_client::SlurmRestApiClient};
 
 #[async_trait::async_trait]
 impl SlurmRestApi for SlurmRestApiClient {

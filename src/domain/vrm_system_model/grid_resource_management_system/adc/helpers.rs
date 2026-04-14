@@ -4,18 +4,15 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use tokio_util::io::simplex::new;
-
 use crate::domain::vrm_system_model::{
     grid_resource_management_system::{
-        adc::ADC, order_res_vrm_component_database::OrderResVrmComponentDatabase, vrm_component_manager::DUMMY_COMPONENT_ID,
-        vrm_component_order::VrmComponentOrder, vrm_component_registry::vrm_component_proxy::VrmComponentProxy, vrm_component_trait::VrmComponent,
+        adc::ADC, vrm_component_registry::vrm_component_proxy::VrmComponentProxy, vrm_component_trait::VrmComponent,
     },
     reservation::{
-        self, probe_reservations::{self, ProbeReservationComparator, ProbeReservations}, reservation::ReservationState, reservation_store::ReservationId
+        probe_reservations::{ProbeReservationComparator, ProbeReservations}, reservation::ReservationState, reservation_store::ReservationId
     },
     utils::{
-        id::{ComponentId, ReservationName, ShadowScheduleId},
+        id::{ComponentId, ShadowScheduleId},
         statistics::ANALYTICS_TARGET,
     },
 };

@@ -2,12 +2,12 @@ use std::{cmp::Ordering, collections::HashMap};
 
 use crate::domain::vrm_system_model::{
     grid_resource_management_system::vrm_component_manager::{VrmComponentContainer, VrmComponentManager},
-    reservation::{probe_reservations::ProbeReservations, reservation_store::ReservationId, reservations::Reservations},
+    reservation::reservation_store::ReservationId,
     utils::id::ComponentId,
 };
 
 /**
- * A mapping between reservations and the AIs which handle them. In this
+* A mapping between reservations and the AIs which handle them. In this
  * map the names of the reservations do not have to be unique
  * (see {@link Reservation#getJobName()}.
  *
@@ -34,23 +34,6 @@ impl OrderResVrmComponentDatabase {
     /// Adds a reservation and its corresponding AI container.
     pub fn put(&mut self, res: ReservationId, component_id: ComponentId) {
         self.store.insert(res, component_id);
-    }
-
-    /// Adds multiple reservations belonging to a single AI.
-    /// TODO Should I do something with the ShadowScheduleId?
-    pub fn put_all(&mut self, probe_reservations: ProbeReservations) {
-        // for res_id in probe_reservations.get_ids() {
-        //     let (component_id, shadow_schedule_id) = probe_reservations.get_origin_information(res_id);
-
-        //     if component_id.is_some() && shadow_schedule_id.is_none() {
-        //         self.store.insert(res_id, component_id.unwrap());
-        //     } else {
-        //         panic!(
-        //             "ErrorProbeReservations: ComponentId {:?} should be Some() and ShadowScheduleId {:?} should be None.",
-        //             component_id, shadow_schedule_id
-        //         );
-        //     }
-        // }
     }
 
     fn compare_reservations(&self, manager: &VrmComponentManager, res1: ReservationId, res2: ReservationId) -> Ordering {

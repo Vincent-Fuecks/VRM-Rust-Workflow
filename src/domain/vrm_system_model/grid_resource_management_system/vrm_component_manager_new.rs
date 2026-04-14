@@ -2,7 +2,6 @@ use std::{cmp::Ordering, collections::HashMap};
 
 use crate::domain::vrm_system_model::{
     grid_resource_management_system::{
-        order_res_vrm_component_database::OrderResVrmComponentDatabase,
         vrm_component_manager::{DUMMY_COMPONENT_ID, VrmComponentManager},
         vrm_component_order::VrmComponentOrder,
     },
@@ -215,7 +214,7 @@ impl VrmComponentManager {
 
                 // TODO
                 todo!();
-                // TODO 
+                // TODO
                 // 1. Prepare the gate
                 let gate = self.sync_registry.create_gate(reservation_id);
 

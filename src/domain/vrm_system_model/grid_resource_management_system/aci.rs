@@ -232,7 +232,6 @@ impl VrmComponent for AcI {
     }
 
     fn commit_shadow_schedule(&mut self, shadow_schedule_id: ShadowScheduleId) -> bool {
-        // TODO Add ReservationStore Listener
         let shadow_schedule_committed_reservations =
             self.shadow_schedule_reservations.get_mut(&shadow_schedule_id).expect("Committed Reservations where not found.").clone();
 

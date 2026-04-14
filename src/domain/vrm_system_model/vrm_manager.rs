@@ -1,8 +1,8 @@
+use anyhow::Ok;
 use std::{
     collections::{HashMap, HashSet},
     sync::{Arc, RwLock},
 };
-use anyhow::Ok;
 use tokio::time::{Duration, sleep};
 
 use crate::{
@@ -19,14 +19,14 @@ use crate::{
                 vrm_component_trait::VrmComponent,
             },
             reservation::{
-                probe_reservations::ProbeReservationComparator,
                 reservation::{ReservationProceeding, ReservationState},
                 reservation_store::{ReservationId, ReservationStore},
                 vrm_state_listener::VrmStateListener,
             },
             utils::id::{AdcId, ComponentId},
         },
-    }, error::ConversionError,
+    },
+    error::ConversionError,
 };
 
 pub struct VrmManager {
@@ -136,14 +136,13 @@ impl VrmManager {
         match adc_master {
             Some(adc_master) => {
                 let vrm_manager = VrmManager::new(
-                adc_master,
-                reservation_store.get_sorted_res_ids_with_arrival_time(unprocessed_reservations),
-                reservation_store,
-                simulator,
-            );
+                    adc_master,
+                    reservation_store.get_sorted_res_ids_with_arrival_time(unprocessed_reservations),
+                    reservation_store,
+                    simulator,
+                );
 
-            return Ok(vrm_manager).map_err(|e| ConversionError::AdcConstructionError("Master-AcI".to_string()));
-
+                return Ok(vrm_manager).map_err(|_| ConversionError::AdcConstructionError("Master-AcI".to_string()));
             }
             None => Err(ConversionError::UnknownRmsType("Failed to find adc master".to_string())),
         }
@@ -184,7 +183,7 @@ impl VrmManager {
             let mut probe_reservations = self.adc_master.probe(process_res_id, use_master_schedule.clone());
 
             // Prompt best ProbeReservation -> Try to reserve ProbeReservation
-            // TODO Must have a reserve function with a component_id 
+            // TODO Must have a reserve function with a component_id
             // if probe_reservations.prompt_best(process_res_id, ProbeReservationComparator::ESTReservationCompare) {
             //     self.adc_master.reserve(reservation_id, shadow_schedule_id)
             //     self.reservation_store.update_state(process_res_id, ReservationState::ReserveProbeReservation);

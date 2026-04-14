@@ -11,8 +11,6 @@ use crate::domain::vrm_system_model::reservation::reservation_sync_gate::SyncReg
 use crate::domain::vrm_system_model::rms::rms::RmsLoadMetric;
 use crate::domain::vrm_system_model::schedule::schedule_trait::Schedule;
 use crate::domain::vrm_system_model::schedule::slotted_schedule::SlottedScheduleNodes;
-use crate::domain::vrm_system_model::schedule::slotted_schedule::slotted_schedule_context::SlottedScheduleContext;
-use crate::domain::vrm_system_model::schedule::slotted_schedule::strategy::node::node_strategy;
 use crate::domain::vrm_system_model::schedule::slotted_schedule::strategy::node::node_strategy::NodeStrategy;
 use crate::domain::vrm_system_model::utils::id::RouterId;
 use crate::domain::vrm_system_model::utils::id::{AdcId, ComponentId, ShadowScheduleId, SlottedScheduleId};
@@ -43,8 +41,6 @@ lazy_static! {
 pub struct VrmComponentContainer {
     // Contains a AcI or ADC
     pub vrm_component: Box<dyn VrmComponent + Send>,
-
-    reservation_store: ReservationStore,
 
     // TODO Should the schedule get a separated ReservationStore? Currently GridComponent and schedule have the same.
     // AKA SlottedSchedule
@@ -94,7 +90,7 @@ impl VrmComponentContainer {
 
         let schedule = Box::new(slotted_schedule_nodes);
 
-        Self { vrm_component, reservation_store, schedule, registration_index, total_link_capacity, link_resource_count, failures: 0 }
+        Self { vrm_component, schedule, registration_index, total_link_capacity, link_resource_count, failures: 0 }
     }
 
     pub fn can_handel(&self, res: Reservation) -> bool {

@@ -23,12 +23,6 @@ pub trait NotificationListener: Send + Sync + Debug {
     );
 }
 
-#[derive(Debug, Clone)]
-struct NoOpenListener;
-impl NotificationListener for NoOpenListener {
-    fn on_reservation_change(&mut self, _: ReservationId, _: ReservationName, _: ReservationState, _: ReservationState) {}
-}
-
 new_key_type! {
     pub struct ReservationId;
 }
@@ -138,7 +132,7 @@ impl ReservationStore {
         }
 
         log::error!(
-            "ReservationStoreDelError: It was not possible to deleate Reservation {:?} from the ReservationStore, because the Reservation was in State {:?} and not in state ReservationState::ProbeReservation can be deleted.",
+            "ReservationStoreDelError: It was not possible to delete Reservation {:?} from the ReservationStore, because the Reservation was in State {:?} and not in state ReservationState::ProbeReservation can be deleted.",
             self.get_name_for_key(reservation_id),
             self.get_state(reservation_id)
         );
@@ -665,11 +659,9 @@ impl ReservationStore {
     /// Note: ReservationStore snapshot has no active Listeners.
     pub fn snapshot(&self) -> ReservationStore {
         let guard = self.inner.read().unwrap();
+        let mut new_slots = guard.slots.clone();
 
-        let mut new_slots = SlotMap::with_key();
-        new_slots = guard.slots.clone();
-
-        for (key, arc_lock) in new_slots.iter_mut() {
+        for (_, arc_lock) in new_slots.iter_mut() {
             let original_res = arc_lock.read().expect("Lock poisoned during snapshot").clone();
             *arc_lock = Arc::new(RwLock::new(original_res));
         }
@@ -696,7 +688,7 @@ impl ReservationStore {
             match res_handle.try_read() {
                 Ok(res) => {
                     log::error!(
-                        "  -> ID: {:?} | Name: {:?} | State: {:?} | Type: {:?} | Precceding: {:?}",
+                        "  -> ID: {:?} | Name: {:?} | State: {:?} | Type: {:?} | Preceding: {:?}",
                         id,
                         res.get_name(),
                         res.get_state(),

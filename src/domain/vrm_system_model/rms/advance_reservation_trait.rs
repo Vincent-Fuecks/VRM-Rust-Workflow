@@ -4,8 +4,6 @@ use crate::domain::vrm_system_model::reservation::reservation_store::{Reservatio
 use crate::domain::vrm_system_model::rms::rms::{Rms, RmsLoadMetric};
 use crate::domain::vrm_system_model::utils::id::ShadowScheduleId;
 
-use std::cmp::Ordering;
-
 /// Direct interface to a local Resource Management System (RMS) capable of making advance reservations.
 ///
 /// This trait serves as the bridge between the high-level Virtual Resource Manager (VRM) and the

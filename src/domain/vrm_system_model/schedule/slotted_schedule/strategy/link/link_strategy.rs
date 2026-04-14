@@ -228,21 +228,21 @@ impl SlottedScheduleStrategy for LinkStrategy {
     }
 
     // TODO Not Implemented
-    fn get_fragmentation(ctx: &mut SlottedScheduleContext<Self>, frag_start_time: i64, frag_end_time: i64) -> f64 {
+    fn get_fragmentation(_ctx: &mut SlottedScheduleContext<Self>, _frag_start_time: i64, _frag_end_time: i64) -> f64 {
         return -1.0;
     }
     // TODO Not Implemented
-    fn get_system_fragmentation(ctx: &mut SlottedScheduleContext<Self>) -> f64 {
+    fn get_system_fragmentation(_ctx: &mut SlottedScheduleContext<Self>) -> f64 {
         return -1.0;
     }
 
     // TODO Not Implemented
-    fn get_load_metric(ctx: &SlottedScheduleContext<Self>, start_time: i64, end_time: i64) -> LoadMetric {
+    fn get_load_metric(_ctx: &SlottedScheduleContext<Self>, _start_time: i64, _end_time: i64) -> LoadMetric {
         LoadMetric::new(-1, -1, -1.0, -1.0, 0.0)
     }
 
     // TODO Not Implemented
-    fn get_simulation_load_metric(ctx: &mut SlottedScheduleContext<Self>) -> LoadMetric {
+    fn get_simulation_load_metric(_ctx: &mut SlottedScheduleContext<Self>) -> LoadMetric {
         LoadMetric::new(-1, -1, -1.0, -1.0, 0.0)
     }
 }

@@ -1,7 +1,7 @@
 use crate::domain::vrm_system_model::{
     reservation::{
         probe_reservations::{ProbeReservationComparator, ProbeReservations},
-        reservation::{Reservation, ReservationState},
+        reservation::ReservationState,
         reservation_store::ReservationId,
     },
     schedule::{
