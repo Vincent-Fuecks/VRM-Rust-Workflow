@@ -1,6 +1,6 @@
-use std::sync::Arc;
+use std::{sync::Arc};
 
-use vrm_rust_workflow::{api::rms_config_dto::rms_dto::{SlurmConfigDto, SlurmRmsDto, SlurmSwitchDto}, domain::{simulator::{simulator::SystemSimulator, simulator_mock::MockSimulator}, vrm_system_model::{reservation::reservation_store::ReservationStore, rms::{advance_reservation_trait::AdvanceReservationRms, slurm::{rms_trait::SlurmRestApi, slurm::SlurmRms, slurm_rest_client::SlurmRestApiClient}}, utils::id::AciId}}};
+use vrm_rust_workflow::{api::rms_config_dto::rms_dto::{SlurmConfigDto, SlurmRmsDto, SlurmSwitchDto}, domain::{simulator::{simulator::SystemSimulator, simulator_mock::MockSimulator}, vrm_system_model::{reservation::reservation_store::ReservationStore, rms::{advance_reservation_trait::AdvanceReservationRms, slurm::{payload::{self, task_properties::{TaskProperties, TaskSubmission}}, rms_trait::SlurmRestApi, slurm::SlurmRms, slurm_rest_client::SlurmRestApiClient}}, utils::id::AciId}}};
 
 #[tokio::test]
 async fn test_is_rms_alive() {
@@ -26,6 +26,126 @@ async fn test_is_rms_alive() {
     }
 }
 
+#[tokio::test]
+async fn test_get_tasks() {
+    let slurm_rms_dummy = create_slurm_rms_mock().await;
+
+    match slurm_rms_dummy {
+        Ok(slurm_rms) => {
+            let tasks = slurm_rms.slurm_rest_client.get_tasks().await;
+            match tasks {
+                Ok(tasks) => {
+                    for task in tasks.jobs {
+                        println!("{:?}", task);
+                    }
+                
+                }
+                Err(e) => {
+                    panic!("Docker Slurm Cluster is offline or API key is missing. Error: {}", e);
+                }
+            }
+        }
+
+        Err(e) => {
+            panic!("Error during the create_slurm_rms_mock creation process: {}", e);
+        }
+    }
+}
+
+
+#[tokio::test]
+async fn test_get_nodes() {
+    let slurm_rms_dummy = create_slurm_rms_mock().await;
+
+    match slurm_rms_dummy {
+        Ok(slurm_rms) => {
+            let nodes = slurm_rms.slurm_rest_client.get_nodes().await;
+            match nodes {
+                Ok(nodes) => {
+                    for node in nodes.nodes {
+                        println!("{:?}", node);
+                    }
+                }
+                Err(e) => {
+                    panic!("Docker Slurm Cluster is offline or API key is missing. Error: {}", e);
+                }
+            }
+        }
+
+        Err(e) => {
+            panic!("Error during the create_slurm_rms_mock creation process: {}", e);
+        }
+    }
+}
+
+#[tokio::test]
+async fn test_delete() {
+    let slurm_rms_dummy = create_slurm_rms_mock().await;
+    let task_id_to_delete: u32 = 7;
+
+    match slurm_rms_dummy {
+        Ok(slurm_rms) => {
+            let is_deleted = slurm_rms.slurm_rest_client.delete(task_id_to_delete).await;
+            match is_deleted {
+                Ok(is_deleted) => {
+                    assert!(is_deleted, "A failure during the deletion of task {:?} occurred.", task_id_to_delete);
+                }
+                Err(e) => {
+                    panic!("Docker Slurm Cluster is offline or API key is missing. Error: {}", e);
+                }
+            }
+        }
+
+        Err(e) => {
+            panic!("Error during the create_slurm_rms_mock creation process: {}", e);
+        }
+    }
+}
+
+
+
+#[tokio::test]
+async fn test_commit() {
+    let slurm_rms_dummy = create_slurm_rms_mock().await;
+    let task_properties = TaskProperties {
+            name: "task-001".to_string(), 
+            nodes: "1-2".to_string(),
+            cpus_per_task: 1,
+            current_working_directory: "/tmp".to_string(),
+            standard_output: "/tmp/task-001.out".to_string(),
+            environment: vec!["PATH=/usr/bin:/bin".to_string()],
+    };
+
+    let script = "#!/bin/bash\nhostname\nsleep 10".to_string();
+
+    let payload = TaskSubmission {
+        job: task_properties, 
+        script: script,
+    };
+
+    match slurm_rms_dummy {
+        Ok(slurm_rms) => {
+            let slurm_task_id = slurm_rms.slurm_rest_client.commit(payload).await;
+            match slurm_task_id {
+                Ok(task) => {
+                    println!("{:?}", task);
+                }
+                Err(e) => {
+                    panic!("Docker Slurm Cluster is offline or API key is missing. Error: {}", e);
+                }
+            }
+        }
+
+        Err(e) => {
+            panic!("Error during the create_slurm_rms_mock creation process: {}", e);
+        }
+    }
+}
+
+
+
+
+
 async fn create_slurm_rms_mock() -> Result<SlurmRms, Box<dyn std::error::Error>> {
         let simulator: Arc<dyn SystemSimulator> = Arc::new(MockSimulator::new(0));
     let aci_id = AciId::new("Test-AcI");
@@ -34,7 +154,7 @@ async fn create_slurm_rms_mock() -> Result<SlurmRms, Box<dyn std::error::Error>>
         base_url: "http://localhost:6820".to_string(), 
         version: "v0.0.41".to_string(), 
         user_name: "root".to_string(), 
-        jwt_token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjIwOTE0MjU2ODIsImlhdCI6MTc3NjA2NTY4Miwic3VuIjoic2x1cm0ifQ.FYYCgbSPHz54xMkSHg5KSt8d2UbYLTy9jeE3OeDGFDw".to_string() 
+        jwt_token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjIwOTE1MDYxNDQsImlhdCI6MTc3NjE0NjE0NCwic3VuIjoic2x1cm0ifQ.1c0D0fH2bP9MS3qmwf944xH9894r_aeaHFgnGaMYw-Q".to_string() 
     };
     
     

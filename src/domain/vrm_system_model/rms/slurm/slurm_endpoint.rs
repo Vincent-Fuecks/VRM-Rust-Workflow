@@ -2,6 +2,7 @@
 pub enum SlurmEndpoint {
     Nodes,
     Jobs,
+    Job,
     Config,
     JobSubmit,
     Ping,
@@ -12,18 +13,10 @@ impl SlurmEndpoint {
         match self {
             Self::Nodes => "/nodes",
             Self::Jobs => "/jobs",
+            Self::Job => "/job",
             Self::Config => "/config",
             Self::JobSubmit => "/job/submit",
             Self::Ping => "/ping",
         }
     }
-
-    // TODO
-    // You can even include the HTTP method
-    // pub fn method(&self) -> reqwest::Method {
-    //     match self {
-    //         Self::JobSubmit => reqwest::Method::POST,
-    //         _ => reqwest::Method::GET,
-    //     }
-    // }
 }

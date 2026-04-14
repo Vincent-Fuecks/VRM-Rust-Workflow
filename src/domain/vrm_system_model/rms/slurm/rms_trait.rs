@@ -1,7 +1,8 @@
 use std::fmt::Debug;
 
 use anyhow::Result;
-use reqwest::Client;
+
+use crate::domain::vrm_system_model::rms::slurm::{payload::task_properties::{TaskProperties, TaskSubmission}, response::{nodes::SlurmNodesResponse, tasks::{SlurmTask, SlurmTaskResponse}}};
 
 #[async_trait::async_trait]
 pub trait SlurmRestApi: Debug {
@@ -9,10 +10,10 @@ pub trait SlurmRestApi: Debug {
     async fn init_rms(&self) -> Result<bool>;
 
     // GET /slurm/v0.0.40/nodes
-    async fn sync_nodes(&self) -> Result<bool>;
+    async fn get_nodes(&self) -> Result<SlurmNodesResponse>;
 
     // "http://localhost:6820/slurm/v0.0.40/jobs"
-    async fn sync_tasks(&self) -> Result<bool>;
+    async fn get_tasks(&self) -> Result<SlurmTaskResponse>;
 
     // Only Pending Jobs: /slurm/v0.0.40/jobs?state=PENDING
     async fn get_waiting_task_for_execution(&self) -> Result<bool>;
@@ -27,8 +28,8 @@ pub trait SlurmRestApi: Debug {
     async fn get_diagnostics(&self) -> Result<bool>;
 
     // POST /slurm/v0.0.40/job/submit
-    async fn commit(&self, client: &Client) -> Result<bool>;
+    async fn commit(&self, payload: TaskSubmission) -> Result<u32>;
 
     // DELETE /slurm/v0.0.40/job/{job_id}
-    async fn delete(&self) -> Result<bool>;
+    async fn delete(&self, task_id: u32) -> Result<bool>;
 }
