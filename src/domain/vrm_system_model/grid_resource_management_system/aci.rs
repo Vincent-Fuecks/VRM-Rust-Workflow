@@ -4,18 +4,18 @@ use crate::domain::simulator::simulator::SystemSimulator;
 use crate::domain::vrm_system_model::grid_resource_management_system::vrm_component_trait::VrmComponent;
 use crate::domain::vrm_system_model::reservation::probe_reservations::{ProbeReservationComparator, ProbeReservations};
 use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationState};
-use crate::domain::vrm_system_model::reservation::reservation_store::{NotificationListener, ReservationId, ReservationStore};
+use crate::domain::vrm_system_model::reservation::reservation_store::{ReservationId, ReservationStore};
 use crate::domain::vrm_system_model::reservation::reservation_sync_gate::SyncRegistry;
 use crate::domain::vrm_system_model::reservation::vrm_state_listener::VrmStateListener;
 use crate::domain::vrm_system_model::rms::advance_reservation_trait::AdvanceReservationRms;
 use crate::domain::vrm_system_model::rms::rms::RmsLoadMetric;
-use crate::domain::vrm_system_model::utils::id::{AciId, AdcId, ClientId, ComponentId, ReservationName, ShadowScheduleId};
+use crate::domain::vrm_system_model::utils::id::{AciId, AdcId, ClientId, ComponentId, ShadowScheduleId};
 use crate::domain::vrm_system_model::utils::statistics::ANALYTICS_TARGET;
 use crate::error::ConversionError;
 
 use std::collections::{BTreeMap, HashMap};
 use std::i64;
-use std::sync::Arc;
+use std::sync::{Arc};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Clone)]
@@ -359,11 +359,13 @@ impl VrmComponent for AcI {
             return ProbeReservations::new(reservation_id, self.reservation_store.clone());
         }
 
-        let prob_request_answer = self.rms_system.probe(reservation_id, shadow_schedule_id.clone());
+        let mut prob_request_answer = self.rms_system.probe(reservation_id, shadow_schedule_id.clone());
+        
+        // Way to attach this AcI to the created probeReservations. 
+        prob_request_answer.add_probe_meta_data(self.id.clone().cast(), shadow_schedule_id.clone());
 
-        // Init ProbeReservation tracking -> Informs AcI if VrmComponent likes to reserve a ProbeReservation
+        // Tracking for when promotion happens
         self.open_probe_reservations.insert(reservation_id, shadow_schedule_id.clone());
-        self.vrm_state_listener.add(reservation_id);
 
         if prob_request_answer.is_empty() {
             if shadow_schedule_id.is_none() {
@@ -399,11 +401,12 @@ impl VrmComponent for AcI {
             return ProbeReservations::new(reservation_id, self.reservation_store.clone());
         }
 
-        let probe_best_answer = self.rms_system.probe_best(reservation_id, probe_reservation_comparator, shadow_schedule_id.clone());
+        let mut  probe_best_answer = self.rms_system.probe_best(reservation_id, probe_reservation_comparator, shadow_schedule_id.clone());
+        // Way to attach this AcI to the created probeReservations. 
+        probe_best_answer.add_probe_meta_data(self.id.clone().cast(), shadow_schedule_id.clone());
 
         // Init ProbeReservation tracking -> Informs AcI if VrmComponent likes to reserve a ProbeReservation
         self.open_probe_reservations.insert(reservation_id, shadow_schedule_id);
-        self.vrm_state_listener.add(reservation_id);
 
         return probe_best_answer;
     }
@@ -548,31 +551,5 @@ impl AcI {
             ProbeAnswers = num_of_answers,
             ProcessingTime = processing_time,
         );
-    }
-}
-
-impl NotificationListener for AcI {
-    fn on_reservation_change(
-        &mut self,
-        reservation_id: ReservationId,
-        res_name: ReservationName,
-        old_state: ReservationState,
-        new_state: ReservationState,
-    ) {
-        if old_state == ReservationState::ProbeReservation {
-            let shadow_schedule_id = self.open_probe_reservations.remove(&reservation_id);
-
-            if new_state == ReservationState::ReserveProbeReservation {
-                log::debug!("AcIReserveProbeReservation: AcI {} performs Reserve of Reservation {:?}", self.id, res_name);
-
-                self.reserve(reservation_id, shadow_schedule_id.unwrap());
-
-                // Notify waiting ADC, that reserve operation was performed
-                if let Some(gate) = self.sync_registry.get_gate(reservation_id) {
-                    let final_state = self.reservation_store.get_state(reservation_id);
-                    gate.notify(final_state, self.adc_id.clone().cast());
-                }
-            }
-        }
     }
 }

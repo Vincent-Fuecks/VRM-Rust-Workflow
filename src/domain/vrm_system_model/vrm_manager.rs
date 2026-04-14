@@ -184,16 +184,18 @@ impl VrmManager {
             let mut probe_reservations = self.adc_master.probe(process_res_id, use_master_schedule.clone());
 
             // Prompt best ProbeReservation -> Try to reserve ProbeReservation
-            if probe_reservations.prompt_best(process_res_id, ProbeReservationComparator::ESTReservationCompare) {
-                self.reservation_store.update_state(process_res_id, ReservationState::ReserveProbeReservation);
+            // TODO Must have a reserve function with a component_id 
+            // if probe_reservations.prompt_best(process_res_id, ProbeReservationComparator::ESTReservationCompare) {
+            //     self.adc_master.reserve(reservation_id, shadow_schedule_id)
+            //     self.reservation_store.update_state(process_res_id, ReservationState::ReserveProbeReservation);
 
-                // Reserve of ProbeReservation was not possible -> Reset Reservation to original
-                if !self.reservation_store.is_reservation_state_at_least(process_res_id, ReservationState::ReserveAnswer) {
-                    probe_reservations.demote();
-                } else {
-                    log::info!("Reservation {:?} was sucessful reseved via probe request.", self.reservation_store.get_name_for_key(process_res_id));
-                }
-            }
+            //     // Reserve of ProbeReservation was not possible -> Reset Reservation to original
+            //     if !self.reservation_store.is_reservation_state_at_least(process_res_id, ReservationState::ReserveAnswer) {
+            //         probe_reservations.demote();
+            //     } else {
+            //         log::info!("Reservation {:?} was sucessful reseved via probe request.", self.reservation_store.get_name_for_key(process_res_id));
+            //     }
+            // }
         }
 
         if self.reservation_store.is_reservation_proceeding(process_res_id, ReservationProceeding::Probe) {
@@ -217,6 +219,8 @@ impl VrmManager {
                 return;
             }
         }
+
+        self.reservation_store.dump_store_contents(process_res_id);
 
         // Step 3: Commit or Delete Reservation
         if self.reservation_store.is_reservation_proceeding(process_res_id, ReservationProceeding::Commit) {

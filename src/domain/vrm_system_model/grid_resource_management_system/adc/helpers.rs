@@ -12,9 +12,7 @@ use crate::domain::vrm_system_model::{
         vrm_component_order::VrmComponentOrder, vrm_component_registry::vrm_component_proxy::VrmComponentProxy, vrm_component_trait::VrmComponent,
     },
     reservation::{
-        probe_reservations::{self, ProbeReservationComparator, ProbeReservations},
-        reservation::ReservationState,
-        reservation_store::ReservationId,
+        self, probe_reservations::{self, ProbeReservationComparator, ProbeReservations}, reservation::ReservationState, reservation_store::ReservationId
     },
     utils::{
         id::{ComponentId, ReservationName, ShadowScheduleId},
@@ -200,25 +198,14 @@ impl ADC {
         }
 
         for _ in 0..=try_n_probe_reservations {
-            if probe_reservations.prompt_best(reservation_id, probe_reservation_comparator.clone()) {
-                // 1. Prepare the gate
-                let gate = self.sync_registry.create_gate(reservation_id);
-
-                // 2. Trigger the AcI by updating the store
-                self.reservation_store.update_state(reservation_id, ReservationState::ReserveProbeReservation);
-
-                // TODO Add parameter to a config
-                // 3. BLOCK here. This thread sleeps until AcI calls notify().
-                let result = gate.wait_with_timeout(std::time::Duration::from_secs(15));
-
-                // 4. Clean up the registry
-                self.sync_registry.remove_gate(reservation_id);
-
-                if result.state == ReservationState::ReserveAnswer {
+            if let Some((component_id, shadow_schedule_id)) = probe_reservations.prompt_best(reservation_id, probe_reservation_comparator.clone()) {
+                self.manager.reserve(component_id.clone(), reservation_id, shadow_schedule_id);                
+                
+                if self.reservation_store.is_reservation_state_at_least(reservation_id, ReservationState::ReserveAnswer) {
                     log::info!("Reservation {:?} successful!", reservation_id);
 
                     // Update local schedule
-                    self.manager.reserve_without_check(result.aci_id.clone().unwrap(), reservation_id);
+                    self.manager.reserve_without_check(component_id.clone(), reservation_id);
 
                     // Register new schedule Sub-Task
                     // Update grid_component_res_database for rollback and for ADC to keep track
@@ -227,11 +214,11 @@ impl ADC {
                         log::error!(
                             "ErrorReservationWasReservedInMultipleGridComponents: The reservation {:?} was multiple times to the GirdComponent {} submitted.",
                             self.reservation_store.get_name_for_key(reservation_id),
-                            result.aci_id.clone().unwrap(),
+                            component_id,
                         );
                     }
 
-                    grid_component_res_database.insert(reservation_id, result.aci_id.unwrap());
+                    grid_component_res_database.insert(reservation_id, component_id);
                     return Some(reservation_id);
                 }
             }

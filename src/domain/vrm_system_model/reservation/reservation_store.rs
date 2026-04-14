@@ -4,9 +4,6 @@ use std::fmt::Debug;
 
 use std::sync::{Arc, RwLock};
 
-use crate::domain::vrm_system_model::grid_resource_management_system::aci::AcI;
-use crate::domain::vrm_system_model::grid_resource_management_system::vrm_component_trait::VrmComponent;
-use crate::domain::vrm_system_model::reservation;
 use crate::domain::vrm_system_model::reservation::link_reservation::LinkReservation;
 use crate::domain::vrm_system_model::reservation::reservation::{
     Reservation, ReservationProceeding, ReservationState, ReservationTrait, ReservationTyp,
@@ -631,7 +628,7 @@ impl ReservationStore {
             };
 
             for listener in listeners {
-                listener.write().expect("Lock poisened").on_reservation_change(id, self.get_name_for_key(id).unwrap(), old_state, new_state);
+                listener.write().expect("Lock poisoned").on_reservation_change(id, self.get_name_for_key(id).unwrap(), old_state, new_state);
             }
         }
     }

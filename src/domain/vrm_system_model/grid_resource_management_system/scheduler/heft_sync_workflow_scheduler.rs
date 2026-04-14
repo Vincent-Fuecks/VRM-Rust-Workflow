@@ -227,10 +227,10 @@ impl HEFTSyncWorkflowScheduler {
         let reservation_id_to_schedule = node_to_schedule.reservation_id;
 
         let first_task_candidate = self.schedule_node_reservation_eft(workflow, reservation_id_to_schedule, grid_component_res_database, adc);
-
+        
         // Failure
         if first_task_candidate.is_none()
-            || self.base.reservation_store.is_reservation_state_at_least(first_task_candidate.unwrap(), ReservationState::ReserveAnswer)
+            || !self.base.reservation_store.is_reservation_state_at_least(first_task_candidate.unwrap(), ReservationState::ReserveAnswer)
         {
             return false;
         }
@@ -304,6 +304,12 @@ impl HEFTSyncWorkflowScheduler {
             // Make dummy dependency as small as possible
             if self.base.reservation_store.get_reserved_capacity(dependency_reservation_id) == 0 || source_component_id.compare(&target_component_id)
             {
+                log::debug!("Reservation {:?} ({:?}) is a dummy dependency -> Set ReservationState::Committed; Dependency reserved_capacity: {:?}, source==target: {:?}", 
+                dependency_reservation_id, 
+                self.get_reservation_store().get_name_for_key(dependency_reservation_id),
+                self.base.reservation_store.get_reserved_capacity(dependency_reservation_id),
+                source_component_id.compare(&target_component_id),
+            );
                 if is_filetransfer {
                     end = start;
                 }

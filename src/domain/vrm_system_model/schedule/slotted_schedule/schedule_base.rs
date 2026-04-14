@@ -74,7 +74,7 @@ impl<S: SlottedScheduleStrategy> Schedule for SlottedScheduleContext<S> {
 
     fn probe_best(&mut self, request_id: ReservationId, probe_reservation_comparator: ProbeReservationComparator) -> ProbeReservations {
         let mut probe_reservations = self.probe(request_id);
-        return probe_reservations.get_best_probe_reservation(request_id, probe_reservation_comparator);
+        return probe_reservations.create_new_probe_reservation_with_best_probe(request_id, probe_reservation_comparator);
     }
 
     fn delete_reservation(&mut self, reservation_id: ReservationId) {
@@ -95,7 +95,7 @@ impl<S: SlottedScheduleStrategy> Schedule for SlottedScheduleContext<S> {
             return None;
         }
 
-        if probe_reservations.prompt_best(reservation_id, ProbeReservationComparator::ESTReservationCompare) {
+        if probe_reservations.only_prompt_best(reservation_id, ProbeReservationComparator::ESTReservationCompare) {
             self.is_frag_cache_up_to_date = false;
             self.reserve_without_check(reservation_id);
             return Some(reservation_id);

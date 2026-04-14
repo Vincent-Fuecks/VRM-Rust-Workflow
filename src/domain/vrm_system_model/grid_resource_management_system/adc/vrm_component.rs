@@ -6,9 +6,7 @@ use crate::domain::vrm_system_model::{
         reservation_store::ReservationId,
     },
     rms::rms::RmsLoadMetric,
-    utils::{
-        id::{ComponentId, ShadowScheduleId},
-    },
+    utils::id::{ComponentId, ProbeReservationId, ShadowScheduleId},
 };
 
 impl VrmComponent for ADC {
@@ -243,7 +241,7 @@ impl VrmComponent for ADC {
         }
 
         // Check reservation
-        if self.reservation_store.is_reservation_state_at_least(reservation_id, ReservationState::ReserveAnswer) {
+        if !self.reservation_store.is_reservation_state_at_least(reservation_id, ReservationState::ReserveAnswer) {
             self.reservation_store.update_state(reservation_id, ReservationState::Rejected);
 
             if shadow_schedule_id.is_none() {

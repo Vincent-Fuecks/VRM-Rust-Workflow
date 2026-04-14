@@ -210,7 +210,12 @@ impl VrmComponentManager {
         }
 
         for _ in 0..=try_n_probe_reservations {
-            if probe_reservations.prompt_best(reservation_id, probe_reservation_comparator.clone()) {
+            if let Some((component_id, shadow_schedule_id)) = probe_reservations.prompt_best(reservation_id, probe_reservation_comparator.clone()) {
+                self.reserve(component_id, reservation_id, shadow_schedule_id);
+
+                // TODO
+                todo!();
+                // TODO 
                 // 1. Prepare the gate
                 let gate = self.sync_registry.create_gate(reservation_id);
 
