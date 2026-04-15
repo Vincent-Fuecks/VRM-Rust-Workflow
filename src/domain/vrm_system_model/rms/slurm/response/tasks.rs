@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -12,11 +14,17 @@ pub struct SlurmTaskResponse {
 pub struct SlurmTask {
     pub job_id: u32,
     pub name: Option<String>,
-    pub job_state: Option<Vec<String>>, 
+    pub job_state: Option<Vec<String>>,
     pub user_name: Option<String>,
-    pub partition: Option<String>,
-    pub job_resources: Option<serde_json::Value>,
+    pub job_resources: Option<SlurmJobResources>,
     pub time: Option<SlurmTime>,
+    pub command: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SlurmJobResources {
+    pub nodes: Option<String>,
+    pub allocated_cpus: Option<i64>,
 }
 
 #[derive(Debug, Deserialize)]

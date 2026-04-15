@@ -1,14 +1,16 @@
-use std::{any::Any, collections::HashMap, str::FromStr, sync::Arc};
+use std::{
+    any::Any,
+    collections::HashMap,
+    str::FromStr,
+    sync::{Arc, RwLock},
+};
 
 use crate::{
     api::rms_config_dto::rms_dto::DummyRmsDto,
     domain::{
         simulator::simulator::SystemSimulator,
         vrm_system_model::{
-            reservation::{
-                reservation::ReservationTrait,
-                reservation_store::{ReservationId, ReservationStore},
-            },
+            reservation::reservation_store::{ReservationId, ReservationStore},
             resource::{node_resource::NodeResource, resource_store::ResourceStore},
             rms::{
                 rms::{Rms, RmsBase},
@@ -26,10 +28,10 @@ use crate::{
 #[derive(Debug)]
 pub struct RmsSimulator {
     pub base: RmsBase,
-    pub node_schedule: Box<dyn Schedule>,
-    pub network_schedule: Box<dyn Schedule>,
-    pub node_shadow_schedule: HashMap<ShadowScheduleId, Box<dyn Schedule>>,
-    pub network_shadow_schedule: HashMap<ShadowScheduleId, Box<dyn Schedule>>,
+    pub node_schedule: Arc<RwLock<Box<dyn Schedule>>>,
+    pub network_schedule: Arc<RwLock<Box<dyn Schedule>>>,
+    pub node_shadow_schedule: HashMap<ShadowScheduleId, Arc<RwLock<Box<dyn Schedule>>>>,
+    pub network_shadow_schedule: HashMap<ShadowScheduleId, Arc<RwLock<Box<dyn Schedule>>>>,
 }
 
 impl Rms for RmsSimulator {
@@ -45,16 +47,16 @@ impl Rms for RmsSimulator {
         self
     }
 
-    fn get_mut_active_schedule(&mut self, shadow_schedule_id: Option<ShadowScheduleId>, reservation_id: ReservationId) -> &mut Box<dyn Schedule> {
+    fn get_active_schedule(&self, shadow_schedule_id: Option<ShadowScheduleId>, reservation_id: ReservationId) -> Arc<RwLock<Box<dyn Schedule>>> {
         if self.base.reservation_store.is_link(reservation_id) {
             match shadow_schedule_id {
-                Some(id) => self.network_shadow_schedule.get_mut(&id).expect("network_shadow_schedule contains ShadowSchedule."),
-                None => &mut self.network_schedule,
+                Some(id) => self.network_shadow_schedule.get(&id).expect("network_shadow_schedule contains ShadowSchedule.").clone(),
+                None => self.network_schedule.clone(),
             }
         } else if self.base.reservation_store.is_node(reservation_id) {
             match shadow_schedule_id {
-                Some(id) => self.node_shadow_schedule.get_mut(&id).expect("node_shadow_schedule contains ShadowSchedule."),
-                None => &mut self.node_schedule,
+                Some(id) => self.node_shadow_schedule.get(&id).expect("node_shadow_schedule contains ShadowSchedule.").clone(),
+                None => self.node_schedule.clone(),
             }
         } else {
             panic!(
@@ -94,8 +96,8 @@ impl TryFrom<(DummyRmsDto, Arc<dyn SystemSimulator>, AciId, ReservationStore)> f
             reservation_store: reservation_store.clone(),
         };
 
-        let scheduler_type = SchedulerType::from_str(&dto.scheduler_typ)?; // TODO
-        let node_schedule = scheduler_type.get_instance(schedule_context);
+        let scheduler_type = SchedulerType::from_str(&dto.scheduler_typ)?;
+        let node_schedule = Arc::new(RwLock::new(scheduler_type.get_instance(schedule_context)));
 
         // Setup RmsNetworkSimulator
         // Adds Links to Resource Store
@@ -120,9 +122,9 @@ impl TryFrom<(DummyRmsDto, Arc<dyn SystemSimulator>, AciId, ReservationStore)> f
             reservation_store: reservation_store.clone(),
         };
 
-        let mut scheduler_type = SchedulerType::from_str(&dto.scheduler_typ)?; // TODO
+        let mut scheduler_type = SchedulerType::from_str(&dto.scheduler_typ)?;
         scheduler_type = scheduler_type.get_network_scheduler_variant(topology, resource_store.clone());
-        let network_schedule = scheduler_type.get_instance(schedule_context);
+        let network_schedule = Arc::new(RwLock::new(scheduler_type.get_instance(schedule_context)));
 
         if resource_store.get_num_of_nodes() <= 0 {
             log::info!("Empty Rms: The newly created Rms of type {} of AcI {} contains no Nodes", dto.typ, aci_id);
@@ -135,43 +137,35 @@ impl TryFrom<(DummyRmsDto, Arc<dyn SystemSimulator>, AciId, ReservationStore)> f
 }
 
 impl Helper for RmsSimulator {
-    fn get_node_shadow_schedule(&self) -> &HashMap<ShadowScheduleId, Box<dyn Schedule>> {
+    fn get_node_shadow_schedule(&self) -> &HashMap<ShadowScheduleId, Arc<RwLock<Box<dyn Schedule>>>> {
         &self.node_shadow_schedule
     }
 
-    fn get_mut_network_shadow_schedule(&mut self) -> &mut HashMap<ShadowScheduleId, Box<dyn Schedule>> {
+    fn get_mut_network_shadow_schedule(&mut self) -> &mut HashMap<ShadowScheduleId, Arc<RwLock<Box<dyn Schedule>>>> {
         &mut self.network_shadow_schedule
     }
 
-    fn get_network_shadow_schedule(&self) -> &HashMap<ShadowScheduleId, Box<dyn Schedule>> {
-        &self.node_shadow_schedule
+    fn get_network_shadow_schedule(&self) -> &HashMap<ShadowScheduleId, Arc<RwLock<Box<dyn Schedule>>>> {
+        &self.network_shadow_schedule
     }
 
-    fn get_mut_node_shadow_schedule(&mut self) -> &mut HashMap<ShadowScheduleId, Box<dyn Schedule>> {
+    fn get_mut_node_shadow_schedule(&mut self) -> &mut HashMap<ShadowScheduleId, Arc<RwLock<Box<dyn Schedule>>>> {
         &mut self.node_shadow_schedule
     }
 
-    fn get_node_schedule(&self) -> &Box<dyn Schedule> {
-        &self.node_schedule
+    fn get_node_schedule(&self) -> Arc<RwLock<Box<dyn Schedule>>> {
+        self.node_schedule.clone()
     }
 
-    fn get_mut_node_schedule(&mut self) -> &mut Box<dyn Schedule> {
-        &mut self.node_schedule
+    fn get_network_schedule(&self) -> Arc<RwLock<Box<dyn Schedule>>> {
+        self.network_schedule.clone()
     }
 
-    fn get_network_schedule(&self) -> &Box<dyn Schedule> {
-        &self.network_schedule
-    }
-
-    fn get_mut_network_schedule(&mut self) -> &mut Box<dyn Schedule> {
-        &mut self.network_schedule
-    }
-
-    fn set_node_schedule(&mut self, new_node_schedule: Box<dyn Schedule>) {
+    fn set_node_schedule(&mut self, new_node_schedule: Arc<RwLock<Box<dyn Schedule>>>) {
         self.node_schedule = new_node_schedule;
     }
 
-    fn set_network_schedule(&mut self, new_network_schedule: Box<dyn Schedule>) {
+    fn set_network_schedule(&mut self, new_network_schedule: Arc<RwLock<Box<dyn Schedule>>>) {
         self.network_schedule = new_network_schedule;
     }
 }

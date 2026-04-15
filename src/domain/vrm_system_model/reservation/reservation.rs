@@ -353,6 +353,33 @@ pub enum ReservationState {
 
     /// The execution phase of the job linked to this reservation has been finished successfully.
     Finished = 8,
+
+    // Is a job, that is not from the VRM system, but from the local RMS system.
+    External = 10,
+}
+
+impl ReservationState {
+    pub fn from_slurm_task_state(str_state: &str) -> Result<Self, String> {
+        match str_state {
+            // "Active" states: The job is either queued (SlurmTaskState::Pending) or actively holding resources.
+            // Hold the allocated resources except task in state PENDING which still waits to start.
+            "PENDING" | "RUNNING" | "SUSPENDED" | "COMPLETING" => Ok(ReservationState::Committed),
+
+            // "Success" state: Job finished normally and released the resources.
+            // Released the allocated resources
+            "COMPLETED" => Ok(ReservationState::Finished),
+
+            // "Cancelled" state: Explicit user or admin deletion.
+            // Released the allocated resources
+            "CANCELLED" => Ok(ReservationState::Deleted),
+
+            // "Failure" states: The job was rejected by the system or failed during execution.
+            // Released the allocated resources
+            "FAILED" | "TIMEOUT" | "NODE_FAIL" | "PREEMPTED" | "BOOT_FAIL" | "DEADLINE" | "OUT_OF_MEMORY" => Ok(ReservationState::Rejected),
+
+            _ => Err(format!("Unknown Slurm state: {}", str_state)),
+        }
+    }
 }
 
 /// Defines the set of primary actions (proceedings) that can be requested for a reservation.
@@ -375,6 +402,9 @@ pub enum ReservationProceeding {
 
     /// Reserve the reservation, but delete it within the commit timeout
     Delete,
+
+    /// Vrm system will not interact with this task, because this is an external task form a local rms.
+    Ignore,
 }
 
 /// The fundamental structure holding common data for any resource reservation system.

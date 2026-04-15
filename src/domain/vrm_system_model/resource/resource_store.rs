@@ -8,7 +8,7 @@ use std::{
 use crate::domain::vrm_system_model::{
     reservation::{
         reservation::{Reservation, ReservationTrait},
-        reservation_store::{ReservationId, ReservationStore},
+        reservation_store::{NotificationListener, ReservationId, ReservationStore},
     },
     resource::{
         link_resource::LinkResource,
@@ -21,6 +21,8 @@ use crate::domain::vrm_system_model::{
     },
     utils::id::{ResourceName, RouterId},
 };
+
+use super::node_resource;
 
 new_key_type! {
     pub struct NodeResourceId;
@@ -37,6 +39,9 @@ struct StoreInner {
     nodes: SlotMap<NodeResourceId, Arc<RwLock<NodeResource>>>,
     links: SlotMap<LinkResourceId, Arc<RwLock<LinkResource>>>,
     k_shortest_paths: Arc<RwLock<HashMap<(RouterId, RouterId), Vec<Path>>>>,
+
+    /// Index lookup InternalKey (NodeResourceId) using input reservation name (ResourceName).
+    node_index: HashMap<ResourceName, NodeResourceId>,
 }
 
 impl ResourceStore {
@@ -49,7 +54,43 @@ impl ResourceStore {
     //---------------------
     pub fn add_node(&self, node: NodeResource) -> NodeResourceId {
         let mut guard = self.inner.write().unwrap();
-        guard.nodes.insert(Arc::new(RwLock::new(node)))
+        let node_resource_id = guard.nodes.insert(Arc::new(RwLock::new(node.clone())));
+        guard.node_index.insert(node.base.get_name(), node_resource_id);
+        return node_resource_id;
+    }
+
+    pub fn remove_node(&self, resource_name: ResourceName) {
+        let mut guard = self.inner.write().unwrap();
+        let node_resource_id = guard.node_index.remove(&resource_name);
+
+        if let Some(node_resource_id) = node_resource_id {
+            if guard.nodes.remove(node_resource_id).is_some() {
+                return;
+            }
+        }
+
+        log::error!(
+            "ReservationStoreRemoveOfNodeError: A failure occurred in the process of removing the node {:?} ({:?}).",
+            resource_name,
+            node_resource_id
+        );
+    }
+    // TODO Is a Listener mechanism necessary like in the ReservationStore, to inform VrmComponents?
+    // What is with the Topology, if nodes are removed?
+    pub fn update_nodes(&self, nodes: Vec<NodeResource>) {
+        let guard = self.inner.read().unwrap();
+        let mut current_store_nodes = guard.node_index.clone();
+
+        for node in nodes {
+            if current_store_nodes.remove(&node.base.get_name()).is_none() {
+                self.add_node(node);
+            }
+        }
+
+        for node_id in current_store_nodes.values() {
+            let resource_id = guard.nodes.get(*node_id).unwrap().read().unwrap().base.get_name();
+            self.remove_node(resource_id);
+        }
     }
 
     pub fn get_node(&self, node_id: NodeResourceId) -> Option<Arc<RwLock<NodeResource>>> {

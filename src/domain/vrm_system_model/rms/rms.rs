@@ -8,19 +8,19 @@ use crate::domain::vrm_system_model::utils::id::{AciId, ResourceName, RmsId, Rou
 use crate::domain::vrm_system_model::utils::load_buffer::LoadMetric;
 
 use std::any::Any;
+use std::sync::{Arc, RwLock};
 
 pub trait Rms: std::fmt::Debug + Any {
     fn get_base(&self) -> &RmsBase;
     fn get_base_mut(&mut self) -> &mut RmsBase;
     fn as_any(&self) -> &dyn Any;
 
-    /// Performs the routing the correct scheduler
+    /// Performs the routing to the correct scheduler
     ///
     /// Routs to the node_schedule or link_schedule based on the provided Reservation
-    /// (LinkReservation or NodeReservation)
-    /// of
-    /// the master or shadowSchedule
-    fn get_mut_active_schedule(&mut self, shadow_schedule_id: Option<ShadowScheduleId>, reservation_id: ReservationId) -> &mut Box<dyn Schedule>;
+    /// (LinkReservation or NodeReservation) of the master or shadowSchedule.
+    /// Returns the thread-safe reference to the schedule so the caller can lock it.
+    fn get_active_schedule(&self, shadow_schedule_id: Option<ShadowScheduleId>, reservation_id: ReservationId) -> Arc<RwLock<Box<dyn Schedule>>>;
 
     fn set_reservation_state(&mut self, id: ReservationId, new_state: ReservationState) {
         self.get_base().reservation_store.update_state(id, new_state);

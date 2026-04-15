@@ -76,6 +76,9 @@ impl NotificationListener for VrmStateListener {
                 let mut guard = self.open_reservations.write().unwrap();
                 guard.remove(&reservation_id);
             }
+            ReservationState::External => {
+                log::info!("State Change of Reservation ID: {:?} | Name: {:?} | {:?}->{:?}", reservation_id, res_name, old_state, new_state);
+            }
         }
     }
 }

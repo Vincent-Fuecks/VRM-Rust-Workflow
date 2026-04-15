@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::domain::vrm_system_model::{
     reservation::reservation::{ReservationBase, ReservationProceeding, ReservationState, ReservationTrait, ReservationTyp},
+    rms::slurm::response::tasks::SlurmTask,
     utils::id::{ClientId, ComponentId, ReservationName},
 };
 
@@ -88,5 +89,45 @@ impl ReservationTrait for NodeReservation {
 
     fn get_type(&self) -> ReservationTyp {
         ReservationTyp::Node
+    }
+}
+
+impl NodeReservation {
+    /// Creates NodeReservation based on the submitted SlurmTask.
+    /// This reservation will be ignored by the VRM system.
+    pub fn from_slurm(task: &SlurmTask, aci_id: ComponentId) -> Self {
+        // Default to 1 CPU if unknown
+        let capacity = task.job_resources.as_ref().and_then(|r| r.allocated_cpus).unwrap_or(1);
+
+        let task_id: u32 = task.job_id;
+        let task_user = task.user_name.clone().unwrap_or_else(|| "slurm_import".to_string());
+        let time = task.time.as_ref().unwrap();
+        let duration = time.limit.unwrap_or(0) as i64;
+
+        let node_reservation = NodeReservation {
+            base: ReservationBase {
+                name: ReservationName::new(format!("External-Task-From-AcI-{:?}-Task-Id-{:?}", aci_id, task_id)),
+                client_id: ClientId::new(format!("External-Task-From-{:?}", task_user)),
+                handler_id: Some(aci_id),
+                state: ReservationState::External,
+                request_proceeding: ReservationProceeding::Ignore,
+                arrival_time: time.submission.unwrap_or(0) as i64,
+                booking_interval_start: time.eligible.unwrap_or(0) as i64,
+                booking_interval_end: time.end.unwrap_or(0) as i64,
+                assigned_start: time.start.unwrap_or(0) as i64,
+                assigned_end: time.end.unwrap_or(0) as i64,
+                task_duration: duration,
+                reserved_capacity: capacity,
+                is_moldable: false,
+                moldable_work: capacity * duration,
+                frag_delta: 0.0,
+            },
+
+            task_path: task.command.clone(),
+            output_path: None,
+            error_path: None,
+        };
+
+        return node_reservation;
     }
 }

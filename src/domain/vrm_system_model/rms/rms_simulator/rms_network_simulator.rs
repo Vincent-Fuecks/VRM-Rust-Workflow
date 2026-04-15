@@ -14,14 +14,14 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::i64;
 use std::str::FromStr;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 /// Only simulates a cluster with Links (Nodes are not simulated)
 #[derive(Debug)]
 pub struct RmsNetworkSimulator {
     pub base: RmsBase,
-    pub network_schedule: Box<dyn Schedule>,
-    pub network_shadow_schedule: HashMap<ShadowScheduleId, Box<dyn Schedule>>,
+    pub network_schedule: Arc<RwLock<Box<dyn Schedule>>>,
+    pub network_shadow_schedule: HashMap<ShadowScheduleId, Arc<RwLock<Box<dyn Schedule>>>>,
 }
 
 impl Rms for RmsNetworkSimulator {
@@ -37,11 +37,11 @@ impl Rms for RmsNetworkSimulator {
         self
     }
 
-    fn get_mut_active_schedule(&mut self, shadow_schedule_id: Option<ShadowScheduleId>, reservation_id: ReservationId) -> &mut Box<dyn Schedule> {
-        if self.base.reservation_store.is_node(reservation_id) {
+    fn get_active_schedule(&self, shadow_schedule_id: Option<ShadowScheduleId>, reservation_id: ReservationId) -> Arc<RwLock<Box<dyn Schedule>>> {
+        if self.base.reservation_store.is_link(reservation_id) {
             match shadow_schedule_id {
-                Some(id) => self.network_shadow_schedule.get_mut(&id).expect("node_shadow_schedule contains ShadowSchedule."),
-                None => &mut self.network_schedule,
+                Some(id) => self.network_shadow_schedule.get(&id).expect("network_shadow_schedule contains ShadowSchedule.").clone(),
+                None => self.network_schedule.clone(),
             }
         } else {
             panic!(
@@ -86,7 +86,7 @@ impl TryFrom<(DummyRmsDto, Arc<dyn SystemSimulator>, AciId, ReservationStore)> f
 
         let mut scheduler_type = SchedulerType::from_str(&dto.scheduler_typ)?;
         scheduler_type = scheduler_type.get_network_scheduler_variant(topology, resource_store.clone());
-        let network_schedule = scheduler_type.get_instance(schedule_context);
+        let network_schedule = Arc::new(RwLock::new(scheduler_type.get_instance(schedule_context)));
 
         let base = RmsBase::new(aci_id, dto.typ, reservation_store, resource_store.clone());
 
@@ -104,22 +104,15 @@ impl AdvanceReservationRms for RmsNetworkSimulator {
             return false;
         }
 
-        if self.network_shadow_schedule.insert(shadow_schedule_id.clone(), self.network_schedule.clone_box()).is_none() {
-            log::error!("ErrorShadowScheduleAlreadyExists: ShadowSchedule is now curupted.");
-            return false;
-        }
-
+        let schedule_clone = self.network_schedule.read().unwrap().clone_box();
+        self.network_shadow_schedule.insert(shadow_schedule_id.clone(), Arc::new(RwLock::new(schedule_clone)));
         return true;
     }
 
     fn commit_shadow_schedule(&mut self, shadow_schedule_id: &ShadowScheduleId) -> bool {
-        if self.network_shadow_schedule.contains_key(shadow_schedule_id) {
-            let new_network_schedule = self.network_shadow_schedule.remove(shadow_schedule_id);
-
-            if !new_network_schedule.is_none() {
-                self.network_schedule = new_network_schedule.unwrap();
-                return true;
-            }
+        if let Some(new_network_schedule) = self.network_shadow_schedule.remove(shadow_schedule_id) {
+            self.network_schedule = new_network_schedule;
+            return true;
         }
 
         log::error!("Finding and removing of shadow schedule with id {} was not possible", shadow_schedule_id.clone());
@@ -127,12 +120,8 @@ impl AdvanceReservationRms for RmsNetworkSimulator {
     }
 
     fn delete_shadow_schedule(&mut self, shadow_schedule_id: &ShadowScheduleId) -> bool {
-        if self.network_shadow_schedule.contains_key(shadow_schedule_id) {
-            let removed_network_schedule = self.network_shadow_schedule.remove(shadow_schedule_id);
-
-            if removed_network_schedule.is_none() {
-                return true;
-            }
+        if self.network_shadow_schedule.remove(shadow_schedule_id).is_some() {
+            return true;
         }
 
         log::error!("Removing shadow schedule was not possible. Shadow schedule id ({}) was not found", shadow_schedule_id.clone());
@@ -141,19 +130,27 @@ impl AdvanceReservationRms for RmsNetworkSimulator {
 
     fn get_fragmentation(&mut self, start: i64, end: i64, shadow_schedule_id: Option<ShadowScheduleId>) -> f64 {
         match shadow_schedule_id {
-            Some(id) => {
-                self.network_shadow_schedule.get_mut(&id).expect("network_shadow_schedule contains ShadowSchedule.").get_fragmentation(start, end)
-            }
-            None => self.network_schedule.get_fragmentation(start, end),
+            Some(id) => self
+                .network_shadow_schedule
+                .get(&id)
+                .expect("network_shadow_schedule contains ShadowSchedule.")
+                .write()
+                .unwrap()
+                .get_fragmentation(start, end),
+            None => self.network_schedule.write().unwrap().get_fragmentation(start, end),
         }
     }
 
     fn get_system_fragmentation(&mut self, shadow_schedule_id: Option<ShadowScheduleId>) -> f64 {
         match shadow_schedule_id {
-            Some(id) => {
-                self.network_shadow_schedule.get_mut(&id).expect("network_shadow_schedule contains ShadowSchedule.").get_system_fragmentation()
-            }
-            None => self.network_schedule.get_system_fragmentation(),
+            Some(id) => self
+                .network_shadow_schedule
+                .get(&id)
+                .expect("network_shadow_schedule contains ShadowSchedule.")
+                .write()
+                .unwrap()
+                .get_system_fragmentation(),
+            None => self.network_schedule.write().unwrap().get_system_fragmentation(),
         }
     }
 
@@ -188,39 +185,58 @@ impl AdvanceReservationRms for RmsNetworkSimulator {
     fn get_load_metric(&self, start: i64, end: i64, shadow_schedule_id: Option<ShadowScheduleId>) -> RmsLoadMetric {
         match shadow_schedule_id {
             Some(id) => RmsLoadMetric {
-                node_load_metric: Some(
-                    self.network_shadow_schedule.get(&id).expect("network_shadow_schedule contains ShadowSchedule.").get_load_metric(start, end),
+                node_load_metric: None,
+                link_load_metric: Some(
+                    self.network_shadow_schedule
+                        .get(&id)
+                        .expect("network_shadow_schedule contains ShadowSchedule.")
+                        .read()
+                        .unwrap()
+                        .get_load_metric(start, end),
                 ),
-                link_load_metric: None,
             },
-            None => RmsLoadMetric { node_load_metric: Some(self.network_schedule.get_load_metric(start, end)), link_load_metric: None },
+            None => {
+                RmsLoadMetric { node_load_metric: None, link_load_metric: Some(self.network_schedule.read().unwrap().get_load_metric(start, end)) }
+            }
         }
     }
 
     fn get_load_metric_up_to_date(&mut self, start: i64, end: i64, shadow_schedule_id: Option<ShadowScheduleId>) -> RmsLoadMetric {
         match shadow_schedule_id {
             Some(id) => RmsLoadMetric {
-                node_load_metric: Some(
+                node_load_metric: None,
+                link_load_metric: Some(
                     self.network_shadow_schedule
-                        .get_mut(&id)
+                        .get(&id)
                         .expect("network_shadow_schedule contains ShadowSchedule.")
+                        .write()
+                        .unwrap()
                         .get_load_metric_up_to_date(start, end),
                 ),
-                link_load_metric: None,
             },
-            None => RmsLoadMetric { node_load_metric: Some(self.network_schedule.get_load_metric_up_to_date(start, end)), link_load_metric: None },
+            None => RmsLoadMetric {
+                node_load_metric: None,
+                link_load_metric: Some(self.network_schedule.write().unwrap().get_load_metric_up_to_date(start, end)),
+            },
         }
     }
 
     fn get_simulation_load_metric(&mut self, shadow_schedule_id: Option<ShadowScheduleId>) -> RmsLoadMetric {
         match shadow_schedule_id {
             Some(id) => RmsLoadMetric {
-                node_load_metric: Some(
-                    self.network_shadow_schedule.get_mut(&id).expect("network_shadow_schedule contains ShadowSchedule.").get_simulation_load_metric(),
+                node_load_metric: None,
+                link_load_metric: Some(
+                    self.network_shadow_schedule
+                        .get(&id)
+                        .expect("network_shadow_schedule contains ShadowSchedule.")
+                        .write()
+                        .unwrap()
+                        .get_simulation_load_metric(),
                 ),
-                link_load_metric: None,
             },
-            None => RmsLoadMetric { node_load_metric: Some(self.network_schedule.get_simulation_load_metric()), link_load_metric: None },
+            None => {
+                RmsLoadMetric { node_load_metric: None, link_load_metric: Some(self.network_schedule.write().unwrap().get_simulation_load_metric()) }
+            }
         }
     }
 }

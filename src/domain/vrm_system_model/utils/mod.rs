@@ -1,3 +1,4 @@
+pub mod config;
 pub mod id;
 pub mod load_buffer;
 pub mod statistics;
