@@ -1,6 +1,6 @@
 use std::{sync::Arc};
 
-use vrm_rust_workflow::{api::rms_config_dto::rms_dto::{SlurmConfigDto, SlurmRmsDto, SlurmSwitchDto}, domain::{simulator::{simulator::SystemSimulator, simulator_mock::MockSimulator}, vrm_system_model::{reservation::reservation_store::ReservationStore, rms::{advance_reservation_trait::AdvanceReservationRms, slurm::{payload::{self, task_properties::{TaskProperties, TaskSubmission}}, rms_trait::SlurmRestApi, slurm::SlurmRms, slurm_rest_client::SlurmRestApiClient}}, utils::id::AciId}}};
+use vrm_rust_workflow::{api::rms_config_dto::rms_dto::{SlurmConfigDto, SlurmRmsDto, SlurmSwitchDto}, domain::{simulator::{simulator::SystemSimulator, simulator_mock::MockSimulator}, vrm_system_model::{reservation::reservation_store::ReservationStore, rms::{advance_reservation_trait::AdvanceReservationRms, slurm::{payload::{self, task_properties::{JobProperties, TaskSubmission}}, rms_trait::SlurmRestApi, slurm::SlurmRms, slurm_rest_client::SlurmRestApiClient}}, utils::id::AciId}}};
 
 #[tokio::test]
 async fn test_is_rms_alive() {
@@ -102,18 +102,20 @@ async fn test_delete() {
     }
 }
 
-
-
 #[tokio::test]
 async fn test_commit() {
     let slurm_rms_dummy = create_slurm_rms_mock().await;
-    let task_properties = TaskProperties {
+    let task_properties = JobProperties {
             name: "task-001".to_string(), 
-            nodes: "1-2".to_string(),
+            nodes: Some("1-2".to_string()),
             cpus_per_task: 1,
-            current_working_directory: "/tmp".to_string(),
-            standard_output: "/tmp/task-001.out".to_string(),
-            environment: vec!["PATH=/usr/bin:/bin".to_string()],
+            begin: 0,
+            deadline: 1000,
+            memory_per_node: 256,
+            current_working_directory: Some("/tmp".to_string()),
+            standard_error: Some("/task-001.error".to_string()),
+            standard_output: Some("/task-001.out".to_string()),
+            environment: Some(vec!["PATH=/usr/bin:/bin".to_string()]),
     };
 
     let script = "#!/bin/bash\nhostname\nsleep 10".to_string();

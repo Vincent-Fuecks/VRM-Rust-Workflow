@@ -2,7 +2,10 @@ use std::fmt::Debug;
 
 use anyhow::Result;
 
-use crate::domain::vrm_system_model::rms::slurm::{payload::task_properties::{TaskProperties, TaskSubmission}, response::{nodes::SlurmNodesResponse, tasks::{SlurmTask, SlurmTaskResponse}}};
+use crate::domain::vrm_system_model::rms::slurm::{
+    payload::task_properties::TaskSubmission,
+    response::{nodes::SlurmNodesResponse, tasks::SlurmTaskResponse},
+};
 
 #[async_trait::async_trait]
 pub trait SlurmRestApi: Debug {

@@ -1,3 +1,6 @@
+use anyhow::Result;
+use async_trait::async_trait;
+
 use crate::api::rms_config_dto::rms_dto::DummyRmsDto;
 use crate::domain::vrm_system_model::reservation::reservation::ReservationState;
 use crate::domain::vrm_system_model::reservation::reservation_store::{ReservationId, ReservationStore};
@@ -14,6 +17,29 @@ pub trait Rms: std::fmt::Debug + Any {
     fn get_base(&self) -> &RmsBase;
     fn get_base_mut(&mut self) -> &mut RmsBase;
     fn as_any(&self) -> &dyn Any;
+
+    /// Finalizes a reservation, marking it as committed.
+    ///
+    /// This informs the RMS that the user has accepted the reservation and it is fixed.
+    /// Committed jobs should not be deleted during normal operation.
+    ///
+    /// # Note on Implementation
+    ///
+    /// The default implementation logs the commit and updates the state to `ReservationState::Committed`.
+    /// Implementors interfacing with hardware or external APIs should override this to propagate
+    /// the commit signal to the physical RMS if necessary.
+    ///
+    /// # Arguments
+    ///
+    /// * `reservation_id` - The identifier of the task to commit.
+    ///
+    /// # Returns
+    ///
+    /// The `ReservationId` of the committed job.
+    fn commit(&self, reservation_id: ReservationId) {
+        self.get_base().reservation_store.update_state(reservation_id, ReservationState::Committed);
+        log::info!("Committed reservation {:?} successfully to the local RMS", reservation_id);
+    }
 
     /// Performs the routing to the correct scheduler
     ///

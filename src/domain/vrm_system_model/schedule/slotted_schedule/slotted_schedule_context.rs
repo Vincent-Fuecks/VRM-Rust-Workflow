@@ -23,10 +23,11 @@ pub struct SlottedScheduleContext<S: SlottedScheduleStrategy> {
     pub id: SlottedScheduleId,
 
     /// A list of all time **Slots** defined for this schedule.
+    /// Represents the number of actual cpus or average bandwidth.
     pub slots: Vec<Slot>,
 
     /// The duration of a single time slot in s.
-    /// Example If the billing periode of the cluster is hour a slot width of 60*60 = 3600s could be used
+    /// Example If the billing period of the cluster is hour a slot width of 60*60 = 3600s could be used
     pub slot_width: i64,
 
     /// The index of the earliest possible slot that can be used for scheduling.

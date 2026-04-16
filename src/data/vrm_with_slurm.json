@@ -32,7 +32,8 @@
                     "baseUrl": "http://localhost:6820", 
                     "version": "v0.0.41",
                     "userName": "root", 
-                    "jwtToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjIwOTE1MDYxNDQsImlhdCI6MTc3NjE0NjE0NCwic3VuIjoic2x1cm0ifQ.1c0D0fH2bP9MS3qmwf944xH9894r_aeaHFgnGaMYw-Q"
+                    "jwtToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjIwOTE1MDYxNDQsImlhdCI6MTc3NjE0NjE0NCwic3VuIjoic2x1cm0ifQ.1c0D0fH2bP9MS3qmwf944xH9894r_aeaHFgnGaMYw-Q",
+                    "partition": ""
                 },
                 "topology" : [
                     {

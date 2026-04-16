@@ -1,6 +1,6 @@
 use crate::api::rms_config_dto::rms_dto::DummyRmsDto;
 use crate::domain::simulator::simulator::SystemSimulator;
-use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationTrait};
+use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationState, ReservationTrait};
 use crate::domain::vrm_system_model::reservation::reservation_store::{ReservationId, ReservationStore};
 use crate::domain::vrm_system_model::resource::resource_store::ResourceStore;
 use crate::domain::vrm_system_model::rms::advance_reservation_trait::AdvanceReservationRms;
@@ -35,6 +35,11 @@ impl Rms for RmsNetworkSimulator {
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn commit(&self, reservation_id: ReservationId) {
+        self.base.reservation_store.update_state(reservation_id, ReservationState::Committed);
+        log::info!("Committed reservation {:?} successfully to the local RMS", reservation_id);
     }
 
     fn get_active_schedule(&self, shadow_schedule_id: Option<ShadowScheduleId>, reservation_id: ReservationId) -> Arc<RwLock<Box<dyn Schedule>>> {

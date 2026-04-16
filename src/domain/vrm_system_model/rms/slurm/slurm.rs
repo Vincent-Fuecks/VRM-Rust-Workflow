@@ -4,19 +4,20 @@ use std::collections::{HashMap, HashSet};
 use std::i64;
 use std::sync::RwLock;
 use std::{any::Any, str::FromStr, sync::Arc};
-use tokio::time::{Duration, MissedTickBehavior, interval};
+use tokio::time::{Duration, MissedTickBehavior, interval, timeout};
 
 use crate::domain::vrm_system_model::reservation::node_reservation::NodeReservation;
 use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationState, ReservationTrait};
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationId;
 use crate::domain::vrm_system_model::resource::node_resource::NodeResource;
 use crate::domain::vrm_system_model::resource::resource_store::ResourceStore;
+use crate::domain::vrm_system_model::rms::rms::Rms;
 use crate::domain::vrm_system_model::rms::rms_node_network_trait::Helper;
 use crate::domain::vrm_system_model::rms::slurm::slurm_rest_client::SlurmRestApiClient;
 use crate::domain::vrm_system_model::schedule::schedule_trait::Schedule;
 use crate::domain::vrm_system_model::schedule::slotted_schedule::strategy::link::topology::NetworkTopology;
 use crate::domain::vrm_system_model::scheduler_type::ScheduleContext;
-use crate::domain::vrm_system_model::utils::config::SCHEDULE_SYNC_TIMEINTERVAL_S;
+use crate::domain::vrm_system_model::utils::config::{MEMORY_PER_NODE, SCHEDULE_SYNC_TIMEINTERVAL_S, SLURM_RMS_COMMIT_TIMEOUT_S};
 use crate::domain::vrm_system_model::utils::id::{ResourceName, RmsId, ShadowScheduleId, SlottedScheduleId};
 use crate::{
     api::rms_config_dto::rms_dto::SlurmRmsDto,
@@ -24,16 +25,14 @@ use crate::{
         simulator::simulator::SystemSimulator,
         vrm_system_model::{
             reservation::reservation_store::ReservationStore,
-            rms::{
-                rms::{Rms, RmsBase},
-                slurm::slurm_endpoint::SlurmEndpoint,
-            },
+            rms::{rms::RmsBase, slurm::slurm_endpoint::SlurmEndpoint},
             scheduler_type::SchedulerType,
             utils::id::{AciId, RouterId},
         },
     },
 };
 
+use super::payload::task_properties::{JobProperties, TaskSubmission};
 use super::response::nodes::SlurmNodesResponse;
 use super::response::tasks::SlurmTaskResponse;
 use super::rms_trait::SlurmRestApi;
@@ -109,6 +108,79 @@ impl Rms for SlurmRms {
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn commit(&self, reservation_id: ReservationId) {
+        let payload;
+        let reservation_store = self.get_reservation_store().clone();
+        let client = self.slurm_rest_client.clone();
+        let base_id = self.base.id.clone();
+
+        if let Some(reservation) = self.get_reservation_store().get_reservation_snapshot(reservation_id) {
+            if let Some(node_res) = reservation.as_node() {
+                payload = TaskSubmission {
+                    job: JobProperties {
+                        name: base_id.id.clone(),
+                        cpus_per_task: node_res.base.reserved_capacity as u32,
+                        nodes: None,
+                        memory_per_node: MEMORY_PER_NODE,
+                        begin: node_res.base.assigned_start as u64,
+                        deadline: node_res.base.assigned_end as u64,
+                        current_working_directory: node_res.current_working_directory.clone(),
+                        standard_output: node_res.output_path.clone(),
+                        standard_error: node_res.error_path.clone(),
+                        environment: node_res.environment.clone(),
+                    },
+
+                    script: node_res.task_path.clone(),
+                };
+            } else {
+                log::warn!(
+                    "SlurmRmsCommitFalseReservationTypeError: Commit is only for NodeReservations possible instead a reservation of type {:?} was submitted.",
+                    reservation.get_type()
+                );
+                self.get_reservation_store().update_state(reservation_id, ReservationState::Rejected);
+                return;
+            }
+        } else {
+            log::warn!("SlurmRmsCommitInValidReservationError: The reservation {:?} was not found.", reservation_id);
+            self.get_reservation_store().update_state(reservation_id, ReservationState::Rejected);
+            return;
+        }
+
+        // Send NodeReservation to RMS
+        tokio::spawn(async move {
+            let result = timeout(Duration::from_secs(SLURM_RMS_COMMIT_TIMEOUT_S), client.commit(payload)).await;
+            reservation_store.update_state(reservation_id, ReservationState::Committed);
+
+            match result {
+                Ok(Ok(job_id)) => {
+                    log::info!(
+                        "The reservation {:?} was successfully submitted to the local RMS {:?}",
+                        reservation_store.get_name_for_key(reservation_id),
+                        base_id
+                    );
+                }
+                Ok(Err(e)) => {
+                    log::info!(
+                        "The reservation {:?} submission failed to the local RMS {:?} the failure  was: {:?}",
+                        reservation_store.get_name_for_key(reservation_id),
+                        base_id,
+                        e
+                    );
+                    reservation_store.update_state(reservation_id, ReservationState::Rejected);
+                }
+                Err(_) => {
+                    log::info!(
+                        "The reservation {:?} submission failed to the local RMS {:?} because the response of the RMS was longer as the timeout of {:?} s.",
+                        reservation_store.get_name_for_key(reservation_id),
+                        base_id,
+                        SLURM_RMS_COMMIT_TIMEOUT_S
+                    );
+                    reservation_store.update_state(reservation_id, ReservationState::Rejected);
+                }
+            }
+        });
     }
 
     fn get_active_schedule(&self, shadow_schedule_id: Option<ShadowScheduleId>, reservation_id: ReservationId) -> Arc<RwLock<Box<dyn Schedule>>> {
@@ -293,20 +365,27 @@ impl SlurmRms {
         let active_slurm_ids: HashSet<u32> = slurm_tasks.jobs.iter().map(|job| job.job_id).collect();
         let mut external_reservations = Vec::new();
 
+        let mut mapping = task_mapping.write().expect("Lock poisoned");
+
         // Tasks deleted by the RMS scheduling logic
-        let to_remove: Vec<(ReservationId, u32)> = {
-            let mapping = task_mapping.read().unwrap();
-            mapping
-                .iter()
-                .filter(|(_, slurm_task_id)| !active_slurm_ids.contains(slurm_task_id))
-                .map(|(reservation_id, slurm_task_id)| (reservation_id.clone(), *slurm_task_id))
-                .collect()
-        };
+        let to_remove: Vec<(ReservationId, u32)> = mapping
+            .iter()
+            .filter(|(_, slurm_task_id)| !active_slurm_ids.contains(slurm_task_id))
+            .map(|(reservation_id, slurm_task_id)| (reservation_id.clone(), *slurm_task_id))
+            .collect();
+
+        // Deletes Reservations by setting them into the Deleted State
+        if !to_remove.is_empty() {
+            for (res_id, slurm_task_id) in to_remove {
+                reservation_store.update_state(res_id, ReservationState::Deleted);
+                mapping.remove_by_right(&slurm_task_id);
+            }
+        }
 
         // Process Task Updates
         for slurm_task in slurm_tasks.jobs {
             // Task is tracked in Schedule
-            if let Some(reservation_id) = task_mapping.read().unwrap().get_by_right(&slurm_task.job_id) {
+            if let Some(reservation_id) = mapping.get_by_right(&slurm_task.job_id) {
                 if let Some(slurm_task_states) = slurm_task.job_state {
                     if slurm_task_states.is_empty() {
                         log::debug!(
@@ -322,10 +401,16 @@ impl SlurmRms {
                             slurm_task_states
                         );
                     } else {
-                        if let Ok(slurm_task_reservation_state) = ReservationState::from_slurm_task_state(slurm_task_states.get(0).unwrap()) {
-                            // Task state in RMS and Schedule are different
-                            if reservation_store.get_state(reservation_id.clone()) != slurm_task_reservation_state {
-                                reservation_store.update_state(*reservation_id, slurm_task_reservation_state);
+                        if let Some(first_state) = slurm_task_states.first() {
+                            if let Ok(new_state) = ReservationState::from_slurm_task_state(first_state) {
+                                let current_state = reservation_store.get_state(*reservation_id);
+
+                                // Task state in RMS and Schedule are different
+                                if current_state != new_state {
+                                    reservation_store.update_state(*reservation_id, new_state);
+                                }
+                            } else {
+                                log::warn!("Job {} on RMS {:?} has no valid state.", slurm_task.job_id, rms_id);
                             }
                         }
                     }
@@ -334,15 +419,6 @@ impl SlurmRms {
                 // Aggregate External Reservations
                 let node_reservation = Reservation::Node(NodeReservation::from_slurm(&slurm_task, aci_id.clone().cast()));
                 external_reservations.push((slurm_task.job_id, node_reservation));
-            }
-        }
-
-        // Deletes Reservations by setting them into the Deleted State
-        if !to_remove.is_empty() {
-            let mut mapping = task_mapping.write().unwrap();
-            for (res_id, slurm_task_id) in to_remove {
-                reservation_store.update_state(res_id, ReservationState::Deleted);
-                mapping.remove_by_right(&slurm_task_id);
             }
         }
 
@@ -365,5 +441,9 @@ impl SlurmRms {
         }
 
         todo!("Update of Schedule, due to external Reservations is currently not supported.")
+    }
+
+    pub fn get_reservation_store(&self) -> &ReservationStore {
+        &self.get_base().reservation_store
     }
 }

@@ -15,7 +15,7 @@ use crate::error::ConversionError;
 
 use std::collections::{BTreeMap, HashMap};
 use std::i64;
-use std::sync::{Arc};
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Clone)]
@@ -108,6 +108,7 @@ pub struct AcI {
     commit_timeout: i64,
     rms_system: Box<dyn AdvanceReservationRms + Send>,
     shadow_schedule_reservations: ShadowScheduleReservations,
+    // TODO add event to clean up finished, rejecet, or deleted tasks
     committed_reservations: HashMap<ReservationId, ReservationContainer>,
     not_committed_reservations: HashMap<ReservationId, ReservationContainer>,
     open_probe_reservations: HashMap<ReservationId, Option<ShadowScheduleId>>,
@@ -120,7 +121,6 @@ pub struct AcI {
 
 impl AcI {
     pub async fn from_dto(dto: AcIDto, simulator: Arc<dyn SystemSimulator>, reservation_store: ReservationStore) -> Result<Self, ConversionError> {
-
         let aci_id = AciId::new(dto.id.clone());
         let adc_id: AdcId = AdcId::new(dto.adc_id);
 
@@ -218,15 +218,8 @@ impl VrmComponent for AcI {
         };
 
         self.rms_system.commit(id_to_commit);
-
-        if self.reservation_store.get_state(id_to_commit) == ReservationState::Committed {
-            self.committed_reservations.insert(id_to_commit, container);
-            // TODO add event to clean up finished job
-            // TODO from Java
-            // Task, where commit_deadline or execution_deadline are reached
-        }
-
-        log::debug!("Committed reservation {:?} in AcI {}.", reservation_id, self.id);
+        log::debug!("Committed reservation {:?} in AcI {} to local RMS.", reservation_id, self.id);
+        self.committed_reservations.insert(id_to_commit, container);
         self.log_stat("Commit".to_string(), id_to_commit, arrival_time);
         return true;
     }
@@ -289,8 +282,11 @@ impl VrmComponent for AcI {
             return reservation_id;
         }
 
-        // Remove Task from RMS
-        self.rms_system.delete_task(reservation_id, shadow_schedule_id.clone());
+        // Remove Task from Schedule
+        self.rms_system.delete_task_from_schedule(reservation_id, shadow_schedule_id.clone());
+
+        // Remove Task from RMS system
+        
 
         if self.reservation_store.get_state(reservation_id) == ReservationState::Deleted {
             if shadow_schedule_id.is_none() {
@@ -359,8 +355,8 @@ impl VrmComponent for AcI {
         }
 
         let mut prob_request_answer = self.rms_system.probe(reservation_id, shadow_schedule_id.clone());
-        
-        // Way to attach this AcI to the created probeReservations. 
+
+        // Way to attach this AcI to the created probeReservations.
         prob_request_answer.add_probe_meta_data(self.id.clone().cast(), shadow_schedule_id.clone());
 
         // Tracking for when promotion happens
@@ -400,8 +396,8 @@ impl VrmComponent for AcI {
             return ProbeReservations::new(reservation_id, self.reservation_store.clone());
         }
 
-        let mut  probe_best_answer = self.rms_system.probe_best(reservation_id, probe_reservation_comparator, shadow_schedule_id.clone());
-        // Way to attach this AcI to the created probeReservations. 
+        let mut probe_best_answer = self.rms_system.probe_best(reservation_id, probe_reservation_comparator, shadow_schedule_id.clone());
+        // Way to attach this AcI to the created probeReservations.
         probe_best_answer.add_probe_meta_data(self.id.clone().cast(), shadow_schedule_id.clone());
 
         // Init ProbeReservation tracking -> Informs AcI if VrmComponent likes to reserve a ProbeReservation

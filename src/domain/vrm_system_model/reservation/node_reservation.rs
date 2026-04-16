@@ -16,9 +16,15 @@ use crate::domain::vrm_system_model::{
 pub struct NodeReservation {
     /// The common base properties shared by all reservations.
     pub base: ReservationBase,
-    // Node specific fields
+
+    /// Acts for the root for all provided relative paths on the RMS.
+    pub current_working_directory: Option<String>,
+
+    /// Defines the exported variables to the compute node when the task runs on the RMS.
+    pub environment: Option<Vec<String>>,
+
     /// File system **path** pointing to the executable for this reservation/task.
-    pub task_path: Option<String>,
+    pub task_path: String,
 
     /// The file path where the **standard output** (stdout) during task execution will be piped.
     pub output_path: Option<String>,
@@ -41,7 +47,9 @@ impl NodeReservation {
         reserved_capacity: i64,
         is_moldable: bool,
         frag_delta: f64,
-        task_path: Option<String>,
+        current_working_directory: Option<String>,
+        environment: Option<Vec<String>>,
+        task_path: String,
         output_path: Option<String>,
         error_path: Option<String>,
     ) -> Self {
@@ -66,7 +74,7 @@ impl NodeReservation {
             frag_delta,
         };
 
-        NodeReservation { base, task_path, output_path, error_path }
+        NodeReservation { base, task_path, output_path, error_path, current_working_directory, environment }
     }
 }
 
@@ -122,8 +130,9 @@ impl NodeReservation {
                 moldable_work: capacity * duration,
                 frag_delta: 0.0,
             },
-
-            task_path: task.command.clone(),
+            current_working_directory: None,
+            environment: None,
+            task_path: "External-Task".to_string(),
             output_path: None,
             error_path: None,
         };

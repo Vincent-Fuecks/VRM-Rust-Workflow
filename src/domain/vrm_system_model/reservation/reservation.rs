@@ -26,8 +26,22 @@ impl Reservation {
         todo!()
     }
 
-    pub fn new_node(base: ReservationBase, task: Option<String>, out: Option<String>, err: Option<String>) -> Self {
-        Self::Node(NodeReservation { base, task_path: task, output_path: out, error_path: err })
+    pub fn new_node(
+        base: ReservationBase,
+        cwd: Option<String>,
+        environment: Option<Vec<String>>,
+        task_path: String,
+        out_path: Option<String>,
+        err_path: Option<String>,
+    ) -> Self {
+        Self::Node(NodeReservation {
+            base,
+            current_working_directory: cwd,
+            environment: environment,
+            task_path: task_path,
+            output_path: out_path,
+            error_path: err_path,
+        })
     }
 
     pub fn new_link(base: ReservationBase, start: RouterId, end: RouterId) -> Self {
@@ -319,16 +333,16 @@ impl Clone for Box<dyn ReservationTrait> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum ReservationState {
     /// The last request of the reservation was explicitly denied or failed.
-    Rejected = 0,
+    Rejected,
 
     /// The reservation has been successfully cancelled and removed from the system.
-    Deleted = 1,
+    Deleted,
 
     /// The reservation is newly created and has not yet been submitted to any processor.
-    Open = 2,
+    Open,
 
     /// The state represents a successful response to a probing (availability) request.
-    ProbeAnswer = 3,
+    ProbeAnswer,
 
     /// The state represents the product of a successful probe request of a specific AcI.
     /// During a probe request, all potential time slots where a reservation on an AcI can run are collected.
@@ -339,23 +353,23 @@ pub enum ReservationState {
     /// The only valid state transitions are ReserveProbeReservation, Rejected, and Deleted.
     /// If the ProbeReservation is promoted to ReserveProbeReservation, it replaces the original ProbeAnswer
     /// Reservation, and all other ProbeReservations for the original ProbeAnswer Reservation become invalid.
-    ProbeReservation = 4,
+    ProbeReservation,
 
     /// The state signals the listerning AcI, that the ProbeAnswer was successful and the Reservation should be
     /// Reserved -> AcI performs reserve for Reservation
-    ReserveProbeReservation = 5,
+    ReserveProbeReservation,
 
     /// The state represents a successful response to a resource reservation request.
-    ReserveAnswer = 6,
+    ReserveAnswer,
 
     /// The reservation has been confirmed and resources are formally allocated.
-    Committed = 7,
+    Committed,
 
     /// The execution phase of the job linked to this reservation has been finished successfully.
-    Finished = 8,
+    Finished,
 
     // Is a job, that is not from the VRM system, but from the local RMS system.
-    External = 10,
+    External,
 }
 
 impl ReservationState {

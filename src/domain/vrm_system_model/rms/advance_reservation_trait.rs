@@ -170,30 +170,6 @@ pub trait AdvanceReservationRms: Rms + Send + Sync {
         active_scheduler.write().unwrap().reserve(reservation_id)
     }
 
-    /// Finalizes a reservation, marking it as committed.
-    ///
-    /// This informs the RMS that the user has accepted the reservation and it is fixed.
-    /// Committed jobs should not be deleted during normal operation.
-    ///
-    /// # Note on Implementation
-    ///
-    /// The default implementation logs the commit and updates the state to `ReservationState::Committed`.
-    /// Implementors interfacing with hardware or external APIs should override this to propagate
-    /// the commit signal to the physical RMS if necessary.
-    ///
-    /// # Arguments
-    ///
-    /// * `reservation_id` - The identifier of the task to commit.
-    ///
-    /// # Returns
-    ///
-    /// The `ReservationId` of the committed job.
-    fn commit(&mut self, reservation_id: ReservationId) -> ReservationId {
-        log::info!("Rms committed reservation with id: {:?}.  Please verify if specific RMS logic is required.", reservation_id);
-        self.set_reservation_state(reservation_id, ReservationState::Committed);
-        return reservation_id;
-    }
-
     /// Destroys the specified **Shadow Schedule**.
     ///
     /// This is used to clean up simulation data. The master schedule remains active and unaffected.
@@ -236,7 +212,7 @@ pub trait AdvanceReservationRms: Rms + Send + Sync {
     ///
     /// * `reservation_id` - The ID of the job to delete.
     /// * `shadow_schedule_id` - If `Some`, deletes from the specified shadow schedule.   
-    fn delete_task(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) {
+    fn delete_task_from_schedule(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) {
         let active_scheduler = self.get_active_schedule(shadow_schedule_id, reservation_id);
         active_scheduler.write().unwrap().delete_reservation(reservation_id);
     }

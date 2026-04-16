@@ -188,6 +188,8 @@ impl Workflow {
 
             let node_reservation = NodeReservation {
                 base: node_base,
+                current_working_directory: node_res_dto.current_working_directory.clone(),
+                environment: node_res_dto.environment.clone(),
                 task_path: node_res_dto.task_path.clone(),
                 output_path: node_res_dto.output_path.clone(),
                 error_path: node_res_dto.error_path.clone(),

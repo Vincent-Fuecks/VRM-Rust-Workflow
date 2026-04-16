@@ -14,7 +14,9 @@ pub struct LinkReservationDto {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct NodeReservationDto {
-    pub task_path: Option<String>,
+    pub current_working_directory: Option<String>,
+    pub environment: Option<Vec<String>>,
+    pub task_path: String,
     pub output_path: Option<String>,
     pub error_path: Option<String>,
     pub duration: i64,
