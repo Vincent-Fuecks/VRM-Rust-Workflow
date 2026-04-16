@@ -41,6 +41,21 @@ pub trait Rms: std::fmt::Debug + Any {
         log::info!("Committed reservation {:?} successfully to the local RMS", reservation_id);
     }
 
+    /// Should not be necessary in the rust implementation.  
+    /// Cancels and deletes a previously submitted reservation.
+    ///
+    /// This removes the reservation from the local schedule. It is primarily used during
+    /// the negotiation phase (before `commit`) or if a user explicitly cancels a task.
+    ///
+    /// # Arguments
+    ///
+    /// * `reservation_id` - The ID of the job to delete.
+    /// * `shadow_schedule_id` - If `Some`, deletes from the specified shadow schedule.   
+    fn delete_task(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) {
+        let active_scheduler = self.get_active_schedule(shadow_schedule_id, reservation_id);
+        active_scheduler.write().unwrap().delete_reservation(reservation_id);
+    }
+
     /// Performs the routing to the correct scheduler
     ///
     /// Routs to the node_schedule or link_schedule based on the provided Reservation

@@ -10,13 +10,12 @@ use crate::domain::vrm_system_model::reservation::vrm_state_listener::VrmStateLi
 use crate::domain::vrm_system_model::rms::advance_reservation_trait::AdvanceReservationRms;
 use crate::domain::vrm_system_model::rms::rms::RmsLoadMetric;
 use crate::domain::vrm_system_model::utils::id::{AciId, AdcId, ClientId, ComponentId, ShadowScheduleId};
-use crate::domain::vrm_system_model::utils::statistics::ANALYTICS_TARGET;
+use crate::domain::vrm_system_model::utils::state_logging::{AnalyticLogger, BaseLog, DetailLog, ProbeLog, VrmCommand};
 use crate::error::ConversionError;
 
 use std::collections::{BTreeMap, HashMap};
 use std::i64;
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Clone)]
 pub enum ScheduleID {
@@ -184,9 +183,18 @@ impl VrmComponent for AcI {
                 // Check if RMS can handle it
                 if !self.rms_system.can_handle_aci_request(self.reservation_store.clone(), reservation_id) {
                     self.reservation_store.update_state(reservation_id, ReservationState::Rejected);
-                    self.log_stat("Commit".to_string(), reservation_id, arrival_time);
+                    self.log_base_info(
+                        VrmCommand::Commit,
+                        format!(
+                            "There was no reserve for reservation ({:?}) before the commit performed and the AcI ({}) can't handle the request.",
+                            reservation_id, self.id
+                        ),
+                        reservation_id,
+                        arrival_time,
+                    );
+
                     log::debug!(
-                        "There was no reservation ({:?}) before the commit and the AcI ({}) can't handle the request.",
+                        "There was no reserve for reservation ({:?}) before the commit performed and the AcI ({}) can't handle the request.",
                         reservation_id,
                         self.id
                     );
@@ -201,7 +209,16 @@ impl VrmComponent for AcI {
                             self.id,
                             possible_reservation_id
                         );
-                        self.log_stat("Commit".to_string(), possible_reservation_id, arrival_time);
+
+                        self.log_base_info(
+                            VrmCommand::Commit,
+                            format!(
+                                "Commit Reservation failed, because no former allocation was found. In AcI: {}, for reservation id {:?}.",
+                                self.id, possible_reservation_id
+                            ),
+                            possible_reservation_id,
+                            arrival_time,
+                        );
                         return false;
                     }
 
@@ -220,7 +237,12 @@ impl VrmComponent for AcI {
         self.rms_system.commit(id_to_commit);
         log::debug!("Committed reservation {:?} in AcI {} to local RMS.", reservation_id, self.id);
         self.committed_reservations.insert(id_to_commit, container);
-        self.log_stat("Commit".to_string(), id_to_commit, arrival_time);
+        self.log_base_info(
+            VrmCommand::Commit,
+            format!("Committed reservation {:?} in AcI {} to local RMS.", id_to_commit, self.id),
+            reservation_id,
+            arrival_time,
+        );
         return true;
     }
 
@@ -276,30 +298,20 @@ impl VrmComponent for AcI {
             log::info!("There was no reserve before the deletion of the reservation ({:?}) was performed.", reservation_id);
             self.reservation_store.update_state(reservation_id, ReservationState::Rejected);
             if shadow_schedule_id.is_none() {
-                self.log_stat("Delete".to_string(), reservation_id, arrival_time);
+                self.log_base_info(
+                    VrmCommand::Delete,
+                    format!("There was no reserve before the deletion of the reservation ({:?}) was performed.", reservation_id),
+                    reservation_id,
+                    arrival_time,
+                );
             }
 
             return reservation_id;
         }
 
-        // Remove Task from Schedule
-        self.rms_system.delete_task_from_schedule(reservation_id, shadow_schedule_id.clone());
+        // Remove Task from Schedule and local Rms (if ReservationState::Committed)
+        self.rms_system.delete_task(reservation_id, shadow_schedule_id.clone());
 
-        // Remove Task from RMS system
-        
-
-        if self.reservation_store.get_state(reservation_id) == ReservationState::Deleted {
-            if shadow_schedule_id.is_none() {
-                self.log_stat("Delete".to_string(), reservation_id, arrival_time);
-            }
-            return reservation_id;
-        }
-
-        // No Success
-        self.reservation_store.update_state(reservation_id, ReservationState::Rejected);
-        if shadow_schedule_id.is_none() {
-            self.log_stat("Delete".to_string(), reservation_id, arrival_time);
-        }
         return reservation_id;
     }
 
@@ -349,7 +361,13 @@ impl VrmComponent for AcI {
         // Can Rms handle request in general?
         if !self.rms_system.can_handle_aci_request(self.reservation_store.clone(), reservation_id) {
             if shadow_schedule_id.is_none() {
-                self.log_state_probe(-1, arrival_time);
+                self.log_probe_info(
+                    VrmCommand::Probe,
+                    format!("Can Rms handle request failed for probe request of the reservation {:?}.", reservation_id),
+                    reservation_id,
+                    arrival_time,
+                    -1,
+                );
             }
             return ProbeReservations::new(reservation_id, self.reservation_store.clone());
         }
@@ -364,14 +382,26 @@ impl VrmComponent for AcI {
 
         if prob_request_answer.is_empty() {
             if shadow_schedule_id.is_none() {
-                self.log_state_probe(0, arrival_time);
+                self.log_probe_info(
+                    VrmCommand::Probe,
+                    format!("No feasible ProbeReservation was found for reservation {:?}.", reservation_id),
+                    reservation_id,
+                    arrival_time,
+                    0,
+                );
             }
 
             return prob_request_answer;
         }
 
         if shadow_schedule_id.is_none() {
-            self.log_state_probe(prob_request_answer.len() as i64, arrival_time);
+            self.log_probe_info(
+                VrmCommand::Probe,
+                format!("Probe request was performed for reservation {:?}.", reservation_id),
+                reservation_id,
+                arrival_time,
+                prob_request_answer.len() as i64,
+            );
         }
 
         return prob_request_answer;
@@ -391,7 +421,13 @@ impl VrmComponent for AcI {
             self.reservation_store.update_state(reservation_id, ReservationState::Rejected);
 
             if shadow_schedule_id.is_none() {
-                self.log_stat("BestProbe".to_string(), reservation_id, arrival_time);
+                self.log_probe_info(
+                    VrmCommand::ProbeBest,
+                    format!("Can Rms handle request failed for probe request of the reservation {:?}.", reservation_id),
+                    reservation_id,
+                    arrival_time,
+                    -1,
+                );
             }
             return ProbeReservations::new(reservation_id, self.reservation_store.clone());
         }
@@ -415,8 +451,14 @@ impl VrmComponent for AcI {
             self.reservation_store.update_state(reservation_id, ReservationState::Rejected);
 
             if shadow_schedule_id.is_none() {
-                self.log_stat("Reserve".to_string(), reservation_id, arrival_time);
+                self.log_base_info(
+                    VrmCommand::Reserve,
+                    format!("Can handle request for reserve request failed for reservation {:?}.", reservation_id),
+                    reservation_id,
+                    arrival_time,
+                );
             }
+
             return reservation_id;
         }
 
@@ -426,7 +468,12 @@ impl VrmComponent for AcI {
             None => {
                 self.reservation_store.update_state(reservation_id, ReservationState::Rejected);
                 if shadow_schedule_id.is_none() {
-                    self.log_stat("Reserve".to_string(), reservation_id, arrival_time);
+                    self.log_base_info(
+                        VrmCommand::Reserve,
+                        format!("There was no feasible slot in the Schedule for the reservation {:?} found.", reservation_id),
+                        reservation_id,
+                        arrival_time,
+                    );
                 }
                 return reservation_id;
             }
@@ -434,7 +481,12 @@ impl VrmComponent for AcI {
                 if !self.reservation_store.is_reservation_state_at_least(reservation_id, ReservationState::ReserveAnswer) {
                     self.reservation_store.update_state(reservation_id_of_answer, ReservationState::Rejected);
                     if shadow_schedule_id.is_none() {
-                        self.log_stat("Reserve".to_string(), reservation_id_of_answer, arrival_time);
+                        self.log_base_info(
+                            VrmCommand::Reserve,
+                            format!("Reservation {:?} was in reserve process rejected.", reservation_id_of_answer),
+                            reservation_id_of_answer,
+                            arrival_time,
+                        );
                     }
                 }
 
@@ -457,7 +509,12 @@ impl VrmComponent for AcI {
                 self.not_committed_reservations.insert(reservation_id_of_answer, reservation_container);
 
                 if shadow_schedule_id.is_none() {
-                    self.log_stat("Reserve".to_string(), reservation_id, arrival_time);
+                    self.log_base_info(
+                        VrmCommand::Reserve,
+                        format!("Reserve of Reservation {:?} was successful.", reservation_id),
+                        reservation_id,
+                        arrival_time,
+                    );
                 }
 
                 return reservation_id;
@@ -467,84 +524,60 @@ impl VrmComponent for AcI {
 }
 
 impl AcI {
-    pub fn log_stat(&mut self, command: String, reservation_id: ReservationId, arrival_time_at_aci: i64) {
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-        let processing_time = self.simulator.get_current_time_in_ms() - arrival_time_at_aci;
-
-        if let Some(res_handle) = self.reservation_store.get(reservation_id) {
-            let (start, end, res_name, capacity, workload, state, proceeding, num_tasks) = {
-                let res = res_handle.read().unwrap();
-
-                let start = res.get_base_reservation().get_assigned_start();
-                let end = res.get_base_reservation().get_assigned_end();
-                let name = res.get_base_reservation().get_name().clone();
-                let cap = res.get_base_reservation().get_reserved_capacity();
-                let workload = res.get_base_reservation().get_task_duration() * cap;
-                let state = res.get_base_reservation().get_state();
-                let proceeding = res.get_base_reservation().get_reservation_proceeding();
-
-                let mut tasks = 1;
-                if res.is_workflow() {
-                    tasks = res.as_workflow().unwrap().get_all_reservation_ids().len()
-                }
-
-                (start, end, name, cap, workload, state, proceeding, tasks)
-            };
-
-            let rms_load_metric = self.rms_system.get_load_metric_up_to_date(start, end, None);
-
-            let node_utilization = rms_load_metric.node_load_metric.as_ref().map(|n| Some(n.utilization)).unwrap_or(None);
-
-            let node_possible_capacity = rms_load_metric.node_load_metric.as_ref().map(|n| Some(n.possible_capacity)).unwrap_or(None);
-
-            let network_utilization = rms_load_metric.link_load_metric.as_ref().map(|n| Some(n.utilization)).unwrap_or(None);
-
-            let network_possible_capacity = rms_load_metric.link_load_metric.as_ref().map(|n| Some(n.possible_capacity)).unwrap_or(None);
-
-            tracing::info!(
-                target: ANALYTICS_TARGET,
-                Time = now,
-                LogDescription = "AcI Operation finished NodeLoadMetric",
-                ComponentType = %self.id,
-                NodeComponentUtilization = node_utilization,
-                NodeComponentCapacity = node_possible_capacity,
-                NetworkComponentUtilization = network_utilization,
-                NetworkComponentCapacity = network_possible_capacity,
-                ComponentFragmentation = self.rms_system.get_system_fragmentation(None),
-                ReservationName = %res_name,
-                ReservationCapacity = capacity,
-                ReservationWorkload = workload,
-                ReservationState = ?state,
-                ReservationProceeding = ?proceeding,
-                NumberOfTasks = num_tasks,
-                Command = command,
-                ProcessingTime = processing_time,
-            );
-        } else {
-            // Handling in case reservation is missing (e.g. deleted/cleaned up)
-
-            tracing::warn!(
-                target: ANALYTICS_TARGET,
-                Time = now,
-                LogDescription = "AcI Operation finished (Reservation Missing/Deleted)",
-                ComponentType = %self.id,
-                ReservationId = ?reservation_id,
-                Command = command,
-                ProcessingTime = processing_time,
-            );
+    pub fn log_base_info(&self, command: VrmCommand, log_description: String, reservation_id: ReservationId, arrival_time_at_aci: i64) {
+        if let Some(base_log) = BaseLog::new(
+            self.id.clone(),
+            command,
+            log_description,
+            reservation_id,
+            self.reservation_store.clone(),
+            self.simulator.clone(),
+            arrival_time_at_aci,
+        ) {
+            base_log.log();
         }
     }
 
-    pub fn log_state_probe(&mut self, num_of_answers: i64, arrival_time_at_aci: i64) {
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-        let processing_time = self.simulator.get_current_time_in_ms() - arrival_time_at_aci;
+    pub fn log_probe_info(
+        &self,
+        command: VrmCommand,
+        log_description: String,
+        reservation_id: ReservationId,
+        arrival_time_at_aci: i64,
+        n_probe_answers: i64,
+    ) {
+        if let Some(probe_log) = ProbeLog::new(
+            self.id.clone(),
+            command,
+            log_description,
+            reservation_id,
+            self.reservation_store.clone(),
+            self.simulator.clone(),
+            arrival_time_at_aci,
+            n_probe_answers,
+        ) {
+            probe_log.log();
+        }
+    }
 
-        tracing::info!(
-            target: ANALYTICS_TARGET,
-            Time = now,
-            Command = "Commit".to_string(),
-            ProbeAnswers = num_of_answers,
-            ProcessingTime = processing_time,
-        );
+    pub fn log_detail_info(&mut self, command: VrmCommand, log_description: String, reservation_id: ReservationId, arrival_time_at_aci: i64) {
+        let start = self.reservation_store.get_assigned_start(reservation_id);
+        let end = self.reservation_store.get_assigned_end(reservation_id);
+        let rms_load_metric = self.rms_system.get_load_metric_up_to_date(start, end, None);
+        let system_fragmentation = self.rms_system.get_system_fragmentation(None);
+
+        if let Some(detail_log) = DetailLog::new(
+            self.id.clone(),
+            command,
+            log_description,
+            reservation_id,
+            self.reservation_store.clone(),
+            self.simulator.clone(),
+            arrival_time_at_aci,
+            system_fragmentation,
+            rms_load_metric,
+        ) {
+            detail_log.log();
+        }
     }
 }

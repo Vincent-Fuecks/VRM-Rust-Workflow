@@ -201,22 +201,6 @@ pub trait AdvanceReservationRms: Rms + Send + Sync {
         active_scheduler.write().unwrap().probe_best(request_id, probe_reservation_comparator)
     }
 
-    /// TODO Returned in java the ReservationId, If a failure occurred.
-    /// Should not be necessary in the rust implementation.  
-    /// Cancels and deletes a previously submitted reservation.
-    ///
-    /// This removes the reservation from the local schedule. It is primarily used during
-    /// the negotiation phase (before `commit`) or if a user explicitly cancels a task.
-    ///
-    /// # Arguments
-    ///
-    /// * `reservation_id` - The ID of the job to delete.
-    /// * `shadow_schedule_id` - If `Some`, deletes from the specified shadow schedule.   
-    fn delete_task_from_schedule(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) {
-        let active_scheduler = self.get_active_schedule(shadow_schedule_id, reservation_id);
-        active_scheduler.write().unwrap().delete_reservation(reservation_id);
-    }
-
     fn can_handle_adc_request(&self, res: Reservation) -> bool;
 
     fn can_handle_aci_request(&self, reservation_store: ReservationStore, reservation_id: ReservationId) -> bool;

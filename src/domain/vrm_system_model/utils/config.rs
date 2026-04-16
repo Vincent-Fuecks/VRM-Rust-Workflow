@@ -12,3 +12,6 @@ pub const MEMORY_PER_NODE: u32 = 512;
 
 /// Defines the duration the VRM waits for the response of a commit request to a local Rms.
 pub const SLURM_RMS_COMMIT_TIMEOUT_S: u64 = 5;
+
+/// Defines the duration the VRM waits for the response of a delete request to a local Rms.
+pub const SLURM_RMS_DELETE_TIMEOUT_S: u64 = 5;

@@ -362,7 +362,7 @@ pub enum ReservationState {
     /// The state represents a successful response to a resource reservation request.
     ReserveAnswer,
 
-    /// The reservation has been confirmed and resources are formally allocated.
+    /// The reservation has been confirmed and was committed to the local RMS.
     Committed,
 
     /// The execution phase of the job linked to this reservation has been finished successfully.
