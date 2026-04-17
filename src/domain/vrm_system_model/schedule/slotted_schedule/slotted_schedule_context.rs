@@ -415,25 +415,22 @@ impl<S: SlottedScheduleStrategy> SlottedScheduleContext<S> {
         return search_results;
     }
 
-    // TODO False implementation should not update the self.active_reservations
     fn try_fit_reservation(&mut self, candidate_id: ReservationId, slot_start_index: i64, request_end_boundary: i64) -> Option<Reservation> {
-        // TODO Should be not need, because res is a clone and unlike in the java implementation not the same object.
-        // candidate.adjust_capacity(candidate.get_reserved_capacity());
+        let mut candidate = self.active_reservations.get_reservation_snapshot(&candidate_id);
 
         let mut current_required_capacity = self.active_reservations.get_reserved_capacity(&candidate_id);
-
         let mut current_duration: i64 = self.active_reservations.get_task_duration(&candidate_id);
         let mut start_time = self.get_slot_start_time(slot_start_index);
 
-        self.active_reservations.get_booking_interval_start(&candidate_id);
+        let booking_interval_start = candidate.get_booking_interval_start();
 
-        if start_time < self.active_reservations.get_booking_interval_start(&candidate_id) {
-            start_time = self.active_reservations.get_booking_interval_start(&candidate_id);
+        if start_time < booking_interval_start {
+            start_time = booking_interval_start;
         }
 
+        let mut is_feasible: bool = true;
         let mut end_time = start_time + current_duration;
         let mut current_end_slot_index = self.get_slot_index(end_time);
-        let mut is_feasible: bool = true;
         let mut current_slot_index: i64 = slot_start_index;
 
         while current_slot_index <= current_end_slot_index {
@@ -444,15 +441,15 @@ impl<S: SlottedScheduleStrategy> SlottedScheduleContext<S> {
                 break;
             }
 
-            if !self.active_reservations.get_is_moldable(&candidate_id) && available_capacity != current_required_capacity {
+            if !candidate.is_moldable() && available_capacity != current_required_capacity {
                 is_feasible = false;
                 break;
             }
 
             if available_capacity < current_required_capacity {
-                self.active_reservations.adjust_capacity(&candidate_id, available_capacity);
+                candidate.adjust_capacity(available_capacity);
                 current_required_capacity = available_capacity;
-                current_duration = self.active_reservations.get_task_duration(&candidate_id);
+                current_duration = candidate.get_task_duration();
 
                 end_time = start_time + current_duration;
 
@@ -468,14 +465,12 @@ impl<S: SlottedScheduleStrategy> SlottedScheduleContext<S> {
         }
 
         if is_feasible {
-            let mut res_candidate_clone = self.active_reservations.get_reservation_snapshot(&candidate_id);
-
-            res_candidate_clone.set_booking_interval_start(start_time);
-            res_candidate_clone.set_booking_interval_end(end_time);
-            res_candidate_clone.set_assigned_start(start_time);
-            res_candidate_clone.set_assigned_end(end_time);
-            res_candidate_clone.set_state(ReservationState::ProbeReservation);
-            return Some(res_candidate_clone);
+            candidate.set_booking_interval_start(start_time);
+            candidate.set_booking_interval_end(end_time);
+            candidate.set_assigned_start(start_time);
+            candidate.set_assigned_end(end_time);
+            candidate.set_state(ReservationState::ProbeReservation);
+            return Some(candidate);
         }
 
         return None;
