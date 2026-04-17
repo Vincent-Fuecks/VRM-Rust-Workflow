@@ -149,7 +149,6 @@ impl Rms for SlurmRms {
             }
         } else {
             log::warn!("SlurmRmsCommitInValidReservationError: The reservation {:?} was not found.", reservation_id);
-            self.get_reservation_store().update_state(reservation_id, ReservationState::Rejected);
             return;
         }
 

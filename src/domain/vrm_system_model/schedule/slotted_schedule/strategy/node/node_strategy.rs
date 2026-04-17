@@ -18,11 +18,11 @@ impl SlottedScheduleStrategy for NodeStrategy {
     fn adjust_requirement_to_slot_capacity(
         ctx: &SlottedScheduleContext<Self>,
         slot_index: i64,
-        requirment: i64,
+        requirement: i64,
         reservation_id: ReservationId,
     ) -> i64 {
         if let Some(slot) = ctx.get_slot(slot_index) {
-            return slot.get_adjust_requirement(requirment);
+            return slot.get_adjust_requirement(requirement);
         } else {
             log::error!(
                 "SlottedSchedule: {}: requested slot outside of scheduling window. Slot index: {}, window start: {}  window width: {} ReservationId: {:?}",

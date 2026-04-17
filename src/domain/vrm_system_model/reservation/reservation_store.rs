@@ -124,18 +124,21 @@ impl ReservationStore {
     }
 
     pub fn delete_probe_reservation(&mut self, reservation_id: ReservationId) {
-        if self.get_state(reservation_id) == ReservationState::ProbeReservation {
-            let mut guard = self.inner.write().unwrap();
-            guard.name_index.remove(&self.get_name_for_key(reservation_id).unwrap());
-            guard.slots.remove(reservation_id);
+        if self.get_state(reservation_id) != ReservationState::ProbeReservation {
+            log::error!(
+                "ReservationStoreDelError: It was not possible to delete Reservation {:?} from the ReservationStore, because the Reservation was in State {:?} and not in state ReservationState::ProbeReservation can be deleted.",
+                self.get_name_for_key(reservation_id),
+                self.get_state(reservation_id)
+            );
             return;
         }
+        let res_name = self.get_name_for_key(reservation_id);
 
-        log::error!(
-            "ReservationStoreDelError: It was not possible to delete Reservation {:?} from the ReservationStore, because the Reservation was in State {:?} and not in state ReservationState::ProbeReservation can be deleted.",
-            self.get_name_for_key(reservation_id),
-            self.get_state(reservation_id)
-        );
+        if let Some(name) = res_name {
+            let mut guard = self.inner.write().unwrap();
+            guard.name_index.remove(&name);
+            guard.slots.remove(reservation_id);
+        }
     }
 
     /// Checks if the provided reservation ids are in the ReservationStore
