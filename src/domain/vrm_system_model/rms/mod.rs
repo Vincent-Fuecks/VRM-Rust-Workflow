@@ -3,4 +3,4 @@ pub mod rms;
 pub mod rms_node_network_trait;
 pub mod rms_simulator;
 pub mod rms_type;
-pub mod slurm;
+pub mod slurm_rms;

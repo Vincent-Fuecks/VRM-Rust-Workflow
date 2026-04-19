@@ -2,8 +2,8 @@ use std::fmt::Debug;
 
 use anyhow::Result;
 
-use crate::domain::vrm_system_model::rms::slurm::{payload::task_properties::TaskSubmission, response::nodes::SlurmNodesResponse};
-
+use super::payload::task_properties::TaskSubmission;
+use super::response::nodes::SlurmNodesResponse;
 use super::response::tasks::SlurmTaskResponse;
 
 /// **SlurmRestApi** provides a high-level abstraction for interacting with a

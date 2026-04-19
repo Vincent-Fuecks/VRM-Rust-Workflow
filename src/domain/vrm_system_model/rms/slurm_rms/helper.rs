@@ -3,11 +3,12 @@ use std::collections::HashMap;
 use crate::{
     api::rms_config_dto::rms_dto::SlurmRmsDto,
     domain::vrm_system_model::{
-        rms::slurm::{response::nodes::SlurmNodesResponse, slurm::SlurmRms},
         schedule::slotted_schedule::strategy::link::topology::{Link, Node},
         utils::id::{ResourceName, RouterId},
     },
 };
+
+use super::{api_client::response::nodes::SlurmNodesResponse, slurm_base::SlurmRms};
 
 impl SlurmRms {
     pub fn get_nodes_and_links(dto: &SlurmRmsDto, nodes_response: &SlurmNodesResponse) -> (Vec<Node>, Vec<Link>) {

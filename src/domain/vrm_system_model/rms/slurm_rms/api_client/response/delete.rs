@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-use crate::domain::vrm_system_model::rms::slurm::response::nodes::{SlurmError, SlurmMeta, SlurmWarning};
+use super::nodes::{SlurmError, SlurmMeta, SlurmWarning};
 
 #[derive(Debug, Deserialize)]
 pub struct SlurmDeleteResponse {

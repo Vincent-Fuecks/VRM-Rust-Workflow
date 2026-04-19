@@ -19,5 +19,5 @@ pub const SLURM_RMS_DELETE_TIMEOUT_S: u64 = 5;
 
 pub const SLURM_TEST_BASE_URL: &str = "http://localhost:6820";
 pub const SLURM_TEST_VERSION: &str = "v0.0.41";
-pub const SLURM_TEST_JWT_TOKEN: &str = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjIwOTE3ODQyMzUsImlhdCI6MTc3NjQyNDIzNSwic3VuIjoicm9vdCJ9.oCbBkp1U6qTKGBhCd_Y57QupAN-laOBbGFFCwWUi2Qs";
+pub const SLURM_TEST_JWT_TOKEN: &str = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjIwOTE5NTQ0MDQsImlhdCI6MTc3NjU5NDQwNCwic3VuIjoicm9vdCJ9.IAwyM32D_3ZtkW78iy2de0En9rrxKbfpaUDH7aQeGRI";
 pub const SLURM_TEST_USER_NAME: &str = "root";

@@ -4,7 +4,7 @@ use crate::domain::vrm_system_model::reservation::reservation_store::Reservation
 use crate::domain::vrm_system_model::rms::advance_reservation_trait::AdvanceReservationRms;
 use crate::domain::vrm_system_model::rms::rms_simulator::rms_network_simulator::RmsNetworkSimulator;
 use crate::domain::vrm_system_model::rms::rms_simulator::rms_node_simulator::RmsNodeSimulator;
-use crate::domain::vrm_system_model::rms::slurm::slurm::SlurmRms;
+use crate::domain::vrm_system_model::rms::slurm_rms::slurm_base::SlurmRms;
 use crate::domain::vrm_system_model::utils::id::AciId;
 use crate::error::ConversionError;
 use std::str::FromStr;

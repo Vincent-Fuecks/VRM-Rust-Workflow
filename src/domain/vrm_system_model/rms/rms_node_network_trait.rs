@@ -10,7 +10,7 @@ use crate::domain::vrm_system_model::{
         advance_reservation_trait::AdvanceReservationRms,
         rms::{Rms, RmsLoadMetric},
         rms_simulator::rms_simulator::RmsSimulator,
-        slurm::slurm::SlurmRms,
+        slurm_rms::slurm_base::SlurmRms,
     },
     schedule::schedule_trait::Schedule,
     utils::id::ShadowScheduleId,

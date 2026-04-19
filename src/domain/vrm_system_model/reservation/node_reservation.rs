@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::domain::vrm_system_model::{
     reservation::reservation::{ReservationBase, ReservationProceeding, ReservationState, ReservationTrait, ReservationTyp},
-    rms::slurm::response::tasks::{SlurmOptionExt, SlurmTask},
+    rms::slurm_rms::api_client::response::tasks::{SlurmOptionExt, SlurmTask},
     utils::id::{ClientId, ComponentId, ReservationName},
 };
 

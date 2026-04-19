@@ -9,7 +9,7 @@ use vrm_rust_workflow::domain::vrm_system_model::reservation::node_reservation::
 use vrm_rust_workflow::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationBase, ReservationProceeding, ReservationState};
 use vrm_rust_workflow::domain::vrm_system_model::reservation::reservation_store::ReservationStore;
 use vrm_rust_workflow::domain::vrm_system_model::rms::rms::Rms;
-use vrm_rust_workflow::domain::vrm_system_model::rms::slurm::slurm::SlurmRms;
+use vrm_rust_workflow::domain::vrm_system_model::rms::slurm_rms::slurm_base::SlurmRms;
 use vrm_rust_workflow::domain::vrm_system_model::utils::config::{
     SLURM_TEST_BASE_URL, SLURM_TEST_JWT_TOKEN, SLURM_TEST_USER_NAME, SLURM_TEST_VERSION,
 };
@@ -185,20 +185,13 @@ async fn test_slurm_rms_delete_task_only_rms() {
 /// Test with a setup, where only the deletion on the local RMS is possible.
 #[tokio::test]
 async fn test_slurm_rms_delete_task_from_rms_and_schedule() {
-    let start = Instant::now();
-
     let now = SystemTime::now().duration_since(UNIX_EPOCH).expect("Time went backwards").as_secs() as i64;
-    println!("1 {:?}", start.elapsed());
-
     let mut slurm_rms = create_test_slurm_rms(now).await.expect("Failed to create SlurmRms");
-    println!("2 {:?}", start.elapsed());
     let reservation_store = slurm_rms.get_reservation_store().clone();
-    println!("3 {:?}", start.elapsed());
 
     let res_name = ReservationName::new("test_delete_job".to_string());
     let res = create_node_reservation(res_name, ReservationState::Open, now);
     let res_id = reservation_store.add(res);
-    println!("4 {:?}", start.elapsed());
 
     // 1. Reserve Reservation at node schedule
     {
@@ -207,7 +200,7 @@ async fn test_slurm_rms_delete_task_from_rms_and_schedule() {
         let _reserve_id = guard.reserve(res_id).expect("Failed to reserve the Reservation on node schedule.");
         assert_eq!(reservation_store.get_state(res_id), ReservationState::ReserveAnswer, "Reservation should be reserved in the node schedule.");
     }
-    println!("5 {:?}", start.elapsed());
+
     // 2. Commit a task to Rms
     slurm_rms.commit(res_id.clone());
     for _ in 0..10 {

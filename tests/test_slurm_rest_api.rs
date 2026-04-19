@@ -7,10 +7,12 @@ use vrm_rust_workflow::{
         simulator::{simulator::SystemSimulator, simulator_mock::MockSimulator},
         vrm_system_model::{
             reservation::reservation_store::ReservationStore,
-            rms::slurm::{
-                payload::task_properties::{JobProperties, TaskSubmission},
-                rms_trait::SlurmRestApi,
-                slurm::SlurmRms,
+            rms::slurm_rms::{
+                api_client::{
+                    payload::task_properties::{JobProperties, TaskSubmission},
+                    slurm_rest_api_trait::SlurmRestApi,
+                },
+                slurm_base::SlurmRms,
             },
             utils::{
                 config::{SLURM_TEST_BASE_URL, SLURM_TEST_JWT_TOKEN, SLURM_TEST_USER_NAME, SLURM_TEST_VERSION},
