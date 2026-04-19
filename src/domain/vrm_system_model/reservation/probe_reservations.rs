@@ -41,7 +41,7 @@ pub struct ProbeReservations {
     original_reservation: Reservation,
     reservation_store: ReservationStore,
     reservation_idx: usize,
-    probe_meta_data: HashMap<ProbeReservationId, (ComponentId, Option<ShadowScheduleId>)>
+    probe_meta_data: HashMap<ProbeReservationId, (ComponentId, Option<ShadowScheduleId>)>,
 }
 
 impl ProbeReservations {
@@ -77,15 +77,13 @@ impl ProbeReservations {
 
     pub fn add_probe_reservations(&mut self, mut other: ProbeReservations) {
         if self.original_reservation_id == other.original_reservation_id {
-            
             for (old_id, res) in other.local_reservation_store.drain() {
-                
                 let meta = other.probe_meta_data.remove(&old_id);
-                
+
                 //Generates a new ID for ProbeReservation
                 let new_id = ProbeReservationId::new(format!("{}-{}", res.get_name(), self.reservation_idx));
                 self.local_reservation_store.insert(old_id, res);
-                
+
                 if let Some(m) = meta {
                     self.probe_meta_data.insert(new_id, m);
                 }
@@ -108,10 +106,14 @@ impl ProbeReservations {
     /// the best Reservation und updates the original Reservation with the information of the ProbeReservation.
     ///
     /// Return:
-    /// If promotion was successful the component_id, is returned, where the Reservation must be reserved. 
-    pub fn prompt_best(&mut self, original_res_id: ReservationId, comparator: ProbeReservationComparator) -> Option<(ComponentId, Option<ShadowScheduleId>)> {
+    /// If promotion was successful the component_id, is returned, where the Reservation must be reserved.
+    pub fn prompt_best(
+        &mut self,
+        original_res_id: ReservationId,
+        comparator: ProbeReservationComparator,
+    ) -> Option<(ComponentId, Option<ShadowScheduleId>)> {
         let best_probe_res_id = self.get_best_probe_reservation_id(original_res_id, comparator)?;
-        
+
         let best_probe_reservation = self.local_reservation_store.remove(&best_probe_res_id);
         let meta_data = self.probe_meta_data.remove(&best_probe_res_id);
 
@@ -128,7 +130,7 @@ impl ProbeReservations {
             _ => {
                 log::warn!("Promotion failed: Reservation or Metadata missing for {:?}", best_probe_res_id);
                 None
-            },
+            }
         }
     }
 
@@ -136,12 +138,11 @@ impl ProbeReservations {
     /// the best Reservation und updates the original Reservation with the information of the ProbeReservation.
     ///
     /// Return:
-    /// If promotion was successful the component_id, is returned, where the Reservation must be reserved. 
-    pub fn only_prompt_best(&mut self, original_res_id: ReservationId, comparator: ProbeReservationComparator) ->  bool {
+    /// If promotion was successful the component_id, is returned, where the Reservation must be reserved.
+    pub fn only_prompt_best(&mut self, original_res_id: ReservationId, comparator: ProbeReservationComparator) -> bool {
         let best_probe_res_id = self.get_best_probe_reservation_id(original_res_id, comparator);
-        
-        if let Some(best_probe_res_id) =  best_probe_res_id{
 
+        if let Some(best_probe_res_id) = best_probe_res_id {
             match self.local_reservation_store.remove(&best_probe_res_id) {
                 Some(res) => {
                     self.reservation_store.set_booking_interval_start(original_res_id, res.get_booking_interval_start());
@@ -154,10 +155,8 @@ impl ProbeReservations {
                 }
                 None => return false,
             }
-        } 
+        }
         return false;
-
-
     }
 
     /// Finds in the ProbeReservations, the Reservation, which is according to the ProbeReservationComparator
@@ -166,7 +165,11 @@ impl ProbeReservations {
     /// Return:
     /// Returns a new ProbeReservation object, which only contains the "best ProbeReservation"
     /// If ProbeReservation is Empty an empty ProbeReservation object is returned.
-    pub fn get_best_probe_reservation_id(&self, original_res_id: ReservationId, comparator: ProbeReservationComparator) -> Option<ProbeReservationId> {
+    pub fn get_best_probe_reservation_id(
+        &self,
+        original_res_id: ReservationId,
+        comparator: ProbeReservationComparator,
+    ) -> Option<ProbeReservationId> {
         if !self.is_request_valid(original_res_id) || self.local_reservation_store.is_empty() {
             return None;
         }
@@ -221,7 +224,7 @@ impl ProbeReservations {
         }
     }
 
-    /// Adds to all ProbeReservation in this ProbeReservations object the provided component_id. 
+    /// Adds to all ProbeReservation in this ProbeReservations object the provided component_id.
     /// This component_id is later in the promotion process utilized to submit this probeReservation to reserve this probeReservation by the vrm_component, that created the probeReservation.
     pub fn add_probe_meta_data(&mut self, component_id: ComponentId, shadow_schedule_id: Option<ShadowScheduleId>) {
         for probe_id in self.get_ids() {
@@ -230,7 +233,11 @@ impl ProbeReservations {
         }
     }
 
-    pub fn create_new_probe_reservation_with_best_probe(&mut self, original_res_id: ReservationId, comparator: ProbeReservationComparator) -> ProbeReservations {
+    pub fn create_new_probe_reservation_with_best_probe(
+        &mut self,
+        original_res_id: ReservationId,
+        comparator: ProbeReservationComparator,
+    ) -> ProbeReservations {
         let mut new_probe_reservations = ProbeReservations::new(original_res_id, self.reservation_store.clone());
         if !self.is_request_valid(original_res_id) || self.local_reservation_store.is_empty() {
             return new_probe_reservations;
@@ -253,6 +260,7 @@ impl ProbeReservations {
                 }
             }
         }
+
         match (best_id, best_res) {
             (Some(id), Some(res)) => {
                 new_probe_reservations.add_reservation(res.clone());
@@ -260,8 +268,7 @@ impl ProbeReservations {
                 new_probe_reservations.add_probe_meta_data(component_id.clone(), shadow_schedule_id.clone());
                 return new_probe_reservations;
             }
-            _ => new_probe_reservations
+            _ => new_probe_reservations,
         }
-
     }
 }

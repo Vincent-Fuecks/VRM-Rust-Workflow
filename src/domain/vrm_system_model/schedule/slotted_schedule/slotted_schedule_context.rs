@@ -338,30 +338,6 @@ impl<S: SlottedScheduleStrategy> SlottedScheduleContext<S> {
         return true;
     }
 
-    /// Returns the best found ReservationId of a probe request
-    pub fn get_best_probe_reservation(
-        &self,
-        probe_reservations: &mut ProbeReservations,
-        request_id: ReservationId,
-        comparator: &mut dyn FnMut(ReservationId, ReservationId) -> Ordering,
-    ) -> Option<ReservationId> {
-        if probe_reservations.is_empty() {
-            return None;
-        }
-
-        // let mut best_candidate = probe_reservations.get_res_id_with_first_start_slot(request_id).expect("Error getting random reservation.").clone();
-        return None;
-        // TODO
-        // for candidate_id in probe_reservations.get_ids() {
-        //     if comparator(best_candidate.clone(), candidate_id) == Ordering::Greater {
-        //         best_candidate = candidate_id.clone();
-        //     }
-        // }
-
-        // probe_reservations.reject_all_probe_reservations_except(best_candidate);
-        // return Some(best_candidate);
-    }
-
     /// Retrieves the current resource load (reserved capacity) for a slot at a given index.
     /// **Note:** If the slot is not found, an error is logged, and **0** is returned.
     pub fn get_slot_load(&self, index: i64) -> i64 {
