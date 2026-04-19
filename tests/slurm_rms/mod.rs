@@ -1,1 +1,1 @@
-pub mod test_slurm_rms_commit;
+pub mod test_slurm_rms;
