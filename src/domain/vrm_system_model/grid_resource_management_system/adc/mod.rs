@@ -4,7 +4,7 @@ mod vrm_component;
 use std::sync::Arc;
 
 use crate::domain::{
-    simulator::simulator::SystemSimulator,
+    simulator::simulator::GlobalClock,
     vrm_system_model::{
         grid_resource_management_system::{
             scheduler::workflow_scheduler::WorkflowScheduler,
@@ -29,7 +29,7 @@ use crate::domain::{
 #[derive(Debug)]
 pub struct ADC {
     pub id: AdcId,
-    simulator: Arc<dyn SystemSimulator>,
+    simulator: Arc<GlobalClock>,
     pub reservation_store: ReservationStore,
 
     /// Registry and management interface for all connected VrmComponents in the domain.
@@ -65,18 +65,12 @@ impl ADC {
         workflow_scheduler: Option<Box<dyn WorkflowScheduler>>,
         vrm_component_order: VrmComponentOrder,
         commit_timeout: i64,
-        simulator: Arc<dyn SystemSimulator>,
+        simulator: Arc<GlobalClock>,
         num_of_slots: i64,
         slot_width: i64,
     ) -> Self {
-        let vrm_component_manager = VrmComponentManager::new(
-            adc_id.clone(),
-            vrm_components_list,
-            simulator.clone_box().into(),
-            reservation_store.clone(),
-            num_of_slots,
-            slot_width,
-        );
+        let vrm_component_manager =
+            VrmComponentManager::new(adc_id.clone(), vrm_components_list, simulator.clone(), reservation_store.clone(), num_of_slots, slot_width);
 
         ADC {
             id: adc_id,

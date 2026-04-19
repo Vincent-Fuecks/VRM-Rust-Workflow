@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use std::i64;
 use std::sync::Arc;
 
-use crate::domain::simulator::simulator::SystemSimulator;
+use crate::domain::simulator::simulator::GlobalClock;
 use crate::domain::vrm_system_model::reservation::probe_reservations::ProbeReservations;
 use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationState, ReservationTrait};
 use crate::domain::vrm_system_model::reservation::reservation_store::{ReservationId, ReservationStore};
@@ -71,7 +71,7 @@ pub struct SlottedScheduleContext<S: SlottedScheduleStrategy> {
     pub is_frag_needed: bool,
 
     pub reservation_store: ReservationStore,
-    pub simulator: Arc<dyn SystemSimulator>,
+    pub simulator: Arc<GlobalClock>,
 }
 
 impl<S: SlottedScheduleStrategy> SlottedScheduleContext<S> {
@@ -83,7 +83,7 @@ impl<S: SlottedScheduleStrategy> SlottedScheduleContext<S> {
         use_quadratic_mean_fragmentation: bool,
         strategy: S,
         reservation_store: ReservationStore,
-        simulator: Arc<dyn SystemSimulator>,
+        simulator: Arc<GlobalClock>,
     ) -> Self {
         let mut slots: Vec<Slot> = Vec::new();
 
@@ -100,7 +100,7 @@ impl<S: SlottedScheduleStrategy> SlottedScheduleContext<S> {
             slot_width: slot_width,
             start_slot_index: 0,
             end_slot_index: number_of_real_slots,
-            scheduling_window_start_time: simulator.get_current_time_in_s(),
+            scheduling_window_start_time: simulator.get_system_time_s(),
             scheduling_window_end_time: -1, // TODO try to set to end of window
             load_buffer: LoadBuffer::new(Arc::new(GlobalLoadContext::new())),
             active_reservations: Reservations::new_empty(reservation_store.clone()),
@@ -216,7 +216,7 @@ impl<S: SlottedScheduleStrategy> SlottedScheduleContext<S> {
     /// and moves the load from the now-expired slots into the `load_buffer` for historical tracking.
     /// Note: Utilized by the SlottedSchedule and NetworkSlottedSchedule
     pub fn update(&mut self) {
-        let current_time = self.simulator.get_current_time_in_s();
+        let current_time = self.simulator.get_system_time_s();
         let new_start_slot_index = self.get_slot_index(current_time);
         let effective_cleanup_end = new_start_slot_index.min(self.end_slot_index + 1);
 
@@ -288,7 +288,7 @@ impl<S: SlottedScheduleStrategy> SlottedScheduleContext<S> {
 
     /// Performs the actual deletion of the reservation in the SlottedScheduleContext
     pub fn delete_reservation(&mut self, id: ReservationId) {
-        let current_time = self.simulator.get_current_time_in_s();
+        let current_time = self.simulator.get_system_time_s();
         // Can not delete already finished reservations
         let task_finished: bool = self.active_reservations.get_assigned_end(&id) <= current_time;
 

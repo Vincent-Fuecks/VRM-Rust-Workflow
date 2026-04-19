@@ -2,7 +2,7 @@ use std::fmt::Debug;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::domain::simulator::simulator::SystemSimulator;
+use crate::domain::simulator::simulator::GlobalClock;
 use crate::domain::vrm_system_model::reservation::reservation::{ReservationProceeding, ReservationState};
 use crate::domain::vrm_system_model::reservation::reservation_store::{ReservationId, ReservationStore};
 use crate::domain::vrm_system_model::rms::rms::RmsLoadMetric;
@@ -81,11 +81,11 @@ impl BaseLog {
         log_description: String,
         reservation_id: ReservationId,
         reservation_store: ReservationStore,
-        simulator: Arc<dyn SystemSimulator>,
+        simulator: Arc<GlobalClock>,
         arrival_time_at_aci: i64,
     ) -> Option<Self> {
         let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-        let processing_time = simulator.get_current_time_in_ms() - arrival_time_at_aci;
+        let processing_time = simulator.get_system_time_s() - arrival_time_at_aci;
 
         if let Some(res_handle) = reservation_store.get(reservation_id) {
             let (start, end, res_name, capacity, workload, state, proceeding, num_tasks) = {
@@ -155,7 +155,7 @@ impl ProbeLog {
         log_description: String,
         reservation_id: ReservationId,
         reservation_store: ReservationStore,
-        simulator: Arc<dyn SystemSimulator>,
+        simulator: Arc<GlobalClock>,
         arrival_time_at_aci: i64,
         num_of_answers: i64,
     ) -> Option<Self> {
@@ -197,7 +197,7 @@ impl DetailLog {
         log_description: String,
         reservation_id: ReservationId,
         reservation_store: ReservationStore,
-        simulator: Arc<dyn SystemSimulator>,
+        simulator: Arc<GlobalClock>,
         arrival_time_at_aci: i64,
         system_fragmentation: f64,
         rms_load_metric: RmsLoadMetric,

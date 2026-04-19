@@ -8,7 +8,7 @@ use std::{
 use crate::{
     api::rms_config_dto::rms_dto::DummyRmsDto,
     domain::{
-        simulator::simulator::SystemSimulator,
+        simulator::simulator::GlobalClock,
         vrm_system_model::{
             reservation::reservation_store::{ReservationId, ReservationStore},
             resource::{node_resource::NodeResource, resource_store::ResourceStore},
@@ -69,10 +69,10 @@ impl Rms for RmsSimulator {
     }
 }
 
-impl TryFrom<(DummyRmsDto, Arc<dyn SystemSimulator>, AciId, ReservationStore)> for RmsSimulator {
+impl TryFrom<(DummyRmsDto, Arc<GlobalClock>, AciId, ReservationStore)> for RmsSimulator {
     type Error = ConversionError;
 
-    fn try_from(args: (DummyRmsDto, Arc<dyn SystemSimulator>, AciId, ReservationStore)) -> Result<Self, Self::Error> {
+    fn try_from(args: (DummyRmsDto, Arc<GlobalClock>, AciId, ReservationStore)) -> Result<Self, Self::Error> {
         let (dto, simulator, aci_id, reservation_store) = args.clone();
         let resource_store = ResourceStore::new();
         let (nodes, links) = RmsBase::get_nodes_and_links(&dto);

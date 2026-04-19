@@ -1,17 +1,16 @@
+use crate::domain::simulator::simulator::GlobalClock;
 use crate::domain::vrm_system_model::reservation::vrm_state_listener::VrmStateListener;
 use crate::domain::vrm_system_model::utils::statistics::AnalyticsSystem;
 use crate::domain::vrm_system_model::vrm_manager::VrmManager;
 
 use crate::domain::vrm_system_model::client::client::Clients;
 
-use crate::domain::simulator::simulator::Simulator;
 use crate::domain::vrm_system_model::grid_resource_management_system::vrm_component_registry::registry_client::RegistryClient;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationStore;
 
 use std::sync::{Arc, RwLock};
 
 use crate::api::vrm_system_model_dto::vrm_dto::VrmDto;
-use crate::domain::simulator::simulator::SystemSimulator;
 use crate::error::Result;
 use crate::loader::parser::parse_json_file;
 
@@ -42,13 +41,13 @@ async fn main() {
     reservation_store.add_listener(Arc::new(RwLock::new(VrmStateListener::new_empty())));
 
     let vrm_dto = get_vrm_dto(file_path_vrm).expect("Failed to load VRM DTO");
-    let simulator_dto = vrm_dto.simulator.clone();
+    let is_simulation = vrm_dto.simulator.is_simulation;
     let unprocessed_reservations = Clients::get_clients(file_path_workflows, reservation_store.clone()).expect("TODO").unprocessed_reservations;
 
     let registry = RegistryClient::new();
-    let simulator: Arc<dyn SystemSimulator> = Arc::new(Simulator::new(simulator_dto));
+    let simulator = Arc::new(GlobalClock::new(is_simulation));
 
-    let mut vrm_manager = VrmManager::init_vrm_system(vrm_dto, unprocessed_reservations, simulator.clone(), registry, reservation_store.clone())
+    let mut vrm_manager = VrmManager::init_vrm_system(vrm_dto, unprocessed_reservations, simulator, registry, reservation_store.clone())
         .await
         .expect("Failed to initialize VRM system");
 

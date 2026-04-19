@@ -1,5 +1,5 @@
 use crate::api::rms_config_dto::rms_dto::RmsSystemWrapper;
-use crate::domain::simulator::simulator::SystemSimulator;
+use crate::domain::simulator::simulator::GlobalClock;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationStore;
 use crate::domain::vrm_system_model::rms::advance_reservation_trait::AdvanceReservationRms;
 use crate::domain::vrm_system_model::rms::rms_simulator::rms_network_simulator::RmsNetworkSimulator;
@@ -19,7 +19,7 @@ pub enum RmsDummyType {
 impl RmsSystemWrapper {
     pub async fn get_instance(
         dto: RmsSystemWrapper,
-        simulator: Arc<dyn SystemSimulator>,
+        simulator: Arc<GlobalClock>,
         aci_id: AciId,
         reservation_store: ReservationStore,
     ) -> Result<Box<dyn AdvanceReservationRms + Send + Sync + 'static>, ConversionError> {

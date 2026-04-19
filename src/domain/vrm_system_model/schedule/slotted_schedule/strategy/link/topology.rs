@@ -1,4 +1,4 @@
-use crate::domain::simulator::simulator::SystemSimulator;
+use crate::domain::simulator::simulator::GlobalClock;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationStore;
 use crate::domain::vrm_system_model::resource::link_resource::LinkResource;
 use crate::domain::vrm_system_model::resource::resource_store::{LinkResourceId, ResourceStore};
@@ -111,7 +111,7 @@ impl NetworkTopology {
         nodes: &Vec<Node>,
         slot_width: i64,
         num_of_slots: i64,
-        simulator: Arc<dyn SystemSimulator>,
+        simulator: Arc<GlobalClock>,
         aci_id: AciId,
         reservation_store: ReservationStore,
         resource_store: ResourceStore,
@@ -356,7 +356,7 @@ impl NetworkTopology {
         num_of_slots: i64,
         slot_width: i64,
         aci_id: AciId,
-        simulator: Arc<dyn SystemSimulator>,
+        simulator: Arc<GlobalClock>,
         reservation_store: ReservationStore,
         resource_store: ResourceStore,
     ) -> HashSet<LinkResourceId> {

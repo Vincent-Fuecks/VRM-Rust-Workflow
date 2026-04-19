@@ -5,11 +5,11 @@ use std::{
 };
 
 use crate::domain::vrm_system_model::{
-    grid_resource_management_system::{
-        adc::ADC, vrm_component_registry::vrm_component_proxy::VrmComponentProxy, vrm_component_trait::VrmComponent,
-    },
+    grid_resource_management_system::{adc::ADC, vrm_component_registry::vrm_component_proxy::VrmComponentProxy, vrm_component_trait::VrmComponent},
     reservation::{
-        probe_reservations::{ProbeReservationComparator, ProbeReservations}, reservation::ReservationState, reservation_store::ReservationId
+        probe_reservations::{ProbeReservationComparator, ProbeReservations},
+        reservation::ReservationState,
+        reservation_store::ReservationId,
     },
     utils::{
         id::{ComponentId, ShadowScheduleId},
@@ -103,7 +103,7 @@ impl ADC {
         log::debug!("ADC: {} adds AcI: {}", self.id, vrm_component.get_id());
         return self.manager.add_vrm_component(
             vrm_component,
-            self.simulator.clone_box().into(),
+            self.simulator.clone(),
             self.reservation_store.clone(),
             self.num_of_slots,
             self.slot_width,
@@ -196,8 +196,8 @@ impl ADC {
 
         for _ in 0..=try_n_probe_reservations {
             if let Some((component_id, shadow_schedule_id)) = probe_reservations.prompt_best(reservation_id, probe_reservation_comparator.clone()) {
-                self.manager.reserve(component_id.clone(), reservation_id, shadow_schedule_id);                
-                
+                self.manager.reserve(component_id.clone(), reservation_id, shadow_schedule_id);
+
                 if self.reservation_store.is_reservation_state_at_least(reservation_id, ReservationState::ReserveAnswer) {
                     log::info!("Reservation {:?} successful!", reservation_id);
 
@@ -235,7 +235,7 @@ impl ADC {
 
     pub fn log_state_probe(&mut self, num_of_answers: i64, arrival_time_at_aci: i64) {
         let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-        let processing_time = self.simulator.get_current_time_in_ms() - arrival_time_at_aci;
+        let processing_time = self.simulator.get_system_time_s() - arrival_time_at_aci;
         // TODO
         tracing::info!(
             target: ANALYTICS_TARGET,
@@ -248,7 +248,7 @@ impl ADC {
 
     pub fn log_stat(&mut self, command: String, reservation_id: ReservationId, arrival_time_at_aci: i64) {
         let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-        let processing_time = self.simulator.get_current_time_in_ms() - arrival_time_at_aci;
+        let processing_time = self.simulator.get_system_time_s() - arrival_time_at_aci;
 
         if let Some(res_handle) = self.reservation_store.get(reservation_id) {
             let (start, end, res_name, capacity, workload, state, proceeding, num_tasks) = {

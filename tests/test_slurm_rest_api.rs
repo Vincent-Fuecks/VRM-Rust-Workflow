@@ -4,7 +4,7 @@ use anyhow::Result;
 use vrm_rust_workflow::{
     api::rms_config_dto::rms_dto::{SlurmConfigDto, SlurmRmsDto, SlurmSwitchDto},
     domain::{
-        simulator::{simulator::SystemSimulator, simulator_mock::MockSimulator},
+        simulator::simulator::GlobalClock,
         vrm_system_model::{
             reservation::reservation_store::ReservationStore,
             rms::slurm_rms::{
@@ -150,7 +150,7 @@ async fn commit_task_to_rms(slurm_rms: &mut SlurmRms) -> Result<u32> {
 }
 
 async fn create_slurm_rms_mock() -> Result<SlurmRms, Box<dyn std::error::Error>> {
-    let simulator: Arc<dyn SystemSimulator> = Arc::new(MockSimulator::new(0));
+    let simulator = Arc::new(GlobalClock::new(false));
     let aci_id = AciId::new("Test-AcI");
     let reservation_store = ReservationStore::new();
     let rest_api_config: SlurmConfigDto = SlurmConfigDto {

@@ -1,5 +1,5 @@
 use crate::api::rms_config_dto::rms_dto::DummyRmsDto;
-use crate::domain::simulator::simulator::SystemSimulator;
+use crate::domain::simulator::simulator::GlobalClock;
 use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationState, ReservationTrait};
 use crate::domain::vrm_system_model::reservation::reservation_store::{ReservationId, ReservationStore};
 use crate::domain::vrm_system_model::resource::resource_store::ResourceStore;
@@ -59,10 +59,10 @@ impl Rms for RmsNetworkSimulator {
     }
 }
 
-impl TryFrom<(DummyRmsDto, Arc<dyn SystemSimulator>, AciId, ReservationStore)> for RmsNetworkSimulator {
+impl TryFrom<(DummyRmsDto, Arc<GlobalClock>, AciId, ReservationStore)> for RmsNetworkSimulator {
     type Error = ConversionError;
 
-    fn try_from(args: (DummyRmsDto, Arc<dyn SystemSimulator>, AciId, ReservationStore)) -> Result<Self, Self::Error> {
+    fn try_from(args: (DummyRmsDto, Arc<GlobalClock>, AciId, ReservationStore)) -> Result<Self, Self::Error> {
         let (dto, simulator, aci_id, reservation_store) = args;
         let (nodes, links) = RmsBase::get_nodes_and_links(&dto);
         let resource_store = ResourceStore::new();

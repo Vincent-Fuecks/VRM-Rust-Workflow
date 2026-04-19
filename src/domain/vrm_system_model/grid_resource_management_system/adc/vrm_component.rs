@@ -40,7 +40,7 @@ impl VrmComponent for ADC {
     }
 
     fn commit(&mut self, reservation_id: ReservationId) -> bool {
-        let arrival_time = self.simulator.get_current_time_in_ms();
+        let arrival_time = self.simulator.get_system_time_s();
         log::info!("ADC {} commits reservation {:?}.", self.id, self.reservation_store.get_name_for_key(reservation_id));
 
         // Get ComponentId where Reservation is reserved
@@ -139,7 +139,7 @@ impl VrmComponent for ADC {
     }
 
     fn delete(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> ReservationId {
-        let arrival_time = self.simulator.get_current_time_in_ms();
+        let arrival_time = self.simulator.get_system_time_s();
         log::info!("ADC Delete: Delete on ADC {} the Reservation {:?}", self.id, self.reservation_store.get_name_for_key(reservation_id));
 
         if self.reservation_store.is_workflow(reservation_id) {
@@ -178,7 +178,7 @@ impl VrmComponent for ADC {
     }
 
     fn probe(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> ProbeReservations {
-        let arrival_time = self.simulator.get_current_time_in_ms();
+        let arrival_time = self.simulator.get_system_time_s();
         let probe_request_answer = self.manager.probe_all_components(reservation_id);
 
         if probe_request_answer.is_empty() {
@@ -205,7 +205,7 @@ impl VrmComponent for ADC {
     }
 
     fn reserve(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> ReservationId {
-        let arrival_time = self.simulator.get_current_time_in_ms();
+        let arrival_time = self.simulator.get_system_time_s();
         log::debug!(
             "Reserve: At VrmComponent {:?}, ReservationId {:?}, ShadowSchedule {:?}",
             self.id,

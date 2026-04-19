@@ -1,4 +1,4 @@
-use crate::domain::simulator::simulator::SystemSimulator;
+use crate::domain::simulator::simulator::GlobalClock;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationStore;
 use crate::domain::vrm_system_model::resource::resource_store::ResourceStore;
 use crate::domain::vrm_system_model::schedule::schedule_trait::Schedule;
@@ -31,7 +31,7 @@ pub struct ScheduleContext {
     pub number_of_slots: i64,
     pub slot_width: i64,
     pub capacity: i64,
-    pub simulator: Arc<dyn SystemSimulator>,
+    pub simulator: Arc<GlobalClock>,
     pub reservation_store: ReservationStore,
 }
 

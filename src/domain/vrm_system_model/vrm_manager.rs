@@ -8,7 +8,7 @@ use tokio::time::{Duration, sleep};
 use crate::{
     api::vrm_system_model_dto::vrm_dto::VrmDto,
     domain::{
-        simulator::simulator::SystemSimulator,
+        simulator::simulator::GlobalClock,
         vrm_system_model::{
             grid_resource_management_system::{
                 aci::AcI,
@@ -35,7 +35,7 @@ pub struct VrmManager {
     pub open_reservations: Arc<RwLock<HashSet<ReservationId>>>,
 
     pub reservation_store: ReservationStore,
-    pub simulator: Arc<dyn SystemSimulator>,
+    pub simulator: Arc<GlobalClock>,
 }
 
 impl VrmManager {
@@ -43,7 +43,7 @@ impl VrmManager {
         adc_master: VrmComponentProxy,
         unprocessed_reservations: Vec<(ReservationId, i64)>,
         reservation_store: ReservationStore,
-        simulator: Arc<dyn SystemSimulator>,
+        simulator: Arc<GlobalClock>,
     ) -> Self {
         VrmManager { adc_master, unprocessed_reservations, open_reservations: Arc::new(RwLock::new(HashSet::new())), reservation_store, simulator }
     }
@@ -51,7 +51,7 @@ impl VrmManager {
     pub async fn init_vrm_system(
         dto: VrmDto,
         unprocessed_reservations: Vec<ReservationId>,
-        simulator: Arc<dyn SystemSimulator>,
+        simulator: Arc<GlobalClock>,
         registry: RegistryClient,
         reservation_store: ReservationStore,
     ) -> Result<Self, ConversionError> {
@@ -152,7 +152,7 @@ impl VrmManager {
         while !self.unprocessed_reservations.is_empty() {
             let (reservation_id, res_arrival_time) = self.unprocessed_reservations.remove(0);
 
-            let now = self.simulator.get_current_time_in_s();
+            let now = self.simulator.get_system_time_s();
             log::info!("Now: {now}");
             if res_arrival_time > now {
                 let wait_seconds = res_arrival_time - now;

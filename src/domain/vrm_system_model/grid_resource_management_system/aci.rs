@@ -1,6 +1,6 @@
 use crate::api::rms_config_dto::rms_dto::RmsSystemWrapper;
 use crate::api::vrm_system_model_dto::aci_dto::AcIDto;
-use crate::domain::simulator::simulator::SystemSimulator;
+use crate::domain::simulator::simulator::GlobalClock;
 use crate::domain::vrm_system_model::grid_resource_management_system::vrm_component_trait::VrmComponent;
 use crate::domain::vrm_system_model::reservation::probe_reservations::{ProbeReservationComparator, ProbeReservations};
 use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationState};
@@ -114,12 +114,12 @@ pub struct AcI {
     vrm_state_listener: VrmStateListener,
     sync_registry: SyncRegistry,
 
-    simulator: Arc<dyn SystemSimulator>,
+    simulator: Arc<GlobalClock>,
     pub reservation_store: ReservationStore,
 }
 
 impl AcI {
-    pub async fn from_dto(dto: AcIDto, simulator: Arc<dyn SystemSimulator>, reservation_store: ReservationStore) -> Result<Self, ConversionError> {
+    pub async fn from_dto(dto: AcIDto, simulator: Arc<GlobalClock>, reservation_store: ReservationStore) -> Result<Self, ConversionError> {
         let aci_id = AciId::new(dto.id.clone());
         let adc_id: AdcId = AdcId::new(dto.adc_id);
 
@@ -138,7 +138,7 @@ impl AcI {
             vrm_state_listener: vrm_state_listener,
             open_probe_reservations: HashMap::new(),
             sync_registry: SyncRegistry::new(),
-            simulator: simulator.clone_box().into(),
+            simulator: simulator,
             reservation_store: reservation_store.clone(),
         })
     }
@@ -172,7 +172,7 @@ impl VrmComponent for AcI {
     fn commit(&mut self, reservation_id: ReservationId) -> bool {
         log::debug!("AcI {}: is committing reservation {:?}", self.id, reservation_id);
 
-        let arrival_time: i64 = self.simulator.get_current_time_in_ms();
+        let arrival_time: i64 = self.simulator.get_system_time_s();
 
         // Try to find reservation in not_committed
         let (container, id_to_commit) = match self.not_committed_reservations.remove(&reservation_id) {
@@ -285,7 +285,7 @@ impl VrmComponent for AcI {
     }
 
     fn delete(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> ReservationId {
-        let arrival_time = self.simulator.get_current_time_in_ms();
+        let arrival_time = self.simulator.get_system_time_s();
         let container;
 
         if !shadow_schedule_id.is_none() {
@@ -356,7 +356,7 @@ impl VrmComponent for AcI {
     }
 
     fn probe(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> ProbeReservations {
-        let arrival_time = self.simulator.get_current_time_in_ms();
+        let arrival_time = self.simulator.get_system_time_s();
 
         // Can Rms handle request in general?
         if !self.rms_system.can_handle_aci_request(self.reservation_store.clone(), reservation_id) {
@@ -415,7 +415,7 @@ impl VrmComponent for AcI {
     ) -> ProbeReservations {
         log::debug!("In AcI {} a probeBest request based on reservation {:?} is requested.", self.id, reservation_id);
 
-        let arrival_time = self.simulator.get_current_time_in_ms();
+        let arrival_time = self.simulator.get_system_time_s();
 
         if !self.rms_system.can_handle_aci_request(self.reservation_store.clone(), reservation_id) {
             self.reservation_store.update_state(reservation_id, ReservationState::Rejected);
@@ -445,7 +445,7 @@ impl VrmComponent for AcI {
     fn reserve(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> ReservationId {
         log::debug!("In AcI {} reserve reservation {:?} for ShadowScheduleId {:?}", self.id, reservation_id, shadow_schedule_id);
 
-        let arrival_time = self.simulator.get_current_time_in_ms();
+        let arrival_time = self.simulator.get_system_time_s();
 
         if !self.rms_system.can_handle_aci_request(self.reservation_store.clone(), reservation_id) {
             self.reservation_store.update_state(reservation_id, ReservationState::Rejected);
@@ -493,7 +493,7 @@ impl VrmComponent for AcI {
                 let reservation_container = ReservationContainer::new(
                     self.reservation_store.get_client_id(reservation_id_of_answer),
                     self.reservation_store.get_assigned_end(reservation_id_of_answer),
-                    self.simulator.get_current_time_in_s() + self.commit_timeout,
+                    self.simulator.get_system_time_s() + self.commit_timeout,
                 );
 
                 if !shadow_schedule_id.is_none() {

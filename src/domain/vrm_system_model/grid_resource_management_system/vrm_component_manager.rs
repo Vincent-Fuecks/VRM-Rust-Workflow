@@ -1,4 +1,4 @@
-use crate::domain::simulator::simulator::SystemSimulator;
+use crate::domain::simulator::simulator::GlobalClock;
 use crate::domain::vrm_system_model::grid_resource_management_system::vrm_component_order::VrmComponentOrder;
 use crate::domain::vrm_system_model::grid_resource_management_system::vrm_component_registry::vrm_component_proxy::VrmComponentProxy;
 use crate::domain::vrm_system_model::grid_resource_management_system::vrm_component_trait::VrmComponent;
@@ -62,7 +62,7 @@ pub struct VrmComponentContainer {
 impl VrmComponentContainer {
     pub fn new(
         vrm_component: Box<dyn VrmComponent + Send>,
-        simulator: Arc<dyn SystemSimulator>,
+        simulator: Arc<GlobalClock>,
         reservation_store: ReservationStore,
         registration_index: usize,
         number_of_real_slots: i64,
@@ -147,7 +147,7 @@ pub struct VrmComponentManager {
     /// Is used to create an empty Reservations struct as return value for an unsuccessful probe request
     pub reservation_store: ReservationStore,
 
-    pub simulator: Arc<dyn SystemSimulator>,
+    pub simulator: Arc<GlobalClock>,
 
     pub sync_registry: SyncRegistry,
 }
@@ -156,7 +156,7 @@ impl VrmComponentManager {
     pub fn new(
         adc_id: AdcId,
         vrm_components_list: Vec<VrmComponentProxy>,
-        simulator: Arc<dyn SystemSimulator>,
+        simulator: Arc<GlobalClock>,
         reservation_store: ReservationStore,
         number_of_real_slots: i64,
         slot_width: i64,
@@ -176,7 +176,7 @@ impl VrmComponentManager {
 
             let container = VrmComponentContainer::new(
                 Box::new(vrm_component),
-                simulator.clone_box().into(),
+                simulator.clone(),
                 reservation_store.clone(),
                 registration_counter,
                 number_of_real_slots,
@@ -454,7 +454,7 @@ impl VrmComponentManager {
     pub fn add_vrm_component(
         &mut self,
         vrm_component: VrmComponentProxy,
-        simulator: Arc<dyn SystemSimulator>,
+        simulator: Arc<GlobalClock>,
         reservation_store: ReservationStore,
         number_of_real_slots: i64,
         slot_width: i64,
@@ -864,7 +864,7 @@ impl VrmComponentManager {
 impl VrmComponentManager {
     pub fn log_stat(&mut self, command: String, reservation_id: ReservationId, arrival_time_at_aci: i64) {
         let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-        let processing_time = self.simulator.get_current_time_in_ms() - arrival_time_at_aci;
+        let processing_time = self.simulator.get_system_time_s() - arrival_time_at_aci;
 
         if let Some(res_handle) = self.reservation_store.get(reservation_id) {
             let (start, end, res_name, capacity, workload, state, proceeding, num_tasks) = {

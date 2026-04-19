@@ -6,6 +6,7 @@ use std::sync::RwLock;
 use std::{str::FromStr, sync::Arc};
 use tokio::time::{Duration, MissedTickBehavior, interval};
 
+use crate::domain::simulator::simulator::GlobalClock;
 use crate::domain::vrm_system_model::reservation::node_reservation::NodeReservation;
 use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationState, ReservationTrait};
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationId;
@@ -19,9 +20,8 @@ use crate::domain::vrm_system_model::utils::config::SCHEDULE_SYNC_TIMEINTERVAL_S
 use crate::domain::vrm_system_model::utils::id::{ResourceName, RmsId, ShadowScheduleId, SlottedScheduleId};
 use crate::{
     api::rms_config_dto::rms_dto::SlurmRmsDto,
-    domain::{
-        simulator::simulator::SystemSimulator,
-        vrm_system_model::{reservation::reservation_store::ReservationStore, rms::rms::RmsBase, scheduler_type::SchedulerType, utils::id::AciId},
+    domain::vrm_system_model::{
+        reservation::reservation_store::ReservationStore, rms::rms::RmsBase, scheduler_type::SchedulerType, utils::id::AciId,
     },
 };
 
@@ -33,7 +33,7 @@ use super::api_client::slurm_rest_api_trait::SlurmRestApi;
 pub struct SlurmRms {
     pub base: RmsBase,
     pub aci_id: AciId,
-    pub simulator: Arc<dyn SystemSimulator>,
+    pub simulator: Arc<GlobalClock>,
     pub slurm_rest_client: SlurmRestApiClient,
 
     // Master Schedules
@@ -51,7 +51,7 @@ pub struct SlurmRms {
 impl SlurmRms {
     pub async fn new(
         dto: SlurmRmsDto,
-        simulator: Arc<dyn SystemSimulator>,
+        simulator: Arc<GlobalClock>,
         aci_id: AciId,
         reservation_store: ReservationStore,
     ) -> Result<Self, Box<dyn std::error::Error>> {

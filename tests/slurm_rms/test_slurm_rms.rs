@@ -1,9 +1,9 @@
 use std::sync::Arc;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use tokio::time::sleep;
 use vrm_rust_workflow::api::rms_config_dto::rms_dto::{SlurmConfigDto, SlurmRmsDto, SlurmSwitchDto};
-use vrm_rust_workflow::domain::simulator::simulator_mock::MockSimulator;
+use vrm_rust_workflow::domain::simulator::simulator::GlobalClock;
 use vrm_rust_workflow::domain::vrm_system_model::reservation::link_reservation::LinkReservation;
 use vrm_rust_workflow::domain::vrm_system_model::reservation::node_reservation::NodeReservation;
 use vrm_rust_workflow::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationBase, ReservationProceeding, ReservationState};
@@ -19,12 +19,12 @@ use vrm_rust_workflow::domain::vrm_system_model::utils::id::{AciId, ClientId, Re
 /// Reservation of state ReserveAnswer -> Committed and task is running on the local RMS.
 #[tokio::test]
 async fn test_slurm_rms_commit_lifecycle() {
-    let now = SystemTime::now().duration_since(UNIX_EPOCH).expect("Time went backwards").as_secs() as i64;
-    let slurm_rms = create_test_slurm_rms(now).await.expect("Failed to create SlurmRms");
+    let clock = Arc::new(GlobalClock::new(false));
+    let slurm_rms = create_test_slurm_rms(clock.clone()).await.expect("Failed to create SlurmRms");
     let reservation_store = slurm_rms.get_reservation_store().clone();
 
     let res_name = ReservationName::new("test_commit_job".to_string());
-    let res = create_node_reservation(res_name, ReservationState::ReserveAnswer, now);
+    let res = create_node_reservation(res_name, ReservationState::ReserveAnswer, clock);
     let res_id = reservation_store.add(res);
 
     slurm_rms.commit(res_id.clone());
@@ -50,14 +50,14 @@ async fn test_slurm_rms_commit_lifecycle() {
 /// Reservation of state ReserveAnswer -> Committed and task is running on the local RMS.
 #[tokio::test]
 async fn test_slurm_rms_commit_multiple_concurrently() {
-    let now = SystemTime::now().duration_since(UNIX_EPOCH).expect("Time went backwards").as_secs() as i64;
-    let slurm_rms = create_test_slurm_rms(now).await.expect("Failed to create SlurmRms");
+    let clock = Arc::new(GlobalClock::new(false));
+    let slurm_rms = create_test_slurm_rms(clock.clone()).await.expect("Failed to create SlurmRms");
     let reservation_store = slurm_rms.get_reservation_store().clone();
 
     let mut ids = Vec::new();
     for i in 0..5 {
         let res_name = ReservationName::new(format!("concurrent_commit_{}", i));
-        let res = create_node_reservation(res_name, ReservationState::ReserveAnswer, now);
+        let res = create_node_reservation(res_name, ReservationState::ReserveAnswer, clock.clone());
         ids.push(reservation_store.add(res));
     }
 
@@ -82,14 +82,14 @@ async fn test_slurm_rms_commit_multiple_concurrently() {
 /// Tests to submit a link reservation --> should produce a SlurmRmsCommitFalseReservationTypeError.
 #[tokio::test]
 async fn test_slurm_rms_commit_link_reservation() {
-    let now = SystemTime::now().duration_since(UNIX_EPOCH).expect("Time went backwards").as_secs() as i64;
+    let clock = Arc::new(GlobalClock::new(false));
     let mut logger = logtest::start();
 
-    let slurm_rms = create_test_slurm_rms(now).await.expect("Failed to create SlurmRms");
+    let slurm_rms = create_test_slurm_rms(clock.clone()).await.expect("Failed to create SlurmRms");
     let reservation_store = slurm_rms.get_reservation_store().clone();
 
     let res_name = ReservationName::new("link_reservation".to_string());
-    let res = create_link_reservation(res_name, ReservationState::ReserveAnswer, now);
+    let res = create_link_reservation(res_name, ReservationState::ReserveAnswer, clock);
     let res_id = reservation_store.add(res);
 
     slurm_rms.commit(res_id.clone());
@@ -111,14 +111,14 @@ async fn test_slurm_rms_commit_link_reservation() {
 /// Tests to submit a reservation that is not in ReservationStore --> should produce a SlurmRmsCommitInValidReservationError.
 #[tokio::test]
 async fn test_slurm_rms_commit_reservation_not_in_store() {
-    let now = SystemTime::now().duration_since(UNIX_EPOCH).expect("Time went backwards").as_secs() as i64;
+    let clock = Arc::new(GlobalClock::new(false));
     let mut logger = logtest::start();
 
-    let slurm_rms = create_test_slurm_rms(now).await.expect("Failed to create SlurmRms");
+    let slurm_rms = create_test_slurm_rms(clock.clone()).await.expect("Failed to create SlurmRms");
     let mut reservation_store = slurm_rms.get_reservation_store().clone();
 
     let res_name = ReservationName::new("node_reservation".to_string());
-    let res = create_node_reservation(res_name, ReservationState::ProbeReservation, now);
+    let res = create_node_reservation(res_name, ReservationState::ProbeReservation, clock);
 
     let res_id = reservation_store.add(res);
     reservation_store.delete_probe_reservation(res_id);
@@ -138,13 +138,13 @@ async fn test_slurm_rms_commit_reservation_not_in_store() {
 /// Test with a setup, where only the deletion on the local RMS is possible.
 #[tokio::test]
 async fn test_slurm_rms_delete_task_only_rms() {
-    let now = SystemTime::now().duration_since(UNIX_EPOCH).expect("Time went backwards").as_secs() as i64;
+    let clock = Arc::new(GlobalClock::new(false));
     let mut logger = logtest::start();
-    let mut slurm_rms = create_test_slurm_rms(now).await.expect("Failed to create SlurmRms");
+    let mut slurm_rms = create_test_slurm_rms(clock.clone()).await.expect("Failed to create SlurmRms");
     let reservation_store = slurm_rms.get_reservation_store().clone();
 
     let res_name = ReservationName::new("test_delete_job".to_string());
-    let res = create_node_reservation(res_name, ReservationState::ReserveAnswer, now);
+    let res = create_node_reservation(res_name, ReservationState::ReserveAnswer, clock);
     let res_id = reservation_store.add(res);
 
     // Commit a task to Rms
@@ -185,12 +185,12 @@ async fn test_slurm_rms_delete_task_only_rms() {
 /// Test with a setup, where only the deletion on the local RMS is possible.
 #[tokio::test]
 async fn test_slurm_rms_delete_task_from_rms_and_schedule() {
-    let now = SystemTime::now().duration_since(UNIX_EPOCH).expect("Time went backwards").as_secs() as i64;
-    let mut slurm_rms = create_test_slurm_rms(now).await.expect("Failed to create SlurmRms");
+    let clock = Arc::new(GlobalClock::new(false));
+    let mut slurm_rms = create_test_slurm_rms(clock.clone()).await.expect("Failed to create SlurmRms");
     let reservation_store = slurm_rms.get_reservation_store().clone();
 
     let res_name = ReservationName::new("test_delete_job".to_string());
-    let res = create_node_reservation(res_name, ReservationState::Open, now);
+    let res = create_node_reservation(res_name, ReservationState::Open, clock);
     let res_id = reservation_store.add(res);
 
     // 1. Reserve Reservation at node schedule
@@ -228,10 +228,9 @@ async fn test_slurm_rms_delete_task_from_rms_and_schedule() {
     assert!(!slurm_rms.task_mapping.read().unwrap().contains_left(&res_id));
 }
 
-async fn create_test_slurm_rms(now: i64) -> Result<SlurmRms, Box<dyn std::error::Error>> {
+async fn create_test_slurm_rms(clock: Arc<GlobalClock>) -> Result<SlurmRms, Box<dyn std::error::Error>> {
     let aci_id = AciId::new("test-aci".to_string());
 
-    let simulator = Arc::new(MockSimulator::new(now));
     let reservation_store = ReservationStore::new();
 
     let rest_api_config: SlurmConfigDto = SlurmConfigDto {
@@ -269,14 +268,14 @@ async fn create_test_slurm_rms(now: i64) -> Result<SlurmRms, Box<dyn std::error:
         topology: topology,
     };
 
-    return SlurmRms::new(slurm_rms_dto, simulator, aci_id, reservation_store).await;
+    return SlurmRms::new(slurm_rms_dto, clock, aci_id, reservation_store).await;
 }
 
-fn create_node_reservation(res_name: ReservationName, reservation_state: ReservationState, now: i64) -> Reservation {
+fn create_node_reservation(res_name: ReservationName, reservation_state: ReservationState, clock: Arc<GlobalClock>) -> Reservation {
     let client_id = ClientId::new("test_client".to_string());
 
     let duration = 600; // 10 minutes
-    let start_time = now + 60; // Start in 1 minute
+    let start_time = clock.get_system_time_s() + 60; // Start in 1 minute
     let end_time = start_time + duration;
 
     let base = ReservationBase {
@@ -285,7 +284,7 @@ fn create_node_reservation(res_name: ReservationName, reservation_state: Reserva
         handler_id: None,
         state: reservation_state,
         request_proceeding: ReservationProceeding::Commit,
-        arrival_time: now,
+        arrival_time: clock.get_system_time_s(),
         booking_interval_start: start_time,
         booking_interval_end: end_time,
         assigned_start: start_time,
@@ -309,11 +308,11 @@ fn create_node_reservation(res_name: ReservationName, reservation_state: Reserva
     return Reservation::Node(node_res);
 }
 
-fn create_link_reservation(res_name: ReservationName, reservation_state: ReservationState, now: i64) -> Reservation {
+fn create_link_reservation(res_name: ReservationName, reservation_state: ReservationState, clock: Arc<GlobalClock>) -> Reservation {
     let client_id = ClientId::new("test_client".to_string());
 
     let duration = 600; // 10 minutes
-    let start_time = now + 60; // Start in 1 minute
+    let start_time = clock.get_system_time_s() + 60; // Start in 1 minute
     let end_time = start_time + duration;
 
     let base = ReservationBase {
@@ -322,7 +321,7 @@ fn create_link_reservation(res_name: ReservationName, reservation_state: Reserva
         handler_id: None,
         state: reservation_state,
         request_proceeding: ReservationProceeding::Commit,
-        arrival_time: now,
+        arrival_time: clock.get_system_time_s(),
         booking_interval_start: start_time,
         booking_interval_end: end_time,
         assigned_start: start_time,
