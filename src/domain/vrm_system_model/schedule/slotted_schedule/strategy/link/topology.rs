@@ -248,7 +248,7 @@ impl NetworkTopology {
     /// Performs preprocessing to identify and cache all paths between Grid Access Points.
     /// This iterates through all router pairs. If both routers are marked as `is_grid_access_point`,
     /// it invokes `calc_k_shortest_paths` and stores the resulting `VirtualLinkResource`.
-    /// 
+    ///
     /// Attention: Updates Paths in ReservationStore
     pub fn calc_all_paths(&mut self) {
         let router_ids: Vec<RouterId> = self.routers.keys().cloned().collect();

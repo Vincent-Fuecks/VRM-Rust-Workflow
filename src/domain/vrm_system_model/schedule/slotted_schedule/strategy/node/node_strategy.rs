@@ -9,8 +9,9 @@ pub struct NodeStrategy {}
 
 impl SlottedScheduleStrategy for NodeStrategy {
     fn get_capacity(ctx: &SlottedScheduleContext<Self>) -> i64 {
-        ctx.slots.len() as i64
+        ctx.slots.first().map(|s| s.capacity).unwrap_or(0)
     }
+
     fn on_clear(_ctx: &mut SlottedScheduleContext<Self>) {}
     /// Adjusts the requested resource requirement (**capacity**) to ensure it does not exceed the
     /// **remaining available capacity** in a specific slot.
@@ -93,10 +94,10 @@ impl SlottedScheduleStrategy for NodeStrategy {
 
         let mut reserved_capacity_sum: i64 = 0;
 
-        for real_slot_index in start_slot_nr..=end_slot_nr {
-            let real_slot_index = ctx.get_real_slot_index(real_slot_index);
-            reserved_capacity_sum += ctx.get_slot_load(real_slot_index);
+        for slot_index in start_slot_nr..=end_slot_nr {
+            reserved_capacity_sum += ctx.get_slot_load(slot_index);
         }
+        
         let mut number_of_slots = 0;
 
         if ctx.slots.len() > 0 {

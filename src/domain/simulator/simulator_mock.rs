@@ -1,6 +1,7 @@
 use crate::domain::simulator::simulator::{SharedSimulator, SystemSimulator};
 
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Clone)]
 pub struct MockSimulator {
@@ -14,13 +15,11 @@ impl MockSimulator {
 }
 
 #[derive(Debug, Clone)]
-pub struct SharedMockSimulator {
-    pub time: Arc<RwLock<i64>>,
-}
+pub struct SharedMockSimulator {}
 
 impl SystemSimulator for SharedMockSimulator {
     fn get_current_time_in_s(&self) -> i64 {
-        *self.time.read().unwrap()
+        SystemTime::now().duration_since(UNIX_EPOCH).expect("Time went backwards").as_secs() as i64
     }
     fn clone_box(&self) -> SharedSimulator {
         todo!()

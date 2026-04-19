@@ -94,6 +94,19 @@ impl ReservationStore {
         return key;
     }
 
+    /// Removes a Reservation from the ReservationStore.
+    pub fn remove(&self, reservation_id: ReservationId) {
+        let res_name = self.get_name_for_key(reservation_id);
+
+        if let Some(name) = res_name {
+            let mut guard = self.inner.write().unwrap();
+            guard.name_index.remove(&name);
+            guard.slots.remove(reservation_id);
+        } else {
+            log::error!("ReservationStoreRemoveError: Failed to remove reservation, because res_name was None.")
+        }
+    }
+
     pub fn add_probe_reservation(&self, reservation: Reservation) -> ReservationId {
         let mut guard = self.inner.write().unwrap();
 
@@ -138,6 +151,8 @@ impl ReservationStore {
             let mut guard = self.inner.write().unwrap();
             guard.name_index.remove(&name);
             guard.slots.remove(reservation_id);
+        } else {
+            log::error!("ReservationStoreRemoveError: Failed to remove reservation, because res_name was None.")
         }
     }
 

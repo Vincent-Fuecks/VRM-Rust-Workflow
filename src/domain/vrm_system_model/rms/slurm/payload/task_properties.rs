@@ -16,10 +16,10 @@ pub struct JobProperties {
     pub nodes: Option<String>,
 
     /// Earliest time the job can start (Unix Timestamp)
-    pub begin: u64,
+    pub begin_time: u64,
 
     /// Latest time the job must be finished (Unix Timestamp)
-    pub deadline: u64,
+    pub time_limit: u64,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub current_working_directory: Option<String>,

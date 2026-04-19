@@ -1,3 +1,4 @@
+use anyhow::{Result, anyhow};
 use bimap::{BiHashMap, BiMap};
 use reqwest::header::{self, HeaderMap, HeaderValue};
 use std::collections::{HashMap, HashSet};
@@ -129,8 +130,8 @@ impl Rms for SlurmRms {
                         cpus_per_task: node_res.base.reserved_capacity as u32,
                         nodes: None,
                         memory_per_node: MEMORY_PER_NODE,
-                        begin: node_res.base.assigned_start as u64,
-                        deadline: node_res.base.assigned_end as u64,
+                        begin_time: node_res.base.assigned_start as u64,
+                        time_limit: node_res.base.assigned_end as u64,
                         current_working_directory: node_res.current_working_directory.clone(),
                         standard_output: node_res.output_path.clone(),
                         standard_error: node_res.error_path.clone(),
@@ -524,21 +525,39 @@ impl SlurmRms {
         }
 
         // Add External Task to Schedule
-        Self::update_schedule(reservation_store, task_mapping, external_reservations);
+        Self::update_schedule(reservation_store, task_mapping, external_reservations, node_schedule, rms_id);
     }
 
     pub fn update_schedule(
         reservation_store: &ReservationStore,
         task_mapping: &Arc<RwLock<BiHashMap<ReservationId, u32>>>,
         external_reservations: Vec<(u32, Reservation)>,
+        node_schedule: &Arc<RwLock<Box<dyn Schedule>>>,
+        rms_id: &RmsId,
     ) {
         for (slurm_task_id, res) in external_reservations {
-            log::debug!("INSERT EXTERNAL: RESERVATION {:?} into ReservationStore", res.get_name());
+            log::debug!("INSERT EXTERNAL: RESERVATION {:?} into ReservationStore", res.get_name().clone());
 
             let res_id = reservation_store.add(res);
             task_mapping.write().unwrap().insert(res_id, slurm_task_id);
 
-            // TODO Insert and re-schedule other reservations in Schedule
+            let mut guard = node_schedule.write().unwrap();
+
+            if let Some(_) = guard.reserve(res_id) {
+                log::debug!(
+                    "EXTERNAL: RESERVATION {:?} was successfully reserved in node schedule for RMS {:?}.",
+                    reservation_store.get_name_for_key(res_id),
+                    rms_id
+                );
+            } else {
+                log::error!(
+                    "Reserve of EXTERNAL: RESERVATION {:?} failed at RMS {:?} at node schedule.",
+                    reservation_store.get_name_for_key(res_id),
+                    rms_id
+                );
+
+                reservation_store.remove(res_id);
+            }
         }
 
         todo!("Update of Schedule, due to external Reservations is currently not supported.")
@@ -546,5 +565,39 @@ impl SlurmRms {
 
     pub fn get_reservation_store(&self) -> &ReservationStore {
         &self.get_base().reservation_store
+    }
+
+    /// Deletes all Task from the RMS cluster.
+    pub async fn delete_all_tasks(&self) -> Result<bool> {
+        let mut is_rms_clean = true;
+        if let Ok(slurm_task_response) = self.slurm_rest_client.get_tasks().await {
+            for job in slurm_task_response.jobs {
+                if let Ok(is_deleted) = self.slurm_rest_client.delete(job.job_id).await {
+                    if !is_deleted {
+                        log::warn!("Failed to delete task {:?} (slurm job id) from cluster {:?}", job.job_id, self.base.id);
+                        is_rms_clean = false;
+                    }
+                }
+            }
+        }
+
+        Ok(is_rms_clean)
+    }
+
+    /// Returns the count of task on the rms in the state RUNNING and PENDING.
+    pub async fn get_active_task_count(&self) -> Result<usize> {
+        match self.slurm_rest_client.get_tasks().await {
+            Ok(tasks) => Ok(tasks
+                .jobs
+                .iter()
+                .filter(|j| {
+                    j.job_state.as_ref().map_or(false, |states| states.contains(&"RUNNING".to_string()) || states.contains(&"PENDING".to_string()))
+                })
+                .count()),
+            Err(e) => {
+                eprintln!("REST Client Error: {:?}", e);
+                Err(anyhow!("The get task request failed: {}", e))
+            }
+        }
     }
 }

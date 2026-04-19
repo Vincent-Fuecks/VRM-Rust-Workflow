@@ -36,7 +36,7 @@ impl SlurmRestApiClient {
         Ok(Self { client, config })
     }
 
-    // Helper to build the full URL: base + version + endpoint
+    /// Helper to build the full URL: base + version + endpoint
     pub fn url(&self, endpoint: &str) -> String {
         format!("{}/slurm/{}{}", self.config.base_url, self.config.version, endpoint)
     }

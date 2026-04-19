@@ -14,7 +14,7 @@ use crate::domain::vrm_system_model::{
 impl<S: SlottedScheduleStrategy> Schedule for SlottedScheduleContext<S> {
     fn clear(&mut self) {
         S::on_clear(self);
-        self.slots.clear();
+        SlottedScheduleContext::clear(self);
         self.update();
     }
 
@@ -106,9 +106,10 @@ impl<S: SlottedScheduleStrategy> Schedule for SlottedScheduleContext<S> {
     }
 
     fn reserve_without_check(&mut self, reservation_id: ReservationId) {
-        for slot_index in self.get_slot_index(self.active_reservations.get_assigned_start(&reservation_id))
-            ..=self.get_slot_index(self.active_reservations.get_assigned_end(&reservation_id))
-        {
+        let start_slot = self.get_slot_index(self.active_reservations.get_assigned_start(&reservation_id));
+        let end_slot = self.get_slot_index(self.active_reservations.get_assigned_end(&reservation_id) - 1);
+
+        for slot_index in start_slot..=end_slot {
             S::insert_reservation_into_slot(self, self.reservation_store.get_reserved_capacity(reservation_id), slot_index, reservation_id);
         }
 

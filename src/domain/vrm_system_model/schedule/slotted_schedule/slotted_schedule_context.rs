@@ -90,9 +90,9 @@ impl<S: SlottedScheduleStrategy> SlottedScheduleContext<S> {
             slots: slots,
             slot_width: slot_width,
             start_slot_index: 0,
-            end_slot_index: -1,
-            scheduling_window_start_time: 0,
-            scheduling_window_end_time: -1,
+            end_slot_index: number_of_real_slots,
+            scheduling_window_start_time: simulator.get_current_time_in_s(),
+            scheduling_window_end_time: -1, // TODO try to set to end of window
             load_buffer: LoadBuffer::new(Arc::new(GlobalLoadContext::new())),
             active_reservations: Reservations::new_empty(reservation_store.clone()),
             is_frag_cache_up_to_date: true,
@@ -133,7 +133,7 @@ impl<S: SlottedScheduleStrategy> SlottedScheduleContext<S> {
             return None;
         }
 
-        if index < self.start_slot_index || index > (self.end_slot_index + 1) {
+        if index < self.start_slot_index || index > self.end_slot_index {
             return None;
         }
 
@@ -149,7 +149,7 @@ impl<S: SlottedScheduleStrategy> SlottedScheduleContext<S> {
             return None;
         }
 
-        if index < self.start_slot_index || index > (self.end_slot_index + 1) {
+        if index < self.start_slot_index || index > self.end_slot_index {
             return None;
         }
 
@@ -209,6 +209,7 @@ impl<S: SlottedScheduleStrategy> SlottedScheduleContext<S> {
     pub fn update(&mut self) {
         let current_time = self.simulator.get_current_time_in_s();
         let new_start_slot_index = self.get_slot_index(current_time);
+        let effective_cleanup_end = new_start_slot_index.min(self.end_slot_index + 1);
 
         if self.start_slot_index < new_start_slot_index {
             self.is_frag_cache_up_to_date = false;
@@ -217,10 +218,10 @@ impl<S: SlottedScheduleStrategy> SlottedScheduleContext<S> {
         // key are used to: remove reservation which end earlier than the new start time
         let mut ids_to_remove: HashSet<ReservationId> = HashSet::new();
 
-        for clean_index in self.start_slot_index..new_start_slot_index {
+        for clean_index in self.start_slot_index..effective_cleanup_end {
             if let Some(slot) = self.get_slot(clean_index) {
                 for id in &slot.reservation_ids {
-                    let last_slot_of_reservation = self.get_slot_index(self.active_reservations.get_assigned_end(id));
+                    let last_slot_of_reservation = self.get_slot_index(self.active_reservations.get_assigned_end(id) - 1);
                     if last_slot_of_reservation == clean_index {
                         ids_to_remove.insert(id.clone());
                     }
@@ -299,7 +300,7 @@ impl<S: SlottedScheduleStrategy> SlottedScheduleContext<S> {
 
         // Delete reservation from all occupied slots
         let mut reservation_start_slot_index: i64 = self.get_slot_index(del_res_assigned_start);
-        let reservation_end_slot_index: i64 = self.get_slot_index(del_res_assigned_end);
+        let reservation_end_slot_index: i64 = self.get_effective_slot_index(self.get_slot_index(del_res_assigned_end - 1));
 
         // Delete only parts that are in the scheduling window
         if reservation_start_slot_index < self.start_slot_index {
@@ -430,7 +431,7 @@ impl<S: SlottedScheduleStrategy> SlottedScheduleContext<S> {
 
         let mut is_feasible: bool = true;
         let mut end_time = start_time + current_duration;
-        let mut current_end_slot_index = self.get_slot_index(end_time);
+        let mut current_end_slot_index = self.get_slot_index(end_time - 1);
         let mut current_slot_index: i64 = slot_start_index;
 
         while current_slot_index <= current_end_slot_index {
@@ -458,7 +459,7 @@ impl<S: SlottedScheduleStrategy> SlottedScheduleContext<S> {
                     break;
                 }
 
-                current_end_slot_index = self.get_slot_index(end_time);
+                current_end_slot_index = self.get_slot_index(end_time - 1);
             }
 
             current_slot_index += 1;
