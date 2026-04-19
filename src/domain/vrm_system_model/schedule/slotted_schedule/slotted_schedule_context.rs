@@ -15,6 +15,15 @@ use crate::domain::vrm_system_model::utils::load_buffer::{GlobalLoadContext, Loa
 
 const FRAGMENTATION_POWER: f64 = 2.0;
 
+/// The core context for managing a time-slotted resource schedule within a distributed **VRM (Virtual Resource Management)** system.
+///
+/// `SlottedScheduleContext` acts as the primary data structure for timeline-based resource allocation.
+/// It utilizes a sliding window mechanism (represented by a sequence of discrete time slots) to track
+/// physical resource capacities (like CPU cores or network bandwidth) over time.
+///
+/// Note: The end of the scheduling window is defined by: Current_Unix_timestamp + slot_width * num_of_slots
+/// For Example : NOW + (60*60) * (24) --> From the current start time (NOW) is Advanced Reservation for the next 24h possible for the system.
+/// If a request is issued exceeding this time window, is the Reservation state set to ReservationState::Rejected
 #[derive(Debug, Clone)]
 pub struct SlottedScheduleContext<S: SlottedScheduleStrategy> {
     pub strategy: S,
@@ -23,7 +32,7 @@ pub struct SlottedScheduleContext<S: SlottedScheduleStrategy> {
     pub id: SlottedScheduleId,
 
     /// A list of all time **Slots** defined for this schedule.
-    /// Represents the number of actual cpus or average bandwidth.
+    /// Represents the actual capacity of the physical resource (e.g. number of cpus of the Node average bandwidth of the link).
     pub slots: Vec<Slot>,
 
     /// The duration of a single time slot in s.
