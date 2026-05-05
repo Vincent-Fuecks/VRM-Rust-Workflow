@@ -13,7 +13,7 @@ Before you begin, ensure you have the following installed:
 Clone the VRM-Rust repository and navigate into the project directory:
 ```bash
 # Clone the VRM-Rust Repository
-git clone git@github.com:Vincent-Fuecks/VRM-Rust.git
+git clone https://github.com/Vincent-Fuecks/VRM-Rust.git
 ```
 ### Usage Modes 
 #### Option A: RmsNodeSimulator (Quick Start)
@@ -26,7 +26,7 @@ cargo run -- --input-file src/data/workflow_with_direct_mapping.json --config-fi
 ##### Step 1 Clone and Initialize Environment
 ```bash
 # Clone the Virtual Slurm Environment (modified clone form https://github.com/giovtorres/slurm-docker-cluster)
-git clone git@github.com:Vincent-Fuecks/virtual-slurm-environment.git
+git clone https://github.com/Vincent-Fuecks/virtual-slurm-environment.git
 cd virtual-slurm-environment
 
 # Generate a JWT key for authentication
