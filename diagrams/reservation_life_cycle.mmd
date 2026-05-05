@@ -1,0 +1,55 @@
+stateDiagram-v2
+
+    %% Main Transitions
+    Open --> ProbeAnswer : Probe
+    Open --> ReserveAnswer : Reserve
+    
+    %% Probe Logic & Internal Promotion
+    state ProbeAnswer {
+        [*] --> ProbeReservation : Generates N options
+        ProbeReservation --> ReserveProbeReservation : Reserve
+        ReserveProbeReservation --> ProbeReservation : Failed (try next)
+        ReserveProbeReservation --> ReserveAnswer : Success (Atomic Promotion)
+    }
+    
+    ProbeAnswer --> Finished : Probe (Results returned)
+    ProbeAnswer --> Rejected : Failure (No valid Reservation)
+
+    %% Allocation Logic
+    ReserveAnswer --> Committed : Commit
+    ReserveAnswer --> Finished : Reserve (Results returned)
+
+    Committed --> Finished : Commit (Task completed)
+    [*] --> Open 
+
+    %% Global Transitions (Initial & Active)
+    state Active {
+            Open
+        state ProbeAnswer {
+            ProbeReservation
+            ReserveProbeReservation
+        }
+        ReserveAnswer
+        Committed
+    }
+
+    Active --> Deleted : Delete
+    Active--> Rejected : Fault / Policy Denied
+
+    %% Terminal States
+    state Terminal {
+        Finished
+        Rejected
+        Deleted
+    }
+
+    note right of Terminal
+        Resources are released.
+        No further transitions.
+    end note
+
+    %% Styles
+    style Open fill:#f9f,stroke:#333
+    style Finished fill:#9f9,stroke:#333
+    style Rejected fill:#f99,stroke:#333
+    style Deleted fill:#f99,stroke:#333
