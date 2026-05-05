@@ -3,6 +3,12 @@ on:
   push:
     paths:
       - 'diagrams/*.mmd' # Only run when diagrams were updated
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Test Run'
+        required: false
+        default: 'Manual test'
 
 jobs:
   build:
