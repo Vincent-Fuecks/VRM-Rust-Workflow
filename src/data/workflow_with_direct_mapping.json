@@ -17,9 +17,11 @@
 
               "nodeReservation": 
                 {
-                  "taskPath": "",
+                  "taskPath": "#!/bin/bash\nsleep 10\nexit 0",
                   "outputPath": "/data/logs/sim.out",
                   "errorPath": "/data/logs/sim.err",
+                  "currentWorkingDirectory": "/tmp",
+                  "environment": ["PATH=/usr/local/bin:/usr/bin:/bin"],
                   "duration": 50,
                   "isMoldable": false, 
                   "cpus": 2,
@@ -66,9 +68,11 @@
 
               "nodeReservation": 
                 {
-                  "taskPath": "",
+                  "taskPath": "#!/bin/bash\nsleep 10\nexit 0",
                   "outputPath": "/data/logs/sim.out",
                   "errorPath": "/data/logs/sim.err",
+                  "currentWorkingDirectory": "/tmp",
+                  "environment": ["PATH=/usr/local/bin:/usr/bin:/bin"],
                   "duration": 50,
                   "isMoldable": false, 
                   "cpus": 2,
@@ -108,9 +112,11 @@
 
               "nodeReservation": 
                 {
-                  "taskPath": "",
+                  "taskPath": "#!/bin/bash\nsleep 10\nexit 0",
                   "outputPath": "/data/logs/sim.out",
                   "errorPath": "/data/logs/sim.err",
+                  "currentWorkingDirectory": "/tmp",
+                  "environment": ["PATH=/usr/local/bin:/usr/bin:/bin"],
                   "duration": 50,
                   "isMoldable": false, 
                   "cpus": 2,
@@ -150,9 +156,11 @@
 
               "nodeReservation": 
                 {
-                  "taskPath": "",
+                  "taskPath": "#!/bin/bash\nsleep 10\nexit 0",
                   "outputPath": "/data/logs/sim.out",
                   "errorPath": "/data/logs/sim.err",
+                  "currentWorkingDirectory": "/tmp",
+                  "environment": ["PATH=/usr/local/bin:/usr/bin:/bin"],
                   "duration": 50,
                   "isMoldable": false, 
                   "cpus": 2,
