@@ -8,6 +8,7 @@ use crate::domain::vrm_system_model::client::client::Clients;
 use crate::domain::vrm_system_model::grid_resource_management_system::vrm_component_registry::registry_client::RegistryClient;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationStore;
 
+use clap::Parser;
 use std::sync::{Arc, RwLock};
 
 use crate::api::vrm_system_model_dto::vrm_dto::VrmDto;
@@ -28,21 +29,48 @@ pub fn get_vrm_dto(file_path: &str) -> Result<VrmDto> {
     Ok(root_dto)
 }
 
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    /// Path to the workflow input file (.json)
+    #[arg(short = 'f', long, default_value = "src/data/workflow_with_direct_mapping.json")]
+    input_file: String,
+
+    /// Path to the output results/statistics file (.csv)
+    #[arg(short = 'o', long, default_value = "results.csv")]
+    output_file: String,
+
+    /// Path to the VRM node simulator config
+    #[arg(short = 'c', long, default_value = "src/data/vrm_with_slurm.json")]
+    config_file: String,
+
+    /// Enables Logging
+    #[arg(short = 'l', default_value_t = true)]
+    enable_logging: bool,
+}
+
 #[tokio::main]
 async fn main() {
-    // Init Logging
-    logger::init();
-    let log_file_path = "/home/vincent/Desktop/Repository/VRM-Rust-Workflow/statistics/analytics.csv".to_string();
-    AnalyticsSystem::init(log_file_path);
+    let args = Args::parse();
 
-    let file_path_workflows: &str = "/home/vincent/Desktop/Repository/VRM-Rust-Workflow/src/data/workflow_with_direct_mapping.json";
-    let file_path_vrm: &str = "/home/vincent/Desktop/Repository/VRM-Rust-Workflow/src/data/vrm_with_slurm.json";
+    // Init Logging
+    if args.enable_logging {
+        logger::init();
+        AnalyticsSystem::init(args.output_file);
+    } else {
+        log::set_max_level(log::LevelFilter::Off);
+    }
+
+    let file_path_workflows = &args.input_file;
+    let file_path_vrm = &args.config_file;
+
     let reservation_store = ReservationStore::new();
     reservation_store.add_listener(Arc::new(RwLock::new(VrmStateListener::new_empty())));
 
     let vrm_dto = get_vrm_dto(file_path_vrm).expect("Failed to load VRM DTO");
     let is_simulation = vrm_dto.simulator.is_simulation;
-    let unprocessed_reservations = Clients::get_clients(file_path_workflows, reservation_store.clone()).expect("TODO").unprocessed_reservations;
+    let unprocessed_reservations =
+        Clients::get_clients(file_path_workflows, reservation_store.clone()).expect("Failed to load clients").unprocessed_reservations;
 
     let registry = RegistryClient::new();
     let simulator = Arc::new(GlobalClock::new(is_simulation));
