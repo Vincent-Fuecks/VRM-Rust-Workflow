@@ -1,0 +1,28 @@
+name: Generate Mermaid Diagrams
+on:
+  push:
+    paths:
+      - 'diagrams/*.mmd' # Only run when diagrams were updated
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write 
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Render Mermaid Diagram
+        uses: mermaid-js/mermaid-cli@v10.9.1
+        with:
+          input: diagrams/architecture.mmd
+          output: diagrams/architecture.svg
+
+      - name: Commit and Push changes
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add diagrams/architecture.svg
+          git commit -m "chore: update architecture diagram" || exit 0
+          git push
