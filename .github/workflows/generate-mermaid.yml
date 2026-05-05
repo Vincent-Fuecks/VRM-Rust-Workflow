@@ -2,7 +2,7 @@ name: Generate Mermaid Diagrams
 on:
   push:
     paths:
-      - 'diagrams/*.mmd' # Only run when diagrams were updated
+      - 'diagrams/*.mmd'
   workflow_dispatch:
     inputs:
       reason:
@@ -18,22 +18,35 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Ensures we have history to push back
+
+      - name: Ensure diagrams directory exists
+        run: mkdir -p diagrams
 
       - name: Render Mermaid Diagram
         uses: mermaid-js/mermaid-cli@master
         with:
-          # Use absolute paths to be safe
-          input: ${{ github.workspace }}/diagrams/architecture.mmd
-          output: ${{ github.workspace }}/diagrams/architecture.svg
+          # Use relative paths here; the action handles the workspace mapping
+          input: 'diagrams/architecture.mmd'
+          output: 'diagrams/architecture.svg'
 
-      - name: Check if file exists (Debug)
-        run: ls -R diagrams/
+      - name: Debug Output
+        run: |
+          echo "Checking for generated files:"
+          ls -la diagrams/
 
       - name: Commit and Push changes
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          # Use 'git add .' to be less brittle, or stick to the path
-          git add diagrams/architecture.svg
-          git commit -m "chore: update architecture diagram" || exit 0
-          git push
+          
+          # Check if the file exists before adding to avoid the fatal error
+          if [ -f "diagrams/architecture.svg" ]; then
+            git add diagrams/architecture.svg
+            git commit -m "chore: update architecture diagram" || echo "No changes to commit"
+            git push
+          else
+            echo "Error: architecture.svg was not found!"
+            exit 1
+          fi
