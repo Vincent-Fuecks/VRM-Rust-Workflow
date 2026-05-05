@@ -4,6 +4,7 @@ use std::collections::{HashMap, HashSet};
 use std::i64;
 use std::sync::RwLock;
 use std::{str::FromStr, sync::Arc};
+use tokio::runtime::Handle;
 use tokio::time::{Duration, MissedTickBehavior, interval};
 
 use crate::domain::simulator::simulator::GlobalClock;
@@ -46,6 +47,8 @@ pub struct SlurmRms {
 
     // Mapping between VRM ReservationId and Slurm Task Id
     pub task_mapping: Arc<RwLock<BiMap<ReservationId, u32>>>,
+
+    pub rt_handle: Handle,
 }
 
 impl SlurmRms {
@@ -121,6 +124,7 @@ impl SlurmRms {
             network_shadow_schedule: HashMap::new(),
             slurm_rest_client: rest_api_client,
             task_mapping: Arc::new(RwLock::new(BiMap::new())),
+            rt_handle: Handle::current(),
         })
     }
 }

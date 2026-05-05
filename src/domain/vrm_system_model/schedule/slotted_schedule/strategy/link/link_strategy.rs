@@ -14,7 +14,7 @@ use crate::domain::vrm_system_model::{
     utils::load_buffer::LoadMetric,
 };
 
-/// Creates the schedule for Networks like NullBroker, SLURM etc.
+/// Creates the schedule for Networks like RmsNetworkSimulator, SLURM etc.
 /// Shares with the SlottedSchedule the SlottedScheduleContext and multiple other function
 /// of the implemented Schedule trait.
 #[derive(Debug, Clone)]

@@ -166,7 +166,6 @@ impl VrmManager {
             }
 
             self.process_reservation(reservation_id).await;
-            self.reservation_store.dump_store_contents(reservation_id);
         }
         log::info!("VrmManager: Finished processing all unprocessed reservations.");
     }
@@ -218,8 +217,6 @@ impl VrmManager {
                 return;
             }
         }
-
-        self.reservation_store.dump_store_contents(process_res_id);
 
         // Step 3: Commit or Delete Reservation
         if self.reservation_store.is_reservation_proceeding(process_res_id, ReservationProceeding::Commit) {

@@ -62,11 +62,12 @@ impl ADC {
                 }
 
                 // D. Re-reserve them in the Shadow Schedule context
+                let mut shadow_db = HashMap::new();
                 for res_id in sorted_ids {
                     self.manager.reserve_task_at_best_vrm_component(
                         res_id,
                         Some(shadow_id.clone()),
-                        &mut HashMap::new(), // dummy db for internal tracking
+                        &mut shadow_db,
                         ProbeReservationComparator::ESTReservationCompare,
                         |_, _| Ordering::Equal,
                     );
@@ -132,12 +133,18 @@ impl ADC {
         shadow_schedule_id: Option<ShadowScheduleId>,
         grid_component_res_database: &mut HashMap<ReservationId, ComponentId>,
     ) -> ReservationId {
+        let res_snapshot = match self.reservation_store.get_reservation_snapshot(reservation_id) {
+            Some(snapshot) => snapshot,
+            None => {
+                log::error!("Cannot submit task: snapshot for {:?} not found.", reservation_id);
+                self.reservation_store.update_state(reservation_id, ReservationState::Rejected);
+                return reservation_id;
+            }
+        };
+
         // Wrong order
         for component_id in self.manager.get_ordered_vrm_components(self.vrm_component_order) {
-            // TODO Change, if communication with aci is over the network
-            let res_snapshot = self.reservation_store.get_reservation_snapshot(reservation_id).unwrap();
-
-            if self.manager.can_component_handel(component_id.clone(), res_snapshot) {
+            if self.manager.can_component_handel(component_id.clone(), res_snapshot.clone()) {
                 let reserve_res_id = self.manager.reserve(component_id.clone(), reservation_id, shadow_schedule_id.clone());
 
                 if self.reservation_store.is_reservation_state_at_least(reserve_res_id, ReservationState::ReserveAnswer) {
@@ -181,20 +188,27 @@ impl ADC {
         probe_reservation_comparator: ProbeReservationComparator,
     ) -> Option<ReservationId> {
         // TODO Should be config
-        let try_n_probe_reservations = 5;
+        let try_n_probe_reservations = 1000;
         let mut probe_reservations = ProbeReservations::new(reservation_id, self.reservation_store.clone());
 
-        for component_id in self.manager.get_random_ordered_vrm_components() {
-            let res_snapshot = self.reservation_store.get_reservation_snapshot(reservation_id).unwrap();
+        let res_snapshot = match self.reservation_store.get_reservation_snapshot(reservation_id) {
+            Some(snapshot) => snapshot,
+            None => {
+                log::error!("Cannot submit task: snapshot for {:?} not found.", reservation_id);
+                return None;
+            }
+        };
 
-            if self.manager.can_component_handel(component_id.clone(), res_snapshot) {
+        for component_id in self.manager.get_random_ordered_vrm_components() {
+            if self.manager.can_component_handel(component_id.clone(), res_snapshot.clone()) {
                 let probe_res = self.manager.get_vrm_component_mut(component_id.clone()).probe(reservation_id, shadow_schedule_id.clone());
 
                 probe_reservations.add_probe_reservations(probe_res);
             }
         }
-
-        for _ in 0..=try_n_probe_reservations {
+        // TODO Optimization high number of tries leads to suboptimal solutions ...
+        // But small number of tries leads to potential rejection ...
+        for _ in 0..try_n_probe_reservations {
             if let Some((component_id, shadow_schedule_id)) = probe_reservations.prompt_best(reservation_id, probe_reservation_comparator.clone()) {
                 self.manager.reserve(component_id.clone(), reservation_id, shadow_schedule_id);
 

@@ -42,10 +42,9 @@ impl VrmComponent for ADC {
     fn commit(&mut self, reservation_id: ReservationId) -> bool {
         let arrival_time = self.simulator.get_system_time_s();
         log::info!("ADC {} commits reservation {:?}.", self.id, self.reservation_store.get_name_for_key(reservation_id));
-
-        // Get ComponentId where Reservation is reserved
+        // Get ComponentId where Reservation is reserved, for Workflows was the reservation by the WorkflowScheduler performed.
         // Most like likely happen before if not reserve now.
-        if !self.manager.is_reservation_reserved(reservation_id) {
+        if !self.manager.is_reservation_reserved(reservation_id) && !self.reservation_store.is_workflow(reservation_id) {
             log::info!(
                 "There was no reserve performed for the commit of reservation {:?}, try to reserve reservation now.",
                 self.reservation_store.get_name_for_key(reservation_id)
@@ -78,49 +77,83 @@ impl VrmComponent for ADC {
             }
         }
 
-        // Get ComponentId where Reservation was reserved
-        let component_id = if self.manager.is_reservation_reserved(reservation_id) {
-            self.manager.get_reserved_component(reservation_id).unwrap()
-        } else {
-            self.reservation_store.update_state(reservation_id, ReservationState::Rejected);
-            log::error!(
-                "ErrorInReservationProcess: Commit at ADC {} failed of Reservation {:?}. There was no reserve at a 
-                    VrmComponent for the reservation found. Should happen before.",
-                self.id,
-                self.reservation_store.get_name_for_key(reservation_id)
-            );
-            return false;
-        };
-
         // Perform Commit at VrmComponentManager (Single or Workflow Reservation?)
         if self.reservation_store.is_workflow(reservation_id) {
             let sub_ids = self.workflow_scheduler.as_mut().unwrap().get_sub_ids(reservation_id);
 
             for sub_res_id in sub_ids.clone() {
-                let component_answer = self.manager.commit_at_component(sub_res_id, component_id.clone());
-                let state = self.reservation_store.get_state(sub_res_id);
+                // Reservation is not already committed e.g. Dummy dependencies or Data Dependencies that have 0 payload.
 
-                // Check if this specific sub-component succeeded
-                if state != ReservationState::Committed || !component_answer {
-                    log::error!("Sub-task {:?} failed in workflow {:?}", sub_res_id, reservation_id);
-                    let mut clean_vrm_of_res_ids = sub_ids.clone();
-                    clean_vrm_of_res_ids.push(reservation_id);
+                match self.reservation_store.get_state(sub_res_id) {
+                    ReservationState::ReserveAnswer => {
+                        // Get ComponentId where Reservation was reserved
+                        let component_id = if self.manager.is_reservation_reserved(sub_res_id) {
+                            self.manager.get_reserved_component(sub_res_id).unwrap()
+                        } else {
+                            self.reservation_store.update_state(reservation_id, ReservationState::Rejected);
+                            log::error!(
+                                "ErrorInReservationProcess: Commit at ADC {} failed of Reservation {:?}. There was no reserve at a VrmComponent for the reservation found. Should happen before.",
+                                self.id,
+                                self.reservation_store.get_name_for_key(sub_res_id)
+                            );
+                            return false;
+                        };
+                        let component_answer = self.manager.commit_at_component(sub_res_id, component_id.clone());
+                        let state = self.reservation_store.get_state(sub_res_id);
 
-                    self.manager.handle_commit_failure(clean_vrm_of_res_ids);
-                    return false;
+                        // Check if this specific sub-component succeeded
+                        if state != ReservationState::Committed || !component_answer {
+                            log::error!("Sub-task {:?} failed in workflow {:?}", sub_res_id, reservation_id);
+                            let mut clean_vrm_of_res_ids = sub_ids.clone();
+                            clean_vrm_of_res_ids.push(reservation_id);
+
+                            self.manager.handle_commit_failure(clean_vrm_of_res_ids);
+                            return false;
+                        }
+                    }
+                    // Dummy Dependencies (see WorkflowScheduler) or DataDependencies without payload.
+                    ReservationState::Committed => {}
+
+                    _ => {
+                        log::error!(
+                            "VrmComponentCommitInValidReservationState: The ReservationState of Reservation {:?} is {:?}, only accepted states are ReserveAnswer and Committed.",
+                            self.reservation_store.get_name_for_key(sub_res_id),
+                            self.reservation_store.get_state(sub_res_id)
+                        );
+                    }
                 }
             }
 
             self.workflow_scheduler.as_mut().unwrap().finalize_commit(reservation_id);
         } else {
             // Non-workflow atomic job
+            // Get ComponentId where Reservation was reserved
+            let component_id = if self.manager.is_reservation_reserved(reservation_id) {
+                self.manager.get_reserved_component(reservation_id).unwrap()
+            } else {
+                self.reservation_store.update_state(reservation_id, ReservationState::Rejected);
+                log::error!(
+                    "ErrorInReservationProcess: Commit at ADC {} failed of Reservation {:?}. There was no reserve at a 
+                    VrmComponent for the reservation found. Should happen before.",
+                    self.id,
+                    self.reservation_store.get_name_for_key(reservation_id)
+                );
+                return false;
+            };
+
             let is_committed = self.manager.commit_at_component(reservation_id, component_id);
-            if !is_committed {
+            let state = self.reservation_store.get_state(reservation_id);
+
+            // Check if this specific sub-component succeeded
+            if state != ReservationState::Committed || !is_committed {
+                log::debug!("Commit for Task {:?} failed. Perform clean up.", reservation_id);
+
+                self.manager.handle_commit_failure(vec![reservation_id]);
                 return false;
             }
         }
 
-        log::debug!("Committed at ADC {} Reservation {:?}.", self.id, self.reservation_store.get_name_for_key(reservation_id));
+        log::debug!("Success: Committed at ADC {} Reservation {:?}.", self.id, self.reservation_store.get_name_for_key(reservation_id));
 
         self.log_stat("Commit".to_string(), reservation_id, arrival_time);
         return true;

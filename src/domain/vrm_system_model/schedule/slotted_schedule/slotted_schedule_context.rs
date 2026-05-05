@@ -98,7 +98,7 @@ impl<S: SlottedScheduleStrategy> SlottedScheduleContext<S> {
             id: SlottedScheduleId::new(id),
             slots: slots,
             slot_width: slot_width,
-            start_slot_index: 0,
+            start_slot_index: simulator.get_system_time_s(),
             end_slot_index: number_of_real_slots,
             scheduling_window_start_time: simulator.get_system_time_s(),
             scheduling_window_end_time: -1, // TODO try to set to end of window

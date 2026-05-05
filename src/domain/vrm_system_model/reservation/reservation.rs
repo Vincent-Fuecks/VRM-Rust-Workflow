@@ -368,7 +368,7 @@ pub enum ReservationState {
     /// The execution phase of the job linked to this reservation has been finished successfully.
     Finished,
 
-    // Is a job, that is not from the VRM system, but from the local RMS system.
+    // Is a job, that is not from the VRM system, but from the local RMS.
     External,
 }
 

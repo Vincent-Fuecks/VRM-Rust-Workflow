@@ -78,7 +78,11 @@ impl WorkflowScheduler for HEFTSyncWorkflowScheduler {
                         let data_dep_source_assigned_end =
                             self.base.reservation_store.get_assigned_end(workflow.nodes.get(&data_dep_source_res_id).unwrap().reservation_id);
 
-                        let mut file_transfer_time = data_dependency.size / average_link_speed;
+                        let mut file_transfer_time = 0;
+
+                        if data_dependency.size > 0 {
+                            file_transfer_time = data_dependency.size / average_link_speed;
+                        }
 
                         // If there is something to transfer it should be at least be one
                         if data_dependency.size > 0 && file_transfer_time == 0 {
@@ -226,8 +230,12 @@ impl HEFTSyncWorkflowScheduler {
 
         let reservation_id_to_schedule = node_to_schedule.reservation_id;
 
-        let first_task_candidate = self.schedule_node_reservation_eft(workflow, reservation_id_to_schedule, grid_component_res_database, adc);
+        let mut first_task_candidate = self.schedule_node_reservation_eft(workflow, reservation_id_to_schedule, grid_component_res_database, adc);
 
+        if first_task_candidate.is_none() {
+            self.get_reservation_store().update_state(reservation_id_to_schedule, ReservationState::Open);
+            first_task_candidate = self.schedule_node_reservation_eft(workflow, reservation_id_to_schedule, grid_component_res_database, adc);
+        }
         // Failure
         if first_task_candidate.is_none()
             || !self.base.reservation_store.is_reservation_state_at_least(first_task_candidate.unwrap(), ReservationState::ReserveAnswer)
@@ -261,6 +269,13 @@ impl HEFTSyncWorkflowScheduler {
             let co_allocation_candidate_id = adc.submit_task_at_first_grid_component(member_id, None, grid_component_res_database);
 
             if !self.base.reservation_store.is_reservation_state_at_least(co_allocation_candidate_id, ReservationState::ReserveAnswer) {
+                log::debug!(
+                    "WorkflowSchedulerScheduleCoAllocationNodeFailed: reservation: {:?}, booking_interval_start {:?}, booking_interval_end: {:?}, reserved_capacity {:?}",
+                    self.get_reservation_store().get_name_for_key(member_id),
+                    self.get_reservation_store().get_booking_interval_start(member_id),
+                    self.get_reservation_store().get_booking_interval_end(member_id),
+                    self.get_reservation_store().get_reserved_capacity(member_id)
+                );
                 return false;
             }
             workflow.update_reservation(self.base.reservation_store.clone(), co_allocation_candidate_id);

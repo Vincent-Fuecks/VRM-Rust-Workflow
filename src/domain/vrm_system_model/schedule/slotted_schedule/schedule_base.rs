@@ -15,7 +15,7 @@ impl<S: SlottedScheduleStrategy> Schedule for SlottedScheduleContext<S> {
     fn clear(&mut self) {
         S::on_clear(self);
         SlottedScheduleContext::clear(self);
-        self.update();
+        SlottedScheduleContext::update(self);
     }
 
     fn clone_box(&self) -> Box<dyn Schedule> {
@@ -31,7 +31,7 @@ impl<S: SlottedScheduleStrategy> Schedule for SlottedScheduleContext<S> {
     }
 
     fn get_load_metric_up_to_date(&mut self, start_time: i64, end_time: i64) -> LoadMetric {
-        self.update();
+        SlottedScheduleContext::update(self);
         S::get_load_metric(self, start_time, end_time)
     }
 
@@ -44,7 +44,7 @@ impl<S: SlottedScheduleStrategy> Schedule for SlottedScheduleContext<S> {
     }
 
     fn probe(&mut self, id: ReservationId) -> ProbeReservations {
-        self.update();
+        SlottedScheduleContext::update(self);
 
         let mut candidates = self.calculate_schedule(id);
 
@@ -56,15 +56,16 @@ impl<S: SlottedScheduleStrategy> Schedule for SlottedScheduleContext<S> {
         if self.is_frag_needed {
             for candidate in candidates.get_mut_reservations() {
                 let candidate_id = self.reservation_store.add_probe_reservation(candidate.clone());
-                // Tempory Reserve
+
+                // Temporary Reserve
                 self.is_frag_cache_up_to_date = false;
                 self.reserve_without_check(candidate_id);
 
                 let frag_delta: f64 = self.get_system_fragmentation() - frag_before;
                 candidate.set_frag_delta(frag_delta);
 
-                // Deleate from Slots and ReservationStore
-                self.delete_reservation(candidate_id);
+                // Delete from Slots and ReservationStore
+                SlottedScheduleContext::delete_reservation(self, candidate_id);
                 self.reservation_store.delete_probe_reservation(candidate_id);
             }
         }
@@ -74,20 +75,25 @@ impl<S: SlottedScheduleStrategy> Schedule for SlottedScheduleContext<S> {
 
     fn probe_best(&mut self, request_id: ReservationId, probe_reservation_comparator: ProbeReservationComparator) -> ProbeReservations {
         let mut probe_reservations = self.probe(request_id);
-        return probe_reservations.create_new_probe_reservation_with_best_probe(request_id, probe_reservation_comparator);
+
+        if let Some(best_probes) = probe_reservations.create_new_probe_reservation_with_best_probe(request_id, probe_reservation_comparator) {
+            best_probes
+        } else {
+            probe_reservations
+        }
     }
 
     fn delete_reservation(&mut self, reservation_id: ReservationId) {
         if self.is_reservation_valid_for_deletion(reservation_id) {
             // Bring scheduling window up to date
-            self.update();
+            SlottedScheduleContext::update(self);
             // Delete Reservation from SlottedSchedule
-            self.delete_reservation(reservation_id);
+            SlottedScheduleContext::delete_reservation(self, reservation_id);
         }
     }
 
     fn reserve(&mut self, reservation_id: ReservationId) -> Option<ReservationId> {
-        self.update();
+        SlottedScheduleContext::update(self);
 
         let mut probe_reservations = self.calculate_schedule(reservation_id);
         if probe_reservations.is_empty() {
@@ -98,7 +104,7 @@ impl<S: SlottedScheduleStrategy> Schedule for SlottedScheduleContext<S> {
         if probe_reservations.only_prompt_best(reservation_id, ProbeReservationComparator::ESTReservationCompare) {
             self.is_frag_cache_up_to_date = false;
             self.reserve_without_check(reservation_id);
-            return Some(reservation_id);
+            Some(reservation_id)
         } else {
             self.active_reservations.set_state(&reservation_id, ReservationState::Rejected);
             return None;
@@ -118,6 +124,6 @@ impl<S: SlottedScheduleStrategy> Schedule for SlottedScheduleContext<S> {
     }
 
     fn update(&mut self) {
-        self.update();
+        SlottedScheduleContext::update(self);
     }
 }

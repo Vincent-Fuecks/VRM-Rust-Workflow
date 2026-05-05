@@ -2,16 +2,16 @@ use crate::domain::simulator::simulator::GlobalClock;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationStore;
 use crate::domain::vrm_system_model::resource::resource_store::ResourceStore;
 use crate::domain::vrm_system_model::schedule::schedule_trait::Schedule;
-use crate::domain::vrm_system_model::schedule::slotted_schedule::slotted_schedule_context::SlottedScheduleContext;
-use crate::domain::vrm_system_model::schedule::slotted_schedule::strategy::link::link_strategy::{self, LinkStrategy};
+use crate::domain::vrm_system_model::schedule::slotted_schedule::strategy::link::link_strategy::LinkStrategy;
 use crate::domain::vrm_system_model::schedule::slotted_schedule::strategy::link::topology::NetworkTopology;
-use crate::domain::vrm_system_model::schedule::slotted_schedule::strategy::node::node_strategy::{self, NodeStrategy};
-use crate::domain::vrm_system_model::schedule::slotted_schedule::{SlottedScheduleLinks, SlottedScheduleNodes};
+use crate::domain::vrm_system_model::schedule::slotted_schedule::strategy::node::node_strategy::NodeStrategy;
 use crate::domain::vrm_system_model::utils::id::SlottedScheduleId;
 
 use crate::error::ConversionError;
 use std::str::FromStr;
 use std::sync::Arc;
+
+use super::schedule::slotted_schedule::{SlottedLinkSchedule, SlottedNodeSchedule};
 
 #[derive(Debug, Clone)]
 pub enum SchedulerType {
@@ -59,7 +59,7 @@ impl SchedulerType {
             }
             Self::SlottedSchedule => {
                 let node_strategy = NodeStrategy::default();
-                let node_schedule = SlottedScheduleNodes::new(
+                let node_schedule = SlottedNodeSchedule::new(
                     ctx.id,
                     ctx.number_of_slots,
                     ctx.slot_width,
@@ -74,7 +74,7 @@ impl SchedulerType {
             }
             Self::SlottedScheduleLinks { topology, resource_store } => {
                 let link_strategy = LinkStrategy::new(topology.clone(), resource_store.clone());
-                let link_schedule = SlottedScheduleLinks::new(
+                let link_schedule = SlottedLinkSchedule::new(
                     ctx.id,
                     ctx.number_of_slots,
                     ctx.slot_width,
@@ -90,7 +90,7 @@ impl SchedulerType {
             Self::SlottedSchedule12 => {
                 let number_of_real_slots = (ctx.number_of_slots * (ctx.slot_width + 11)) / 12;
                 let node_strategy = NodeStrategy::default();
-                let node_schedule = SlottedScheduleNodes::new(
+                let node_schedule = SlottedNodeSchedule::new(
                     ctx.id,
                     number_of_real_slots,
                     ctx.slot_width,
@@ -106,7 +106,7 @@ impl SchedulerType {
             Self::SlottedSchedule12000 => {
                 let number_of_real_slots = (ctx.number_of_slots * (ctx.slot_width + 11999)) / 12000;
                 let node_strategy = NodeStrategy::default();
-                let node_schedule = SlottedScheduleNodes::new(
+                let node_schedule = SlottedNodeSchedule::new(
                     ctx.id,
                     number_of_real_slots,
                     ctx.slot_width,

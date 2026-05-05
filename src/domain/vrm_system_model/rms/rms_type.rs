@@ -10,10 +10,13 @@ use crate::error::ConversionError;
 use std::str::FromStr;
 use std::sync::Arc;
 
+use super::rms_simulator::rms_simulator::RmsSimulator;
+
 #[derive(Debug)]
-pub enum RmsDummyType {
-    NullRms,
-    NullBroker,
+pub enum RmsSimulatorType {
+    RmsNodeSimulator,
+    RmsNetworkSimulator,
+    RmsSimulator,
 }
 
 impl RmsSystemWrapper {
@@ -34,17 +37,22 @@ impl RmsSystemWrapper {
             }
 
             RmsSystemWrapper::DummyRms(dummy_rms_dto) => {
-                let rms_type = RmsDummyType::from_str(&dummy_rms_dto.typ)?;
+                let rms_type = RmsSimulatorType::from_str(&dummy_rms_dto.typ)?;
 
                 match rms_type {
-                    RmsDummyType::NullRms => {
-                        let rms_instance = RmsNodeSimulator::try_from((dummy_rms_dto, simulator, aci_id, reservation_store))?;
-                        Ok(Box::new(rms_instance) as Box<dyn AdvanceReservationRms + Send + Sync>)
+                    RmsSimulatorType::RmsNodeSimulator => {
+                        let rms_node_simulator_instance = RmsNodeSimulator::try_from((dummy_rms_dto, simulator, aci_id, reservation_store))?;
+                        Ok(Box::new(rms_node_simulator_instance) as Box<dyn AdvanceReservationRms + Send + Sync>)
                     }
 
-                    RmsDummyType::NullBroker => {
-                        let broker_instance = RmsNetworkSimulator::try_from((dummy_rms_dto, simulator, aci_id, reservation_store))?;
-                        Ok(Box::new(broker_instance) as Box<dyn AdvanceReservationRms + Send + Sync>)
+                    RmsSimulatorType::RmsNetworkSimulator => {
+                        let rms_network_simulator = RmsNetworkSimulator::try_from((dummy_rms_dto, simulator, aci_id, reservation_store))?;
+                        Ok(Box::new(rms_network_simulator) as Box<dyn AdvanceReservationRms + Send + Sync>)
+                    }
+
+                    RmsSimulatorType::RmsSimulator => {
+                        let rms_simulator = RmsSimulator::try_from((dummy_rms_dto, simulator, aci_id, reservation_store))?;
+                        Ok(Box::new(rms_simulator) as Box<dyn AdvanceReservationRms + Send + Sync>)
                     }
                 }
             }
@@ -52,13 +60,14 @@ impl RmsSystemWrapper {
     }
 }
 
-impl FromStr for RmsDummyType {
+impl FromStr for RmsSimulatorType {
     type Err = ConversionError;
 
-    fn from_str(rms_type_dto: &str) -> Result<RmsDummyType, Self::Err> {
+    fn from_str(rms_type_dto: &str) -> Result<RmsSimulatorType, Self::Err> {
         match rms_type_dto {
-            "NullRms" => Ok(RmsDummyType::NullRms),
-            "NullBroker" => Ok(RmsDummyType::NullBroker),
+            "RmsNodeSimulator" => Ok(RmsSimulatorType::RmsNodeSimulator),
+            "RmsNetworkSimulator" => Ok(RmsSimulatorType::RmsNetworkSimulator),
+            "RmsSimulator" => Ok(RmsSimulatorType::RmsSimulator),
             _ => Err(ConversionError::UnknownRmsType(rms_type_dto.to_string())),
         }
     }

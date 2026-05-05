@@ -17,18 +17,26 @@ pub struct GlobalClock {
 
 impl GlobalClock {
     pub fn new(is_simulation: bool) -> Self {
-        let start_at = if is_simulation { 0 } else { SystemTime::now().duration_since(UNIX_EPOCH).expect("Time went backwards").as_secs() as i64 };
-
-        Self { is_simulation: is_simulation, reference_start_time: AtomicI64::new(start_at) }
+        let mut reference_start_time = AtomicI64::new(SystemTime::now().duration_since(UNIX_EPOCH).expect("Time went backwards").as_secs() as i64);
+        if is_simulation {
+            reference_start_time = AtomicI64::new(0);
+        }
+        Self { is_simulation: is_simulation, reference_start_time: reference_start_time }
     }
 
     pub fn get_system_time_s(&self) -> i64 {
         let now = SystemTime::now().duration_since(UNIX_EPOCH).expect("Time went backwards").as_secs() as i64;
 
         if self.is_simulation {
-            return now - self.reference_start_time.load(Ordering::Relaxed);
+            return self.reference_start_time.load(Ordering::Relaxed);
         }
 
         return now;
+    }
+
+    pub fn tick_forward(&mut self) {
+        if self.is_simulation {
+            self.reference_start_time = AtomicI64::new(self.reference_start_time.load(Ordering::Relaxed) + 1);
+        }
     }
 }

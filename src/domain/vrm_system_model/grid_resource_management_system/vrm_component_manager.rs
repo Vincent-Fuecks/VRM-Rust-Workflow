@@ -10,7 +10,7 @@ use crate::domain::vrm_system_model::reservation::reservation_store::Reservation
 use crate::domain::vrm_system_model::reservation::reservation_sync_gate::SyncRegistry;
 use crate::domain::vrm_system_model::rms::rms::RmsLoadMetric;
 use crate::domain::vrm_system_model::schedule::schedule_trait::Schedule;
-use crate::domain::vrm_system_model::schedule::slotted_schedule::SlottedScheduleNodes;
+use crate::domain::vrm_system_model::schedule::slotted_schedule::SlottedNodeSchedule;
 use crate::domain::vrm_system_model::schedule::slotted_schedule::strategy::node::node_strategy::NodeStrategy;
 use crate::domain::vrm_system_model::utils::id::RouterId;
 use crate::domain::vrm_system_model::utils::id::{AdcId, ComponentId, ShadowScheduleId, SlottedScheduleId};
@@ -77,7 +77,7 @@ impl VrmComponentContainer {
         let total_capacity = vrm_component.get_total_capacity();
         let node_strategy = NodeStrategy::default();
 
-        let slotted_schedule_nodes = SlottedScheduleNodes::new(
+        let slotted_schedule_nodes = SlottedNodeSchedule::new(
             scheduler_id,
             number_of_real_slots,
             slot_width,

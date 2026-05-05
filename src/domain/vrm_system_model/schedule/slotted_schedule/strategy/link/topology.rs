@@ -2,7 +2,7 @@ use crate::domain::simulator::simulator::GlobalClock;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationStore;
 use crate::domain::vrm_system_model::resource::link_resource::LinkResource;
 use crate::domain::vrm_system_model::resource::resource_store::{LinkResourceId, ResourceStore};
-use crate::domain::vrm_system_model::schedule::slotted_schedule::SlottedScheduleNodes;
+use crate::domain::vrm_system_model::schedule::slotted_schedule::SlottedNodeSchedule;
 use crate::domain::vrm_system_model::schedule::slotted_schedule::strategy::node::node_strategy::NodeStrategy;
 use crate::domain::vrm_system_model::utils::id::{AciId, ResourceName, RouterId, SlottedScheduleId};
 
@@ -365,7 +365,7 @@ impl NetworkTopology {
             let link_schedule_name = format!("Schedule LinkResource {} -> {}", link.source, link.target);
             let node_strategy = NodeStrategy::default();
 
-            let link_schedule = SlottedScheduleNodes::new(
+            let link_schedule = SlottedNodeSchedule::new(
                 SlottedScheduleId::new(link_schedule_name),
                 num_of_slots,
                 slot_width,
@@ -376,9 +376,9 @@ impl NetworkTopology {
                 simulator.clone(),
             );
 
-            let link_resouce_name = ResourceName::new(link.id.clone());
+            let link_resource_name = ResourceName::new(link.id.clone());
             let link_resource = LinkResource::new(
-                link_resouce_name,
+                link_resource_name,
                 RouterId::new(link.source.clone()),
                 RouterId::new(link.target.clone()),
                 link.capacity,
@@ -390,7 +390,7 @@ impl NetworkTopology {
 
         if links_ids.is_empty() {
             log::info!(
-                "Empty Network Cluster: The newly created Rms Network of AcI {} contains no Network. NullRms should be utilized instead.",
+                "Empty Network Cluster: The newly created Rms Network of AcI {} contains no Network. RmsNodeSimulator should be utilized instead.",
                 aci_id
             );
         }

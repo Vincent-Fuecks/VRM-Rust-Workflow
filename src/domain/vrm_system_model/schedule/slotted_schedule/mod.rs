@@ -9,5 +9,5 @@ pub mod slot;
 pub mod slotted_schedule_context;
 pub mod strategy;
 
-pub type SlottedScheduleNodes = SlottedScheduleContext<NodeStrategy>;
-pub type SlottedScheduleLinks = SlottedScheduleContext<LinkStrategy>;
+pub type SlottedNodeSchedule = SlottedScheduleContext<NodeStrategy>;
+pub type SlottedLinkSchedule = SlottedScheduleContext<LinkStrategy>;

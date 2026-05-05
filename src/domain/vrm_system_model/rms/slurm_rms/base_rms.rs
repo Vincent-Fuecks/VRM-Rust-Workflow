@@ -69,7 +69,7 @@ impl Rms for SlurmRms {
         }
 
         // Send NodeReservation to RMS
-        tokio::spawn(async move {
+        self.rt_handle.block_on(async move {
             let result = timeout(Duration::from_secs(SLURM_RMS_COMMIT_TIMEOUT_S), client.commit(payload)).await;
             reservation_store.update_state(reservation_id, ReservationState::Committed);
 
@@ -129,7 +129,7 @@ impl Rms for SlurmRms {
         let slurm_task_id = task_mapping.read().unwrap().get_by_left(&reservation_id).cloned();
 
         if let Some(slurm_task_id) = slurm_task_id {
-            tokio::spawn(async move {
+            self.rt_handle.block_on(async move {
                 let result = timeout(Duration::from_secs(SLURM_RMS_DELETE_TIMEOUT_S), client.delete(slurm_task_id)).await;
 
                 match result {

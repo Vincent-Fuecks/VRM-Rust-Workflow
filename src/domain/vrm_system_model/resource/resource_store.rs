@@ -8,7 +8,7 @@ use std::{
 use crate::domain::vrm_system_model::{
     reservation::{
         reservation::{Reservation, ReservationTrait},
-        reservation_store::{NotificationListener, ReservationId, ReservationStore},
+        reservation_store::{ReservationId, ReservationStore},
     },
     resource::{
         link_resource::LinkResource,
@@ -21,8 +21,6 @@ use crate::domain::vrm_system_model::{
     },
     utils::id::{ResourceName, RouterId},
 };
-
-use super::node_resource;
 
 new_key_type! {
     pub struct NodeResourceId;
