@@ -44,9 +44,9 @@ struct Args {
     #[arg(short = 'c', long, default_value = "src/data/vrm_with_slurm.json")]
     config_file: String,
 
-    /// Enables Logging
-    #[arg(short = 'l', default_value_t = true)]
-    enable_logging: bool,
+    /// Disables Logging
+    #[arg(short = 'l', long)]
+    disable_logging: bool,
 }
 
 #[tokio::main]
@@ -54,11 +54,11 @@ async fn main() {
     let args = Args::parse();
 
     // Init Logging
-    if args.enable_logging {
+    if args.disable_logging {
+        log::set_max_level(log::LevelFilter::Off);
+    } else {
         logger::init();
         AnalyticsSystem::init(args.output_file);
-    } else {
-        log::set_max_level(log::LevelFilter::Off);
     }
 
     let file_path_workflows = &args.input_file;

@@ -2,11 +2,130 @@
 
 A hierarchical Virtual Resource Manager (VRM) implementation in Rust, designed to provide an abstraction layer for virtual resources and Service Level Agreements (SLAs) in High-Performance Computing (HPC) environments.
 
-## Installation and Usage
+## Setup and Usage
+
+### Pre-Requirements
+Before you begin, ensure you have the following installed:
+* Rust (latest stable version)
+* Docker & Docker Compose (required for the virtual Slurm HPC environment)
+
+### Installation
+Clone the VRM-Rust repository and navigate into the project directory:
+```bash
+# Clone the VRM-Rust Repository
+git clone git@github.com:Vincent-Fuecks/VRM-Rust.git
+```
+### Usage Modes 
+#### Option A: RmsNodeSimulator (Quick Start)
+To test VRM-Rust against a Slurm-based system, you must first set up the virtual cluster.
+```bash
+cargo run -- --input-file src/data/workflow_with_direct_mapping.json --config-file src/data/vrm_node_simulator.json
+```
+
+
+##### Step 1 Clone and Initialize Environment
+```bash
+# Clone the Virtual Slurm Environment (modified clone form https://github.com/giovtorres/slurm-docker-cluster)
+git clone git@github.com:Vincent-Fuecks/virtual-slurm-environment.git
+cd virtual-slurm-environment
+
+# Generate a JWT key for authentication
+openssl rand -out jwt_hs256.key 32
+
+# Start the cluster to initialize directories
+docker compose up -d
+```
+
+##### Step 2 Configure Authentication
+Inject the JWT key into the docker cluster and set the correct permissions:
+```bash
+# Copy key to the control daemon
+docker cp jwt_hs256.key slurmctld:/etc/slurm/jwt_hs256.key
+
+# Set ownership
+docker exec -u root slurmctld chown 991:991 /etc/slurm/jwt_hs256.key
+
+# Restart the cluster to apply changes
+docker compose down
+
+# Update all compute nodes
+./update_slurmfiles.sh slurm.conf
+docker compose up -d
+```
+
+##### Step 3 Configure Authentication
+Generate a REST API token for the user **vrmUser**. We’ll set a lifespan of one day for the token:
+```bash
+docker compose exec slurmctld scontrol token username=vrmUser lifespan=86400
+```
+[!IMPORTANT]
+Copy the token output from the command above. You will need it for the final configuration.
+
+##### Step 4: Verify Connection
+Test the Slurm REST API connection using curl:
+```bash
+curl -s -v \
+  -H "X-SLURM-USER-NAME: vrmUser" \
+  -H "X-SLURM-USER-TOKEN: <YOUR-ACCESS-TOKEN>" \
+  "http://localhost:6820/slurm/v0.0.41/ping"
+
+# Should look like this: 
+# *   Trying 127.0.0.1:6820...
+# * Connected to localhost (127.0.0.1) port 6820 (#0)
+# > GET /slurm/v0.0.41/ping HTTP/1.1
+# > Host: localhost:6820
+# > User-Agent: curl/7.81.0
+# > Accept: */*
+# > X-SLURM-USER-NAME: vrmUser
+# > X-SLURM-USER-TOKEN: <<YOUR-ACCESS-TOKEN>>
+# > 
+# * Mark bundle as not supporting multiuse
+# < HTTP/1.1 200 OK
+# < Content-Length: 698
+# < Content-Type: application/json
+# < 
+# {
+#   "pings": [
+#     {
+#       "hostname": "slurmctld",
+#       "pinged": "UP",
+#       "latency": 1425,
+#       "mode": "primary"
+#     }
+#   ],
+#  ...
+# }
+```
+
+##### Step 5 Configure VRM-Rust
+Finally, update the project configuration to point to your new cluster. Open VRM-Rust/src/data/vrm_with_slurm.json and update the following fields:
+```json
+{
+  "userName": "vrmUser",
+  "jwtToken": "<YOUR-ACCESS-TOKEN>"
+}
+```
+##### Step 6 Run the VRM-Rust with Demo data 
+```bash
+cargo run -- --input-file src/data/workflow_with_direct_mapping.json --config-file src/data/vrm_with_slurm.json
+```
 
 ## Project Structure
-
-## Tests
+├── src/
+│   ├── api/                             # Contains the Transferable Objects  
+│   ├── data/                            # Contains examples input for the VRM-Rust system 
+│   │   ├── benchmark/                   # Benchmark data for the VRM-Rust vs. Java legacy system benchmark 
+│   │   ├── demo/                        # Demo data to run the VRM-Rust system 
+│   │   ├── generated_workflows/         # Directory, where generated workflows are stored
+│   │   └── test/                        # Utilized VRM-Rust configuration and workflow for tests 
+│   ├──domain  
+│   │   ├── simulator/                   # Manges the system time of the VRM-Rust system (GlobalClock) 
+│   │   ├── 
+│   │   ├── 
+│   │   └── 
+|   └──  loader/                         # Parser to load JSON files
+├── tests/              # Integration tests with sample avatars
+└── Cargo.toml          # Build configuration
 
 ## Overview
 
