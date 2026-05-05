@@ -22,13 +22,18 @@ jobs:
       - name: Render Mermaid Diagram
         uses: mermaid-js/mermaid-cli@master
         with:
-          input: diagrams/architecture.mmd
-          output: diagrams/architecture.svg
+          # Use absolute paths to be safe
+          input: ${{ github.workspace }}/diagrams/architecture.mmd
+          output: ${{ github.workspace }}/diagrams/architecture.svg
+
+      - name: Check if file exists (Debug)
+        run: ls -R diagrams/
 
       - name: Commit and Push changes
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          # Use 'git add .' to be less brittle, or stick to the path
           git add diagrams/architecture.svg
           git commit -m "chore: update architecture diagram" || exit 0
           git push
