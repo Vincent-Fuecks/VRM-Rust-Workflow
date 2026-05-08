@@ -20,7 +20,7 @@ pub struct DataDependency {
     /// TODO
     pub port_name: String,
 
-    /// TODO Size of the file for transport?
+    /// Size of the file for transport.
     pub size: i64,
 }
 

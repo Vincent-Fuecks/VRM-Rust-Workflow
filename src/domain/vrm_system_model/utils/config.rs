@@ -1,7 +1,11 @@
 //////////////////////////////////////////////////////////
 /// File contains all constants of the VRM-Rust system ///
 //////////////////////////////////////////////////////////
-use crate::api::rms_config_dto::rms_dto::SlurmConfigDto;
+
+/// Defines the number of times a ProbeReservation is prompted, start the reserve process for this specific reservation
+/// Optimization high number of tries leads to suboptimal solutions ...
+/// But small number of tries leads to potential rejection ...
+pub const TRY_N_PROMOTIONS: u64 = 50;
 
 /// Specifies the time interval, in which the ResourceStore and the Schedule of the
 /// corresponding Slurm Rms system is synchronized regarding nodes and tasks.

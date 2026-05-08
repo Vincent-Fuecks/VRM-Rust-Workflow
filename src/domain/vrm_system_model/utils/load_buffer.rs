@@ -14,7 +14,6 @@ pub const SLOTS_TO_DROP_ON_END: i64 = 50;
 
 /// This context acts as a thread-safe synchronization point
 /// to determine the global start and end times of activity across the AcI.
-/// TODO Is AcI right?
 #[derive(Debug)]
 pub struct GlobalLoadContext {
     /// The earliest slot index where load was observed globally.

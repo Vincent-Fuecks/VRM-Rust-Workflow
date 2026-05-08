@@ -107,7 +107,6 @@ impl<S: SlottedScheduleStrategy> SlottedScheduleContext<S> {
             is_frag_cache_up_to_date: true,
             fragmentation_cache: 0.0,
             use_quadratic_mean_fragmentation: use_quadratic_mean_fragmentation,
-            // TODO Always false
             is_frag_needed: false,
             reservation_store,
             simulator,

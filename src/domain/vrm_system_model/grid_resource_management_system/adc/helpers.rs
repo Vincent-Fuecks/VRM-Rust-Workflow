@@ -12,6 +12,7 @@ use crate::domain::vrm_system_model::{
         reservation_store::ReservationId,
     },
     utils::{
+        config::TRY_N_PROMOTIONS,
         id::{ComponentId, ShadowScheduleId},
         statistics::ANALYTICS_TARGET,
     },
@@ -187,8 +188,6 @@ impl ADC {
         grid_component_res_database: &mut HashMap<ReservationId, ComponentId>,
         probe_reservation_comparator: ProbeReservationComparator,
     ) -> Option<ReservationId> {
-        // TODO Should be config
-        let try_n_probe_reservations = 1000;
         let mut probe_reservations = ProbeReservations::new(reservation_id, self.reservation_store.clone());
 
         let res_snapshot = match self.reservation_store.get_reservation_snapshot(reservation_id) {
@@ -206,9 +205,8 @@ impl ADC {
                 probe_reservations.add_probe_reservations(probe_res);
             }
         }
-        // TODO Optimization high number of tries leads to suboptimal solutions ...
-        // But small number of tries leads to potential rejection ...
-        for _ in 0..try_n_probe_reservations {
+
+        for _ in 0..TRY_N_PROMOTIONS {
             if let Some((component_id, shadow_schedule_id)) = probe_reservations.prompt_best(reservation_id, probe_reservation_comparator.clone()) {
                 self.manager.reserve(component_id.clone(), reservation_id, shadow_schedule_id);
 

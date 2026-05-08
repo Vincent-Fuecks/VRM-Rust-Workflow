@@ -24,17 +24,11 @@ use std::sync::Arc;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
-/**
- * Used as dummy AI for all jobs, which are not really send to AIs but
- * rather processed internally. E.g. workflow network transfers, which are
- * skipped as both endpoints are on the same node.
- */
+// In the case where dummy dependencies where scheduled, a dummy VrmComponentId is utilized.
+// This happens in the cases, where network transfers can be skipped, as both endpoints are on the same node.
 lazy_static! {
     pub static ref DUMMY_COMPONENT_ID: ComponentId = ComponentId::new("ADC INTERNAL JOB");
 }
-
-// TODO Functions must be synchronized with the AcIs
-// TODO Old Java Version contained all resources and enabled access to them looks like this is now not necessary
 
 /// Container holds a VrmComponents (**AcI** or **ADC**) instance and metadata required for sorting and management.
 #[derive(Debug)]
@@ -42,8 +36,7 @@ pub struct VrmComponentContainer {
     // Contains a AcI or ADC
     pub vrm_component: Box<dyn VrmComponent + Send>,
 
-    // TODO Should the schedule get a separated ReservationStore? Currently GridComponent and schedule have the same.
-    // AKA SlottedSchedule
+    // Internal schedule of the VrmComponent (is e.g. a SlottedSchedule)
     pub schedule: Box<dyn Schedule>,
 
     /// The sequence number assigned at registration time, used for stable sorting.
@@ -71,12 +64,9 @@ impl VrmComponentContainer {
         link_resource_count: usize,
     ) -> Self {
         let component_id = vrm_component.get_id();
-        // TODO Add Option for different schedule
         let scheduler_id = SlottedScheduleId::new(format!("Scheduler of VrmComponent: {:?}", component_id));
-
         let total_capacity = vrm_component.get_total_capacity();
         let node_strategy = NodeStrategy::default();
-
         let slotted_schedule_nodes = SlottedNodeSchedule::new(
             scheduler_id,
             number_of_real_slots,
