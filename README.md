@@ -5,13 +5,12 @@ A hierarchical Virtual Resource Manager (VRM) implementation in Rust, designed t
 ## Table of Contents
 - [VRM-Rust](#vrm-rust)
   - [Table of Contents](#table-of-contents)
-  - [Setup and Usage](#setup-and-usage)
   - [Overview](#overview)
-  - [Features and Capabilities](#features-and-capabilities)
-  - [Reservation](#reservation)
-    - [Probe Reservation Process](#probe-reservation-process)
-    - [Reservation State Definitions](#reservation-state-definitions)
-    - [Pre-Requirements](#pre-requirements)
+    - [Features and Capabilities](#features-and-capabilities)
+    - [Reservation](#reservation)
+      - [Probe Reservation Process](#probe-reservation-process)
+      - [Reservation State Definitions](#reservation-state-definitions)
+  - [Pre-Requirements](#pre-requirements)
     - [Installation](#installation)
     - [Usage Modes](#usage-modes)
       - [Option A: RmsNodeSimulator (Quick Start)](#option-a-rmsnodesimulator-quick-start)
@@ -22,8 +21,7 @@ A hierarchical Virtual Resource Manager (VRM) implementation in Rust, designed t
         - [Step 4: Verify Connection](#step-4-verify-connection)
         - [Step 5 Configure VRM-Rust](#step-5-configure-vrm-rust)
         - [Step 6 Run the VRM-Rust with Demo data](#step-6-run-the-vrm-rust-with-demo-data)
-  - [Project Structure](#project-structure)
-## Setup and Usage
+  - [Project Structure (Overview)](#project-structure-overview)
 
 <details><summary>VRM-Rust Overview</summary>
 
@@ -43,7 +41,7 @@ In instances where the underlying RMS employs a queuing-based system rather than
 ![Architecture Diagram](./diagrams/architecture.svg)
 *Figure 1: System Architecture*
 
-## Features and Capabilities
+### Features and Capabilities
 
 - **Abstraction & Usability:** Provides a high-level interface for virtual resources and SLAs.
 - **Slurm Support:** Integrates with Slurm-based RMSs via a the Slurm REST API.
@@ -52,7 +50,7 @@ In instances where the underlying RMS employs a queuing-based system rather than
 - **System Simulation:** Built-in support for emulating cluster nodes and network topologies for testing and development.
 
 
-## Reservation
+### Reservation
 
 A reservation in the VRM system represents a resource request made by a **Client**. These reservations are derived from the workflow or atomic task submitted by the **Client**. There are three kinds of reservations: **NodeReservation**, **LinkReservation** and **WorkflowReservation** (contains all link- or node reservations for the corresponding workflow). 
 
@@ -70,14 +68,14 @@ The reservation proceeding is tracked by the nine **ReservationState**s detailed
 * Terminal Immutability: For the states $\{Finished, Rejected, Deleted\}$, no further transitions are defined.
 * Any transition into a terminal state releases/cleans up the reserved/allocated resources.
 
-### Probe Reservation Process
+#### Probe Reservation Process
 The probe reservation process within the VRM architecture is distinct from others because it requires multiple state changes to succeed. This process is instantiated by the **VrmManager**, which updates the reservation state from Open to ProbeAnswer. This update indicates that a probe request for this reservation has been made. The potential outcomes of this operation are Rejected upon failure or ReserveAnswer following a successful reserve request.
 
 During the probe process, the system queries all connected **AcI** components to return all valid ProbeReservation objects that satisfy the specific requirements of the reservation. These objects are aggregated into a **ProbeReservations** container. This container encapsulates the original probe reservation and all received probe reservations with their respective AcIId to ensure origin traceability. An important difference between a probe reservation and a normal reservation is that probe reservations are not tracked by the **ReservationStore**. 
 
 These aggregated **ProbeReservations** are returned to the requester to initiate the promotion process. The system selects the best candidate from the **ProbeReservations** object based on selection criteria, such as the earliest start time. The selected candidate replaces the original reservation, and the state is updated to ReserveProbeReservation. The reservation is directly via a reserve request submitted to the **AcI**, which issued the probe reservation. If the reserve request succeeds, the state is updated to ReserveAnswer and the probe reservation process terminates. In the event of a failure, the system discards the promoted candidate and selects the next best candidate for promotion.
 
-### Reservation State Definitions
+#### Reservation State Definitions
 
 | State | Category | Description |
 | :--- | :--- | :--- |
@@ -100,8 +98,7 @@ These aggregated **ProbeReservations** are returned to the requester to initiate
 *Figure 2: Reservation Life Cycle*
 </details>
 
-
-### Pre-Requirements
+## Pre-Requirements
 Before you begin, ensure you have the following installed:
 - **[Rust](https://rust-lang.org/)** 
 - **[Docker](https://docs.docker.com/get-docker/)**
@@ -213,7 +210,7 @@ Finally, update the project configuration to point to your new cluster. Open VRM
 cargo run -- --input-file src/data/workflow_with_direct_mapping.json --config-file src/data/vrm_with_slurm.json
 ```
 
-## Project Structure
+## Project Structure (Overview)
 ```plaintext
 ├── src/
 │   ├── api/                             # Contains the Transferable Objects  
