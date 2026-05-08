@@ -5,8 +5,6 @@ use crate::domain::vrm_system_model::grid_resource_management_system::vrm_compon
 use crate::domain::vrm_system_model::reservation::probe_reservations::{ProbeReservationComparator, ProbeReservations};
 use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationState};
 use crate::domain::vrm_system_model::reservation::reservation_store::{ReservationId, ReservationStore};
-use crate::domain::vrm_system_model::reservation::reservation_sync_gate::SyncRegistry;
-use crate::domain::vrm_system_model::reservation::vrm_state_listener::VrmStateListener;
 use crate::domain::vrm_system_model::rms::advance_reservation_trait::AdvanceReservationRms;
 use crate::domain::vrm_system_model::rms::rms::RmsLoadMetric;
 use crate::domain::vrm_system_model::utils::id::{AciId, AdcId, ClientId, ComponentId, ShadowScheduleId};
@@ -107,12 +105,10 @@ pub struct AcI {
     commit_timeout: i64,
     rms_system: Box<dyn AdvanceReservationRms + Send>,
     shadow_schedule_reservations: ShadowScheduleReservations,
-    // TODO add event to clean up finished, rejecet, or deleted tasks
+    // TODO add event to clean up finished, reject, or deleted tasks
     committed_reservations: HashMap<ReservationId, ReservationContainer>,
     not_committed_reservations: HashMap<ReservationId, ReservationContainer>,
     open_probe_reservations: HashMap<ReservationId, Option<ShadowScheduleId>>,
-    vrm_state_listener: VrmStateListener,
-    sync_registry: SyncRegistry,
 
     simulator: Arc<GlobalClock>,
     pub reservation_store: ReservationStore,
@@ -122,10 +118,7 @@ impl AcI {
     pub async fn from_dto(dto: AcIDto, simulator: Arc<GlobalClock>, reservation_store: ReservationStore) -> Result<Self, ConversionError> {
         let aci_id = AciId::new(dto.id.clone());
         let adc_id: AdcId = AdcId::new(dto.adc_id);
-
         let rms_system = RmsSystemWrapper::get_instance(dto.rms_system, simulator.clone(), aci_id.clone(), reservation_store.clone()).await?;
-
-        let vrm_state_listener = VrmStateListener::new_empty();
 
         Ok(AcI {
             id: aci_id,
@@ -135,9 +128,7 @@ impl AcI {
             shadow_schedule_reservations: ShadowScheduleReservations::new(),
             not_committed_reservations: HashMap::new(),
             committed_reservations: HashMap::new(),
-            vrm_state_listener: vrm_state_listener,
             open_probe_reservations: HashMap::new(),
-            sync_registry: SyncRegistry::new(),
             simulator: simulator,
             reservation_store: reservation_store.clone(),
         })
@@ -444,6 +435,19 @@ impl VrmComponent for AcI {
 
     fn reserve(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> ReservationId {
         log::debug!("In AcI {} reserve reservation {:?} for ShadowScheduleId {:?}", self.id, reservation_id, shadow_schedule_id);
+
+        // Is reservation has in valid state stop early
+        if !self.reservation_store.is_reserve_request_valid(reservation_id) {
+            log::error!(
+                "ErrorAcIReserveRequestInValidReservationState: AcI {} reserve reservation {:?} for ShadowScheduleId {:?}, with ReservationState: {:?} ",
+                self.id,
+                reservation_id,
+                shadow_schedule_id,
+                self.reservation_store.get_state(reservation_id)
+            );
+            self.reservation_store.update_state(reservation_id, ReservationState::Rejected);
+            return reservation_id;
+        }
 
         let arrival_time = self.simulator.get_system_time_s();
 

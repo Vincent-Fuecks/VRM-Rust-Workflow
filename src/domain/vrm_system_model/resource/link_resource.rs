@@ -1,6 +1,5 @@
 use std::any::Any;
 
-use crate::domain::vrm_system_model::reservation::reservation::ReservationTrait;
 use crate::domain::vrm_system_model::resource::resource_trait::{FeasibilityRequest, Resource};
 use crate::domain::vrm_system_model::resource::resources::BaseResource;
 use crate::domain::vrm_system_model::schedule::slotted_schedule::slotted_schedule_context::SlottedScheduleContext;
@@ -42,7 +41,7 @@ impl Resource for LinkResource {
         match request {
             FeasibilityRequest::Link { source, target, capacity, is_moldable } => {
                 // Links check topology AND capacity
-                log::debug!("LinkResouce check with {:?} source: {:?}, target: {:?}", self.base.name, self.source, self.target);
+                log::debug!("LinkResource check with {:?} source: {:?}, target: {:?}", self.base.name, self.source, self.target);
                 if source.compare(&self.source) && target.compare(&self.target) {
                     return self.base.can_handle(*is_moldable, *capacity);
                 } else {

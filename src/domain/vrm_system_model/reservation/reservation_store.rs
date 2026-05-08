@@ -498,6 +498,16 @@ impl ReservationStore {
         }
     }
 
+    pub fn is_reserve_request_valid(&self, reservation_id: ReservationId) -> bool {
+        if let Some(handle) = self.get(reservation_id) {
+            let res = handle.read().unwrap();
+            return res.get_state().is_reserve_request_valid();
+        } else {
+            log::error!("Get reservation (id: {:?}) was not possible.", reservation_id);
+            return false;
+        }
+    }
+
     pub fn get_type(&self, reservation_id: ReservationId) -> Option<ReservationTyp> {
         if let Some(handle) = self.get(reservation_id) {
             let res = handle.read().unwrap();

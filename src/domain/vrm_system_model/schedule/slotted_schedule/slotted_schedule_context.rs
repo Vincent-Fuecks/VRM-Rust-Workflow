@@ -380,6 +380,16 @@ impl<S: SlottedScheduleStrategy> SlottedScheduleContext<S> {
 
         let mut search_results = ProbeReservations::new(id, self.reservation_store.clone());
 
+        if request_start_boundary > request_end_boundary || request_start_boundary < 0 {
+            log::error!(
+                "ErrorSlottedScheduleContextInValidReservationStartAndEndRequest: The reservation with id {:?} has in valid start ({}) or end ({}).",
+                id,
+                request_start_boundary,
+                request_end_boundary
+            );
+            return search_results;
+        }
+
         if !self.active_reservations.get_is_moldable(&id)
             && S::get_capacity(self) > 0
             && S::get_capacity(self) < self.active_reservations.get_reserved_capacity(&id)

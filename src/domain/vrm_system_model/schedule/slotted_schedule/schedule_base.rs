@@ -44,6 +44,12 @@ impl<S: SlottedScheduleStrategy> Schedule for SlottedScheduleContext<S> {
     }
 
     fn probe(&mut self, id: ReservationId) -> ProbeReservations {
+        // Early Stop
+        if self.reservation_store.get_reserved_capacity(id) < 0 {
+            log::error!("SlottedScheduleContextProbeRequestNegativeReserveCapacity: The reserved capacity of Reservation {:?} is below zero.", id);
+            self.reservation_store.update_state(id, ReservationState::Rejected);
+        }
+
         SlottedScheduleContext::update(self);
 
         let mut candidates = self.calculate_schedule(id);
@@ -74,6 +80,15 @@ impl<S: SlottedScheduleStrategy> Schedule for SlottedScheduleContext<S> {
     }
 
     fn probe_best(&mut self, request_id: ReservationId, probe_reservation_comparator: ProbeReservationComparator) -> ProbeReservations {
+        // Early Stop
+        if self.reservation_store.get_reserved_capacity(request_id) < 0 {
+            log::error!(
+                "SlottedScheduleContextProbeBestRequestNegativeReserveCapacity: The reserved capacity of Reservation {:?} is below zero.",
+                request_id
+            );
+            self.reservation_store.update_state(request_id, ReservationState::Rejected);
+        }
+
         let mut probe_reservations = self.probe(request_id);
 
         if let Some(best_probes) = probe_reservations.create_new_probe_reservation_with_best_probe(request_id, probe_reservation_comparator) {
@@ -93,6 +108,15 @@ impl<S: SlottedScheduleStrategy> Schedule for SlottedScheduleContext<S> {
     }
 
     fn reserve(&mut self, reservation_id: ReservationId) -> Option<ReservationId> {
+        // Early Stop
+        if self.reservation_store.get_reserved_capacity(reservation_id) < 0 {
+            log::error!(
+                "SlottedScheduleContextReserveRequestNegativeReserveCapacity: The reserved capacity of Reservation {:?} is below zero.",
+                reservation_id
+            );
+            self.reservation_store.update_state(reservation_id, ReservationState::Rejected);
+        }
+
         SlottedScheduleContext::update(self);
 
         let mut probe_reservations = self.calculate_schedule(reservation_id);
@@ -112,6 +136,15 @@ impl<S: SlottedScheduleStrategy> Schedule for SlottedScheduleContext<S> {
     }
 
     fn reserve_without_check(&mut self, reservation_id: ReservationId) {
+        // Early Stop
+        if self.reservation_store.get_reserved_capacity(reservation_id) < 0 {
+            log::error!(
+                "SlottedScheduleContextReserveWithoutCheckRequestNegativeReserveCapacity: The reserved capacity of Reservation {:?} is below zero.",
+                reservation_id
+            );
+            self.reservation_store.update_state(reservation_id, ReservationState::Rejected);
+        }
+
         let start_slot = self.get_slot_index(self.active_reservations.get_assigned_start(&reservation_id));
         let end_slot = self.get_slot_index(self.active_reservations.get_assigned_end(&reservation_id) - 1);
 

@@ -394,6 +394,10 @@ impl ReservationState {
             _ => Err(format!("Unknown Slurm state: {}", str_state)),
         }
     }
+
+    pub fn is_reserve_request_valid(&self) -> bool {
+        matches!(self, Self::Open | Self::ReserveProbeReservation)
+    }
 }
 
 /// Defines the set of primary actions (proceedings) that can be requested for a reservation.
