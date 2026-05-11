@@ -229,7 +229,7 @@ impl<S: SlottedScheduleStrategy> SlottedScheduleContext<S> {
         for clean_index in self.start_slot_index..effective_cleanup_end {
             if let Some(slot) = self.get_slot(clean_index) {
                 for id in &slot.reservation_ids {
-                    let last_slot_of_reservation = self.get_slot_index(self.active_reservations.get_assigned_end(id) - 1);
+                    let last_slot_of_reservation = self.get_slot_index(self.reservation_store.get_assigned_end(id.clone()) - 1);
                     if last_slot_of_reservation == clean_index {
                         ids_to_remove.insert(id.clone());
                     }
@@ -272,8 +272,7 @@ impl<S: SlottedScheduleStrategy> SlottedScheduleContext<S> {
         // Can not Del unreserved reservation
         if !self.active_reservations.contains_key(&id) {
             log::error!("DEL Reservation form Schedule: {}, However Schedule does not contain reservation with id: {:?}", self.id, id);
-
-            self.active_reservations.set_state(&id, ReservationState::Rejected);
+            self.reservation_store.update_state(id.clone(), ReservationState::Rejected);
             return false;
         }
         return true;
@@ -289,16 +288,16 @@ impl<S: SlottedScheduleStrategy> SlottedScheduleContext<S> {
     pub fn delete_reservation(&mut self, id: ReservationId) {
         let current_time = self.simulator.get_system_time_s();
         // Can not delete already finished reservations
-        let task_finished: bool = self.active_reservations.get_assigned_end(&id) <= current_time;
+        let task_finished: bool = self.reservation_store.get_assigned_end(id.clone()) <= current_time;
 
         if task_finished {
             log::error!("Can't deleted reservation {:?} form Schedule: {}, because reservation is already finished.", id, self.id,);
             return;
         }
 
-        let del_res_assigned_start = self.active_reservations.get_assigned_start(&id);
-        let del_res_assigned_end = self.active_reservations.get_assigned_end(&id);
-        let del_res_reserved_capacity = self.active_reservations.get_reserved_capacity(&id);
+        let del_res_assigned_start = self.reservation_store.get_assigned_start(id.clone());
+        let del_res_assigned_end = self.reservation_store.get_assigned_end(id.clone());
+        let del_res_reserved_capacity = self.reservation_store.get_reserved_capacity(id.clone());
 
         // Delete reservation from schedule
         if !self.active_reservations.delete_reservation(&id) {
@@ -365,9 +364,9 @@ impl<S: SlottedScheduleStrategy> SlottedScheduleContext<S> {
     /// Returns a `Reservations` object containing a map of all feasible reservations (candidates) found.
     /// Each candidate represents a valid assignment time within the schedule's constraints.
     pub fn calculate_schedule(&mut self, id: ReservationId) -> ProbeReservations {
-        let mut request_start_boundary: i64 = self.active_reservations.get_booking_interval_start(&id);
-        let mut request_end_boundary: i64 = self.active_reservations.get_booking_interval_end(&id);
-        let initial_duration: i64 = self.active_reservations.get_task_duration(&id);
+        let mut request_start_boundary: i64 = self.reservation_store.get_booking_interval_start(id.clone());
+        let mut request_end_boundary: i64 = self.reservation_store.get_booking_interval_end(id.clone());
+        let initial_duration: i64 = self.reservation_store.get_task_duration(id.clone());
 
         if request_start_boundary == i64::MIN {
             request_start_boundary = 0;
@@ -389,9 +388,9 @@ impl<S: SlottedScheduleStrategy> SlottedScheduleContext<S> {
             return search_results;
         }
 
-        if !self.active_reservations.get_is_moldable(&id)
+        if !self.reservation_store.is_moldable(id.clone())
             && S::get_capacity(self) > 0
-            && S::get_capacity(self) < self.active_reservations.get_reserved_capacity(&id)
+            && S::get_capacity(self) < self.reservation_store.get_reserved_capacity(id.clone())
         {
             return search_results;
         }
@@ -411,10 +410,10 @@ impl<S: SlottedScheduleStrategy> SlottedScheduleContext<S> {
     }
 
     fn try_fit_reservation(&mut self, candidate_id: ReservationId, slot_start_index: i64, request_end_boundary: i64) -> Option<Reservation> {
-        let mut candidate = self.active_reservations.get_reservation_snapshot(&candidate_id);
+        let mut candidate = self.reservation_store.get_reservation_snapshot(candidate_id.clone()).expect("ReservationStore snapshot should handle potential errors.");
 
-        let mut current_required_capacity = self.active_reservations.get_reserved_capacity(&candidate_id);
-        let mut current_duration: i64 = self.active_reservations.get_task_duration(&candidate_id);
+        let mut current_required_capacity = self.reservation_store.get_reserved_capacity(candidate_id.clone());
+        let mut current_duration: i64 = self.reservation_store.get_task_duration(candidate_id.clone());
         let mut start_time = self.get_slot_start_time(slot_start_index);
 
         let booking_interval_start = candidate.get_booking_interval_start();

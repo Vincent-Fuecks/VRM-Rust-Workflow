@@ -1,10 +1,12 @@
-use crate::domain::vrm_system_model::reservation::reservation::{Reservation, ReservationState};
+use crate::domain::vrm_system_model::reservation::reservation::ReservationState;
 use crate::domain::vrm_system_model::reservation::reservation_store::{ReservationId, ReservationStore};
 use rand::seq::IndexedRandom;
 use std::collections::hash_set;
 use std::{collections::HashSet, i64};
 
-/// TODO Add Comment
+/// This structure tracks a local subset of active `ReservationId`s while maintaining
+/// a reference to the global `ReservationStore` for metadata persistence and
+/// state synchronization for the schedule.
 #[derive(Debug, Clone)]
 pub struct Reservations {
     reservations: HashSet<ReservationId>,
@@ -16,12 +18,18 @@ impl Reservations {
         Reservations { reservations: HashSet::new(), reservation_store }
     }
 
+    /// Clears all local reservation mappings.
+    ///
+    /// **Note:** This does not purge the data from the global `ReservationStore`,
+    /// but removes the scheduler's tracking interest in these IDs.
     pub fn clear(&mut self) {
         self.reservations = HashSet::new();
     }
 
-    // TODO maybe insert Real Reservation into store?
-    // TODO Change handler_id?
+    /// Inserts a `ReservationId` into the local management set.
+    /// This operation ensures the reservation is tracked for scheduling logic.
+    /// If the ID is already present, the system will panic to prevent inconsistent
+    /// scheduling states.
     pub fn insert(&mut self, id: ReservationId) {
         if !self.reservations.insert(id) {
             panic!(
@@ -31,71 +39,34 @@ impl Reservations {
         }
     }
 
-    // TODO maybe del Real Reservation into store?
-    // TODO Change handler_id?
+    /// Deletes a reservation from the local set and updates the global state to `Deleted`.
+    /// This effectively cancels the reservation and notifies the distributed store
+    /// that the resources associated with this ID are no longer reserved.
     pub fn delete_reservation(&mut self, id: &ReservationId) -> bool {
         if self.reservations.remove(id) {
-            self.set_state(id, ReservationState::Deleted);
+            log::debug!("Reservation was updated to ReservationState::Deleted, by the schedule.");
+            self.reservation_store.update_state(*id, ReservationState::Deleted);
             return true;
         }
         return false;
     }
 
+    /// Checks if a specific `ReservationId` is currently managed in this collection.
     pub fn contains_key(&self, id: &ReservationId) -> bool {
         self.reservations.contains(id)
     }
 
-    // TODO Should we send an update to each Component with interest?! Update_state is doing this.
-    pub fn set_state(&mut self, id: &ReservationId, new_state: ReservationState) {
-        self.reservation_store.update_state(id.clone(), new_state);
-    }
-
-    pub fn set_frag_delta(&mut self, id: &ReservationId, frag_delta: f64) {
-        self.reservation_store.set_frag_delta(id.clone(), frag_delta);
-    }
-
-    pub fn set_booking_interval_start(&mut self, id: &ReservationId, booking_interval_start: i64) {
-        self.reservation_store.set_booking_interval_start(id.clone(), booking_interval_start);
-    }
-
-    pub fn set_booking_interval_end(&mut self, id: &ReservationId, booking_interval_end: i64) {
-        self.reservation_store.set_booking_interval_end(id.clone(), booking_interval_end);
-    }
-
-    pub fn set_assigned_start(&mut self, id: &ReservationId, assigned_start: i64) {
-        self.reservation_store.set_assigned_start(id.clone(), assigned_start);
-    }
-
-    pub fn set_assigned_end(&mut self, id: &ReservationId, assigned_end: i64) {
-        self.reservation_store.set_assigned_end(id.clone(), assigned_end);
-    }
-
+    /// Returns the number of reservations currently tracked by this local manager.
     pub fn len(&self) -> usize {
         self.reservations.len()
     }
 
-    // Log all reservations
-    pub fn dump_reservation(&self, _res_id_leads_to_error: ReservationId) {
-        log::error!("=== RESERVATION RESERVATION(s) DUMP ({} entries) ===", self.reservations.len());
-
-        for reservation_id in &self.reservations {
-            log::error!(
-                "  -> ID: {:?} | Name: {:?} | State: {:?} | Type: {:?}",
-                reservation_id,
-                self.reservation_store.get_name_for_key(reservation_id.clone()),
-                self.reservation_store.get_state(reservation_id.clone()),
-                self.reservation_store.get_type(reservation_id.clone()),
-            );
-        }
-        log::error!("=== END OF DUMP ===");
-
-        //self.reservation_store.dump_store_contents(res_id_leads_to_error);
-    }
-
+    /// Returns `true` if no reservations are currently being tracked.
     pub fn is_empty(&self) -> bool {
         self.reservations.is_empty()
     }
 
+    /// Selects a random `ReservationId` from the current collection.
     pub fn get_random_id(&self) -> Option<ReservationId> {
         let ids: Vec<ReservationId> = self.reservations.iter().into_iter().cloned().collect();
         let mut rng = rand::rng();
@@ -103,56 +74,23 @@ impl Reservations {
         return ids.choose(&mut rng).cloned();
     }
 
+    /// Identifies the reservation with the earliest assigned start time.
+    /// This is an O(n) operation used to determine the next pending task in the queue.
     pub fn get_id_with_first_start_slot(&self) -> Option<ReservationId> {
         let ids: Vec<ReservationId> = self.reservations.iter().into_iter().cloned().collect();
         let earliest_start_time: i64 = i64::MAX;
         let mut reservation_of_earliest_start_time = None;
 
         for id in ids {
-            if self.get_assigned_start(&id) < earliest_start_time {
+            if self.reservation_store.get_assigned_start(id.clone()) < earliest_start_time {
                 reservation_of_earliest_start_time = Some(id);
             }
         }
         return reservation_of_earliest_start_time;
     }
 
+    /// Returns an iterator over the managed `ReservationId`s.
     pub fn iter(&self) -> hash_set::Iter<'_, ReservationId> {
         self.reservations.iter()
-    }
-
-    pub fn get_assigned_start(&self, id: &ReservationId) -> i64 {
-        self.reservation_store.get_assigned_start(id.clone())
-    }
-
-    pub fn get_assigned_end(&self, id: &ReservationId) -> i64 {
-        self.reservation_store.get_assigned_end(id.clone())
-    }
-
-    pub fn get_booking_interval_start(&self, id: &ReservationId) -> i64 {
-        self.reservation_store.get_booking_interval_start(id.clone())
-    }
-
-    pub fn get_booking_interval_end(&self, id: &ReservationId) -> i64 {
-        self.reservation_store.get_booking_interval_end(id.clone())
-    }
-
-    pub fn get_task_duration(&self, id: &ReservationId) -> i64 {
-        self.reservation_store.get_task_duration(id.clone())
-    }
-
-    pub fn get_is_moldable(&self, id: &ReservationId) -> bool {
-        self.reservation_store.is_moldable(id.clone())
-    }
-
-    pub fn get_reserved_capacity(&self, id: &ReservationId) -> i64 {
-        self.reservation_store.get_reserved_capacity(id.clone())
-    }
-
-    pub fn adjust_capacity(&self, id: &ReservationId, capacity: i64) {
-        self.reservation_store.adjust_capacity(id.clone(), capacity);
-    }
-
-    pub fn get_reservation_snapshot(&mut self, id: &ReservationId) -> Reservation {
-        self.reservation_store.get_reservation_snapshot(*id).unwrap()
     }
 }

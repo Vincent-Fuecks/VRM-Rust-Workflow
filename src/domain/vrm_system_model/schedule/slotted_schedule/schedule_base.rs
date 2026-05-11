@@ -144,7 +144,7 @@ impl<S: SlottedScheduleStrategy> Schedule for SlottedScheduleContext<S> {
             self.reserve_without_check(reservation_id);
             Some(reservation_id)
         } else {
-            self.active_reservations.set_state(&reservation_id, ReservationState::Rejected);
+            self.reservation_store.update_state(reservation_id, ReservationState::Rejected);
             return None;
         }
     }
@@ -159,15 +159,15 @@ impl<S: SlottedScheduleStrategy> Schedule for SlottedScheduleContext<S> {
             self.reservation_store.update_state(reservation_id, ReservationState::Rejected);
         }
 
-        let start_slot = self.get_slot_index(self.active_reservations.get_assigned_start(&reservation_id));
-        let end_slot = self.get_slot_index(self.active_reservations.get_assigned_end(&reservation_id) - 1);
+        let start_slot = self.get_slot_index(self.reservation_store.get_assigned_start(reservation_id.clone()));
+        let end_slot = self.get_slot_index(self.reservation_store.get_assigned_end(reservation_id.clone()) - 1);
 
         for slot_index in start_slot..=end_slot {
             S::insert_reservation_into_slot(self, self.reservation_store.get_reserved_capacity(reservation_id), slot_index, reservation_id);
         }
 
         self.active_reservations.insert(reservation_id);
-        self.active_reservations.set_state(&reservation_id, ReservationState::ReserveAnswer);
+        self.reservation_store.update_state(reservation_id, ReservationState::ReserveAnswer);
     }
 
     fn update(&mut self) {

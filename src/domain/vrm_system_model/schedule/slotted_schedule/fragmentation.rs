@@ -153,8 +153,8 @@ impl<S: SlottedScheduleStrategy + Clone + 'static> SlottedScheduleContext<S> {
             let random_reservation_id: ReservationId = loop {
                 let id = self.active_reservations.get_random_id().expect("No random ReservationId was found in test SlottedSchedule.");
 
-                let is_non_overlapping = self.active_reservations.get_assigned_start(&id) > self.get_slot_end_time(end_slot_index)
-                    || self.active_reservations.get_assigned_end(&id) < self.get_slot_start_time(start_slot_index);
+                let is_non_overlapping = self.reservation_store.get_assigned_start(id.clone()) > self.get_slot_end_time(end_slot_index)
+                    || self.reservation_store.get_assigned_end(id.clone()) < self.get_slot_start_time(start_slot_index);
 
                 if !is_non_overlapping {
                     break id;
@@ -164,12 +164,13 @@ impl<S: SlottedScheduleStrategy + Clone + 'static> SlottedScheduleContext<S> {
             match test_schedule.reserve(random_reservation_id) {
                 // Could not book again
                 Some(id) => {
-                    remaining_capacity -= self.active_reservations.get_reserved_capacity(&id);
-                    rejected_capacity += self.active_reservations.get_reserved_capacity(&id) * self.active_reservations.get_task_duration(&id);
+                    remaining_capacity -= self.reservation_store.get_reserved_capacity(id.clone());
+                    rejected_capacity +=
+                        self.reservation_store.get_reserved_capacity(id.clone()) * self.reservation_store.get_task_duration(id.clone());
                 }
                 // Success
                 None => {
-                    remaining_capacity -= self.active_reservations.get_reserved_capacity(&random_reservation_id);
+                    remaining_capacity -= self.reservation_store.get_reserved_capacity(random_reservation_id);
                 }
             }
         }
