@@ -39,8 +39,7 @@ impl BaseResource {
 pub struct Resources {
     inner: Vec<Box<dyn Resource>>,
 
-    // TODO What if all routers are not connected? We have multiple clusters --> Is this allowed?
-    /// Router list
+    /// Router list contains all router of the rms. 
     router_list: Vec<RouterId>,
 }
 

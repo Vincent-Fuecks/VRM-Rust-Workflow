@@ -173,4 +173,8 @@ impl<S: SlottedScheduleStrategy> Schedule for SlottedScheduleContext<S> {
     fn update(&mut self) {
         SlottedScheduleContext::update(self);
     }
+
+    fn update_capacity(&mut self, capacity: usize) {
+        SlottedScheduleContext::update_capacity(self, capacity);
+    }
 }

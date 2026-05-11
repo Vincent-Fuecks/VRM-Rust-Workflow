@@ -356,7 +356,7 @@ pub enum ReservationState {
     /// Reservation, and all other ProbeReservations for the original ProbeAnswer Reservation become invalid.
     ProbeReservation,
 
-    /// The state signals the listerning AcI, that the ProbeAnswer was successful and the Reservation should be
+    /// The state signals the listening AcI, that the ProbeAnswer was successful and the Reservation should be
     /// Reserved -> AcI performs reserve for Reservation
     ReserveProbeReservation,
 
@@ -418,7 +418,7 @@ pub enum ReservationProceeding {
     /// the resource allocation.
     Commit,
 
-    /// Deletes the reservation in the system with the corresponding id. 
+    /// Deletes the reservation in the system with the corresponding id.
     Delete,
 
     /// Vrm system will not interact with this task, because this is an external task form a local rms.
@@ -487,14 +487,14 @@ pub struct ReservationBase {
     /// Internal field: The total required work, calculated as `reserved_capacity` * `task_duration`.
     /// This value remains constant for non-moldable jobs.
     pub moldable_work: i64,
-    
+
     /// Currently not used by the VRM.
     /// Represents the change in fragmentation resulting from a new reservation.
     ///
     /// # Example
-    /// If the current fragmentation degree of the schedule is 0.5 and a new reservation 
-    /// increases it to 0.6, the `frag_delta` is the difference indicating that the 
-    /// fragmentation has worsened. This value is intended for use by a `WorkflowScheduler` 
+    /// If the current fragmentation degree of the schedule is 0.5 and a new reservation
+    /// increases it to 0.6, the `frag_delta` is the difference indicating that the
+    /// fragmentation has worsened. This value is intended for use by a `WorkflowScheduler`
     /// or other schedule optimization criteria.
     pub frag_delta: f64,
 }

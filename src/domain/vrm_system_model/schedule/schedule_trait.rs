@@ -125,6 +125,10 @@ pub trait Schedule: Debug + Send + Sync {
     /// and moves the load from the now-expired slots into the `load_buffer` for historical tracking.
     fn update(&mut self);
 
+    /// **Updates the Schedule Capacity** due to node status changes is the capacity of the schedule adjusted.
+    /// In the case of reduced capacity, are reservations deleted form slots where the capacity is exceed.
+    fn update_capacity(&mut self, capacity: usize);
+    
     fn clone_box(&self) -> Box<dyn Schedule>;
 }
 

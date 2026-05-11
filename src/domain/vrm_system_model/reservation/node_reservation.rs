@@ -4,8 +4,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::domain::vrm_system_model::{
     reservation::reservation::{ReservationBase, ReservationProceeding, ReservationState, ReservationTrait, ReservationTyp},
+    resource::resource_store::NodeResourceId,
     rms::slurm_rms::api_client::response::tasks::{SlurmOptionExt, SlurmTask},
-    utils::id::{ClientId, ComponentId, ReservationName},
+    utils::id::{ClientId, ComponentId, ReservationName, ResourceName},
 };
 
 /// This structure extends [`ReservationBase`] to include fields specific to
@@ -106,7 +107,6 @@ impl NodeReservation {
     pub fn from_slurm(task: &SlurmTask, aci_id: ComponentId) -> Self {
         // Default to 1 CPU if unknown
         let capacity = task.job_resources.as_ref().unwrap().allocated_cpus.val_or(1);
-
         let task_id: u32 = task.job_id;
         let task_user = task.user_name.val_or("slurm_import".to_string());
         let time = task.time.as_ref().unwrap();

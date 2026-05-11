@@ -410,7 +410,8 @@ impl<S: SlottedScheduleStrategy> SlottedScheduleContext<S> {
     }
 
     fn try_fit_reservation(&mut self, candidate_id: ReservationId, slot_start_index: i64, request_end_boundary: i64) -> Option<Reservation> {
-        let mut candidate = self.reservation_store.get_reservation_snapshot(candidate_id.clone()).expect("ReservationStore snapshot should handle potential errors.");
+        let mut candidate =
+            self.reservation_store.get_reservation_snapshot(candidate_id.clone()).expect("ReservationStore snapshot should handle potential errors.");
 
         let mut current_required_capacity = self.reservation_store.get_reserved_capacity(candidate_id.clone());
         let mut current_duration: i64 = self.reservation_store.get_task_duration(candidate_id.clone());
@@ -468,5 +469,43 @@ impl<S: SlottedScheduleStrategy> SlottedScheduleContext<S> {
         }
 
         return None;
+    }
+
+    /// Updates the total resource capacity for all time slots within the schedule.
+    ///
+    /// This method performs a global capacity adjustment across all slots of the schedule. 
+    /// If a slot's current **occupied load** exceeds the requested `capacity`, the system 
+    /// will aggressively prune existing reservations from that slot until the load 
+    /// satisfies the new constraint.
+    ///
+    /// # Side Effects
+    /// * **Reservation Eviction**: Reservations are removed based on their presence in 
+    ///   the slot's internal tracking list until the load is lowered.
+    pub fn update_capacity(&mut self, capacity: usize) {
+        let new_capacity = capacity as i64;
+
+        for slot in &mut self.slots {
+            if slot.load < new_capacity {
+                slot.capacity = new_capacity;
+                continue;
+            }
+
+            // Start reservation pruning
+            for res_in_slot in slot.reservation_ids.clone().iter() {
+                if !slot.delete_reservation(res_in_slot.clone(), self.reservation_store.get_reserved_capacity(res_in_slot.clone())) {
+                    log::error!(
+                        "ErrorSlottedScheduleContextUpdateCapacity: In schedule {:?} with reservation {:?}",
+                        self.id,
+                        self.reservation_store.get_name_for_key(res_in_slot.clone())
+                    );
+                }
+
+                // Success
+                if slot.load < new_capacity {
+                    slot.capacity = new_capacity;
+                    break;
+                }
+            }
+        }
     }
 }

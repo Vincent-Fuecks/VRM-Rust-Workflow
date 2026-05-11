@@ -170,9 +170,19 @@ impl SlurmRms {
 
         let node_resources: Vec<NodeResource> =
             slurm_nodes.nodes.iter().map(|node| NodeResource::new(ResourceName::new(node.name.clone()), node.cpus as i64)).collect();
+        let old_node_capacity = resource_store.get_total_node_capacity();
 
-        // Update Node in ResourceStore
+        // Update Nodes in ResourceStore (Changes occur, if new nodes are up or registered nodes are down).
         resource_store.update_nodes(node_resources);
+
+        let new_node_capacity = resource_store.get_total_node_capacity();
+
+        if old_node_capacity != new_node_capacity {
+            let mut guard = node_schedule.write().unwrap();
+            // Adjust capacity in node schedule accordingly to the new total node capacity.
+            guard.update_capacity(new_node_capacity as usize);
+        }
+
         Self::update_reservations(reservation_store, task_mapping, node_schedule, slurm_tasks, rms_id, aci_id);
 
         Ok(())

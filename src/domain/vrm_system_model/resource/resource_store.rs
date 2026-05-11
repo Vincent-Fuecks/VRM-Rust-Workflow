@@ -73,13 +73,33 @@ impl ResourceStore {
             node_resource_id
         );
     }
-    // TODO Is a Listener mechanism necessary like in the ReservationStore, to inform VrmComponents?
-    // What is with the Topology, if nodes are removed?
-    pub fn update_nodes(&self, nodes: Vec<NodeResource>) {
+
+    /// Synchronizes the local node state with the external RMS.
+    ///
+    /// This method ensures the **distributed resource view** remains consistent by updating 
+    /// differences between the `nodes_in_rms` and the current `ResourceStore`. 
+    /// * **New Nodes**: Any node present in the RMS but missing locally is added via `add_node`.
+    /// * **Offline/Missing Nodes**: Any node existing locally that is no longer reported by the 
+    ///   RMS is treated as offline and purged via `remove_node`.
+    ///
+    /// ### Network Topology & Routing
+    /// In modern high-performance computing (HPC) setups like **Fat-Tree topologies**, nodes function 
+    /// as leaves connected to external switches. Consequently, this synchronization does not trigger 
+    /// a topology recalculation. 
+    /// 
+    /// > **Important:** Nodes must be part of the initial topology to be accessible. If an RMS node 
+    /// > was not included during the system's initialization, it will remain unreachable even 
+    /// > after synchronization.
+    ///
+    /// ### Job Handling
+    /// Committed jobs or active reservations on nodes that go offline are not handled within this 
+    /// function. Those lifecycle events are managed independently by the reservation logic 
+    /// (e.g., `slurm_base.rs` through `update_reservations`).
+    pub fn update_nodes(&self, nodes_in_rms: Vec<NodeResource>) {
         let guard = self.inner.read().unwrap();
         let mut current_store_nodes = guard.node_index.clone();
 
-        for node in nodes {
+        for node in nodes_in_rms {
             if current_store_nodes.remove(&node.base.get_name()).is_none() {
                 self.add_node(node);
             }
@@ -88,6 +108,7 @@ impl ResourceStore {
         for node_id in current_store_nodes.values() {
             let resource_id = guard.nodes.get(*node_id).unwrap().read().unwrap().base.get_name();
             self.remove_node(resource_id);
+
         }
     }
 
@@ -290,7 +311,6 @@ impl ResourceStore {
         self.get_total_link_capacity() + self.get_total_node_capacity()
     }
 
-    /// TODO Currently also works for Workflows, is this right?
     /// Returns true if a resource can handle the reservation
     pub fn can_handle_adc_request(&self, res: Reservation) -> bool {
         log::debug!(
@@ -337,7 +357,6 @@ impl ResourceStore {
         }
     }
 
-    /// TODO Currently also works for Workflows, is this right?
     /// Returns true if a resource can handle the reservation
     pub fn can_handle_aci_request(&self, reservation_store: ReservationStore, reservation_id: ReservationId) -> bool {
         log::debug!(
