@@ -101,7 +101,7 @@ impl<S: SlottedScheduleStrategy> SlottedScheduleContext<S> {
             start_slot_index: simulator.get_system_time_s(),
             end_slot_index: number_of_real_slots,
             scheduling_window_start_time: simulator.get_system_time_s(),
-            scheduling_window_end_time: -1, // TODO try to set to end of window
+            scheduling_window_end_time: (number_of_real_slots * slot_width) - 1, // End of the valid scheduling window
             load_buffer: LoadBuffer::new(Arc::new(GlobalLoadContext::new())),
             active_reservations: Reservations::new_empty(reservation_store.clone()),
             is_frag_cache_up_to_date: true,

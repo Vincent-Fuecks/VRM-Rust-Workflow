@@ -2,7 +2,12 @@ use std::collections::HashSet;
 
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationId;
 
-/// TODO Add Comment
+/// Represents a discrete time interval within a `SlottedSchedule` used for
+/// distributed resource management.
+///
+/// A **Slot** tracks the availability and consumption of a specific resource's
+/// physical capacity over a defined window of time. It acts as the core accounting
+/// unit in the SlottedSchedule, ensuring that distributed reservations do not exceed physical hardware constraints.
 #[derive(Debug, Clone)]
 pub struct Slot {
     /// The current reserved capacity, which is assigned to this slot by active reservations.

@@ -33,7 +33,6 @@ impl VrmStateListener {
     }
 }
 
-// TODO What should happen by State change?
 impl NotificationListener for VrmStateListener {
     fn on_reservation_change(
         &mut self,

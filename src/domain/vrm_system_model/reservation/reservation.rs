@@ -404,7 +404,6 @@ impl ReservationState {
 /// Defines the set of primary actions (proceedings) that can be requested for a reservation.
 ///
 /// This determines the lifecycle stage a reservation is intended to reach.
-/// TODO Rework states transition description
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ReservationProceeding {
     /// Executes only the initial resource availability **probe** request to check feasibility.
@@ -419,7 +418,7 @@ pub enum ReservationProceeding {
     /// the resource allocation.
     Commit,
 
-    /// Reserve the reservation, but delete it within the commit timeout
+    /// Deletes the reservation in the system with the corresponding id. 
     Delete,
 
     /// Vrm system will not interact with this task, because this is an external task form a local rms.
@@ -488,7 +487,15 @@ pub struct ReservationBase {
     /// Internal field: The total required work, calculated as `reserved_capacity` * `task_duration`.
     /// This value remains constant for non-moldable jobs.
     pub moldable_work: i64,
-    // TODO
+    
+    /// Currently not used by the VRM.
+    /// Represents the change in fragmentation resulting from a new reservation.
+    ///
+    /// # Example
+    /// If the current fragmentation degree of the schedule is 0.5 and a new reservation 
+    /// increases it to 0.6, the `frag_delta` is the difference indicating that the 
+    /// fragmentation has worsened. This value is intended for use by a `WorkflowScheduler` 
+    /// or other schedule optimization criteria.
     pub frag_delta: f64,
 }
 

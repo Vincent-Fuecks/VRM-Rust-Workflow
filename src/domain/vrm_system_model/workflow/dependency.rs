@@ -17,7 +17,9 @@ pub struct DataDependency {
     /// Key to Workflow.nodes, which is the receiver.
     pub target_node: Option<WorkflowNodeId>,
 
-    /// TODO
+    /// The TCP port to be used for communication, i.e.,
+    /// the Port to be opened by the VRM. If the VRM
+    /// component is behind a NAT firewall,
     pub port_name: String,
 
     /// Size of the file for transport.
@@ -36,7 +38,9 @@ pub struct SyncDependency {
     /// Key to Workflow.nodes, which is the receiver.
     pub target_node: Option<WorkflowNodeId>,
 
-    /// TODO
+    /// The TCP port to be used for communication, i.e.,
+    /// the Port to be opened by the VRM. If the VRM
+    /// component is behind a NAT firewall,
     pub port_name: String,
 
     /// Bandwidth in MB's
