@@ -51,8 +51,8 @@ impl<S: SlottedScheduleStrategy> Schedule for SlottedScheduleContext<S> {
         }
 
         SlottedScheduleContext::update(self);
-
         let mut candidates = self.calculate_schedule(id);
+        self.reservation_store.update_state(id, ReservationState::ProbeAnswer);
 
         if candidates.is_empty() {
             return candidates;
@@ -87,14 +87,28 @@ impl<S: SlottedScheduleStrategy> Schedule for SlottedScheduleContext<S> {
                 request_id
             );
             self.reservation_store.update_state(request_id, ReservationState::Rejected);
+            return ProbeReservations::new(request_id, self.reservation_store.clone());
         }
 
         let mut probe_reservations = self.probe(request_id);
 
+        if probe_reservations.is_empty() {
+            self.reservation_store.update_state(request_id, ReservationState::ProbeAnswer);
+            return probe_reservations;
+        }
+
         if let Some(best_probes) = probe_reservations.create_new_probe_reservation_with_best_probe(request_id, probe_reservation_comparator) {
-            best_probes
+            self.reservation_store.update_state(request_id, ReservationState::ProbeAnswer);
+            return best_probes;
         } else {
-            probe_reservations
+            log::error!(
+                "SlottedScheduleContextProbeBestRequestEmptyProbeReservationErrorInSelectBestProbeReservationLogic: Reservation {:?} on Schedule {:?}",
+                request_id,
+                self.id
+            );
+
+            self.reservation_store.update_state(request_id, ReservationState::Rejected);
+            return probe_reservations;
         }
     }
 

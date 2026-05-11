@@ -220,7 +220,15 @@ fn test_error_file_not_found() {
 
 fn create_dummy_workflow_dto() -> (WorkflowDto, ClientId) {
     let client_id = ClientId::new("test-client");
-    let mut dto = WorkflowDto { id: "wf-1".to_string(), arrival_time: 100, booking_interval_start: 200, booking_interval_end: 1000, tasks: vec![] };
+    let mut dto = WorkflowDto {
+        id: "wf-1".to_string(),
+        arrival_time: 100,
+        booking_interval_start: 200,
+        booking_interval_end: 1000,
+        tasks: vec![],
+        state: ReservationStateDto::Open,
+        request_proceeding: ReservationProceedingDto::Commit,
+    };
 
     // Common dummy link reservation (not used for node logic, but required by DTO)
     let dummy_link_res =

@@ -225,6 +225,12 @@ impl VrmComponent for AcI {
             }
         };
 
+        // Is reservation invalid state, if so return
+        if self.reservation_store.get_state(id_to_commit) != ReservationState::ReserveAnswer {
+            self.reservation_store.update_state(id_to_commit, ReservationState::Rejected);
+            return false;
+        }
+
         self.rms_system.commit(id_to_commit);
         log::debug!("Committed reservation {:?} in AcI {} to local RMS.", reservation_id, self.id);
         self.committed_reservations.insert(id_to_commit, container);
@@ -360,14 +366,14 @@ impl VrmComponent for AcI {
                     -1,
                 );
             }
+
+            self.reservation_store.update_state(reservation_id, ReservationState::Rejected);
             return ProbeReservations::new(reservation_id, self.reservation_store.clone());
         }
 
         let mut prob_request_answer = self.rms_system.probe(reservation_id, shadow_schedule_id.clone());
-
         // Way to attach this AcI to the created probeReservations.
         prob_request_answer.add_probe_meta_data(self.id.clone().cast(), shadow_schedule_id.clone());
-
         // Tracking for when promotion happens
         self.open_probe_reservations.insert(reservation_id, shadow_schedule_id.clone());
 
@@ -381,7 +387,6 @@ impl VrmComponent for AcI {
                     0,
                 );
             }
-
             return prob_request_answer;
         }
 
@@ -420,6 +425,7 @@ impl VrmComponent for AcI {
                     -1,
                 );
             }
+            self.reservation_store.update_state(reservation_id, ReservationState::Rejected);
             return ProbeReservations::new(reservation_id, self.reservation_store.clone());
         }
 
@@ -429,7 +435,6 @@ impl VrmComponent for AcI {
 
         // Init ProbeReservation tracking -> Informs AcI if VrmComponent likes to reserve a ProbeReservation
         self.open_probe_reservations.insert(reservation_id, shadow_schedule_id);
-
         return probe_best_answer;
     }
 

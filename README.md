@@ -22,6 +22,7 @@ A hierarchical Virtual Resource Manager (VRM) implementation in Rust, designed t
         - [Step 5 Configure VRM-Rust](#step-5-configure-vrm-rust)
         - [Step 6 Run the VRM-Rust with Demo data](#step-6-run-the-vrm-rust-with-demo-data)
   - [Project Structure (Overview)](#project-structure-overview)
+  - [Ideas](#ideas)
 
 <details><summary>VRM-Rust Overview</summary>
 
@@ -228,3 +229,9 @@ cargo run -- --input-file src/data/workflow_with_direct_mapping.json --config-fi
 ├── tests/              # Integration tests with sample avatars
 └── Cargo.toml          # Build configuration
 ```
+
+## Ideas 
+This section lists all unfinished concepts of the VRM-Rust prototype. These unfinished concepts are marked with **Idea:** in the project. 
+- The client, should have the ability to request all his currently scheduled reservations on the system. The current state of this feature is, that the data is aggregate, but the new request typ is not implemented. See in vrm_manager.rs function get_managed_reservations_for_client. 
+- 
+

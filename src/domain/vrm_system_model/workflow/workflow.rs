@@ -140,8 +140,8 @@ impl Workflow {
             name: ReservationName::new(dto.id.clone()),
             client_id: client_id,
             handler_id: None,
-            state: ReservationState::Open,                     // Workflow state is managed separately
-            request_proceeding: ReservationProceeding::Commit, // Default
+            state: dto.state.to_reservation_state(), // Workflow state is managed separately
+            request_proceeding: dto.request_proceeding.to_reservation_proceeding(), // Default
             arrival_time: dto.arrival_time,
             booking_interval_start: dto.booking_interval_start,
             booking_interval_end: dto.booking_interval_end,
@@ -249,8 +249,8 @@ impl Workflow {
                     name: dep_name,
                     client_id: client_id.clone(),
                     handler_id: None,
-                    state: ReservationState::Open,
-                    request_proceeding: ReservationProceeding::Commit, // Default
+                    state: task_dto.reservation_state.to_reservation_state(),
+                    request_proceeding: task_dto.request_proceeding.to_reservation_proceeding(),
                     arrival_time: dto.arrival_time,
                     booking_interval_start: dto.booking_interval_start,
                     booking_interval_end: dto.booking_interval_end,

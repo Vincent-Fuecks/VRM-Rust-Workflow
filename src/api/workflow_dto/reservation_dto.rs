@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::api::workflow_dto::dependency_dto::DependencyDto;
+use crate::domain::vrm_system_model::reservation::reservation::{ReservationProceeding, ReservationState};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -57,12 +58,37 @@ pub enum ReservationStateDto {
     Finished,
 }
 
+impl ReservationStateDto {
+    pub fn to_reservation_state(&self) -> ReservationState {
+        match self {
+            Self::Rejected => ReservationState::Rejected,
+            Self::Deleted => ReservationState::Deleted,
+            Self::Open => ReservationState::Open,
+            Self::ProbeAnswer => ReservationState::ProbeAnswer,
+            Self::ReserveAnswer => ReservationState::ReserveAnswer,
+            Self::Committed => ReservationState::Committed,
+            Self::Finished => ReservationState::Finished,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReservationProceedingDto {
     Probe,
     Reserve,
     Commit,
     Delete,
+}
+
+impl ReservationProceedingDto {
+    pub fn to_reservation_proceeding(&self) -> ReservationProceeding {
+        match self {
+            Self::Probe => ReservationProceeding::Probe,
+            Self::Reserve => ReservationProceeding::Reserve,
+            Self::Commit => ReservationProceeding::Commit,
+            Self::Delete => ReservationProceeding::Delete,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

@@ -342,6 +342,7 @@ pub enum ReservationState {
     Open,
 
     /// The state represents a successful response to a probing (availability) request.
+    /// Success includes also an empty ProbeAnswer, but only if the request was feasible resource wise and no error in the request process occurred.
     ProbeAnswer,
 
     /// The state represents the product of a successful probe request of a specific AcI.
@@ -396,7 +397,7 @@ impl ReservationState {
     }
 
     pub fn is_reserve_request_valid(&self) -> bool {
-        matches!(self, Self::Open | Self::ReserveProbeReservation)
+        matches!(self, Self::Open | Self::ReserveProbeReservation | Self::ProbeReservation)
     }
 }
 

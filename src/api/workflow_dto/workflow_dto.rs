@@ -1,8 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::api::workflow_dto::reservation_dto::{
-    LinkReservationDto, NodeReservationDto, ReservationProceedingDto, ReservationStateDto,
-};
+use crate::api::workflow_dto::reservation_dto::{LinkReservationDto, NodeReservationDto, ReservationProceedingDto, ReservationStateDto};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -12,6 +10,8 @@ pub struct WorkflowDto {
     pub arrival_time: i64,
     pub booking_interval_start: i64,
     pub booking_interval_end: i64,
+    pub state: ReservationStateDto,
+    pub request_proceeding: ReservationProceedingDto,
 
     pub tasks: Vec<TaskDto>,
 }

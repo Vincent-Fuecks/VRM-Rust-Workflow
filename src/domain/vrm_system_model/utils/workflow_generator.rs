@@ -60,7 +60,7 @@ impl WorkflowGenerator {
                 if d > 0 {
                     let prev_level = &levels[d - 1];
                     if d == self.depth - 1 {
-                        // Final node 
+                        // Final node
                         data_deps = prev_level.clone();
                     } else {
                         let parent_idx = i / self.branching_degree;
@@ -95,7 +95,15 @@ impl WorkflowGenerator {
             }
         }
 
-        WorkflowDto { id: id.to_string(), arrival_time: 0, booking_interval_start: 10, booking_interval_end: 1000000, tasks }
+        WorkflowDto {
+            id: id.to_string(),
+            arrival_time: 0,
+            booking_interval_start: 10,
+            booking_interval_end: 1000000,
+            tasks,
+            request_proceeding: ReservationProceedingDto::Commit,
+            state: ReservationStateDto::Open,
+        }
     }
 
     fn create_link(&self, start: &str, end: &str) -> LinkReservationDto {
@@ -112,10 +120,7 @@ impl WorkflowGenerator {
             is_moldable: true,
             current_working_directory: None,
             environment: None,
-            dependencies: DependencyDto {
-                data: data_ids,
-                sync: sync_ids, 
-            },
+            dependencies: DependencyDto { data: data_ids, sync: sync_ids },
             data_out: vec![],
             data_in: vec![],
         }

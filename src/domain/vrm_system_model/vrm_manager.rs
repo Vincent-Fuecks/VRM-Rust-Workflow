@@ -29,6 +29,8 @@ use crate::{
     error::ConversionError,
 };
 
+use super::utils::id::ClientId;
+
 pub struct VrmManager {
     pub adc_master: VrmComponentProxy,
     pub unprocessed_reservations: Vec<(ReservationId, i64)>,
@@ -46,6 +48,11 @@ impl VrmManager {
         simulator: Arc<GlobalClock>,
     ) -> Self {
         VrmManager { adc_master, unprocessed_reservations, open_reservations: Arc::new(RwLock::new(HashSet::new())), reservation_store, simulator }
+    }
+
+    /// Idea: Is should be possible for the client to later request all his currently scheduled reservations on the vrm system.
+    pub fn get_managed_reservations_for_client(&self, client_id: &ClientId) -> Vec<ReservationId> {
+        self.reservation_store.get_client_reservations(client_id)
     }
 
     pub async fn init_vrm_system(
@@ -151,9 +158,8 @@ impl VrmManager {
     pub async fn run_vrm(&mut self) {
         while !self.unprocessed_reservations.is_empty() {
             let (reservation_id, res_arrival_time) = self.unprocessed_reservations.remove(0);
-
             let now = self.simulator.get_system_time_s();
-            log::info!("Now: {now}");
+            
             if res_arrival_time > now {
                 let wait_seconds = res_arrival_time - now;
                 if wait_seconds > 0 {
