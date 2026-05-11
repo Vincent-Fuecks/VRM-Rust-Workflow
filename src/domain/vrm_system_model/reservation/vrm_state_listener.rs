@@ -4,15 +4,20 @@ use std::{
 };
 
 use crate::domain::vrm_system_model::{
-    reservation::{
-        reservation::ReservationState,
-        reservation_store::{NotificationListener, ReservationId},
-    },
+    reservation::{reservation::ReservationState, reservation_store::ReservationId},
     utils::id::ReservationName,
 };
 
-/// Listener that implements the "Abo" (subscription) system to keep
-/// open_reservations in sync with the ReservationStore state.
+use super::reservation_notification_listener::ReservationNotificationListener;
+
+/// A listener responsible for maintaining a synchronized view of active reservations
+/// within the VRM.
+///
+/// The `VrmStateListener` implements a **Subscription (Abo)** pattern. It monitors
+/// state transitions from the `ReservationStore` and ensures that the local `open_reservations` 
+/// set accurately reflects the distributed state of the grid. It specifically handles 
+/// the lifecycle of resource allocations by removing IDs when they reach terminal 
+/// states like **Deleted**, **Rejected**, or **Finished**.
 #[derive(Debug)]
 pub struct VrmStateListener {
     open_reservations: Arc<RwLock<HashSet<ReservationId>>>,
@@ -33,7 +38,7 @@ impl VrmStateListener {
     }
 }
 
-impl NotificationListener for VrmStateListener {
+impl ReservationNotificationListener for VrmStateListener {
     fn on_reservation_change(
         &mut self,
         reservation_id: ReservationId,

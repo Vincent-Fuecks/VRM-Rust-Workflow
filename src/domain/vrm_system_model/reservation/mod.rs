@@ -2,6 +2,7 @@ pub mod link_reservation;
 pub mod node_reservation;
 pub mod probe_reservations;
 pub mod reservation;
+pub mod reservation_notification_listener;
 pub mod reservation_store;
 pub mod reservation_sync_gate;
 pub mod reservations;
