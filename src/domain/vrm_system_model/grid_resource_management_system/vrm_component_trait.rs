@@ -164,11 +164,6 @@ pub trait VrmComponent: std::fmt::Debug {
     ///
     /// The live schedule remains untouched. After this call, the provided ID
     /// is no longer valid.
-    ///
-    /// # Panics
-    /// TODO Panic is handled?
-    /// Implementing types should handle cases where the ID is `None` (representing
-    /// the live schedule), as the live schedule cannot be rolled back here.
     fn delete_shadow_schedule(&mut self, shadow_schedule_id: ShadowScheduleId) -> bool;
 
     /// Performs an **Atomic Switch** from a shadow schedule to the live schedule.

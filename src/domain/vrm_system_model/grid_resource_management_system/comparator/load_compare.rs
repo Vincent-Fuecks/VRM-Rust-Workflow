@@ -19,7 +19,7 @@ impl LoadCompare {
         Self { start: start_value, end: end_value }
     }
 
-    /// TODO Performance Bottleneck: get_load_metric is 2 * N * log(N) times called
+    /// Optimization: Performance Bottleneck: get_load_metric is 2 * N * log(N) times called
     /// Returns `Ordering::Less`, if aci1 has a lower load than aci2
     ///         `Ordering::Greater`, if aci1 has a higher load than aci2
     ///

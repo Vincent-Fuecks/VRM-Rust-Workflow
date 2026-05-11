@@ -214,6 +214,7 @@ impl<S: SlottedScheduleStrategy> SlottedScheduleContext<S> {
     /// This process deletes all reservations that have expired (assigned end time is past the new start time)
     /// and moves the load from the now-expired slots into the `load_buffer` for historical tracking.
     /// Note: Utilized by the SlottedSchedule and NetworkSlottedSchedule
+    /// Optimization: This functions is prior to every probe and reserve request called
     pub fn update(&mut self) {
         let current_time = self.simulator.get_system_time_s();
         let new_start_slot_index = self.get_slot_index(current_time);

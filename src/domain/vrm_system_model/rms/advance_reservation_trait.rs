@@ -142,7 +142,6 @@ pub trait AdvanceReservationRms: Rms + Send + Sync {
     /// A [`Reservations`] object containing a list of valid configuration candidates.
     /// Each candidate will have its state set to `ReservationState::ProbeAnswer`.
     /// If no candidates are found, an empty list is returned.
-    /// TODO is the state of all reservation changed in the ReservationStore?
     fn probe(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> ProbeReservations {
         let active_scheduler = self.get_active_schedule(shadow_schedule_id, reservation_id);
         active_scheduler.write().unwrap().probe(reservation_id)
