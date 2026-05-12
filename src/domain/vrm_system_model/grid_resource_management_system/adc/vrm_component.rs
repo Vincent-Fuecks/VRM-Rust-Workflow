@@ -172,14 +172,33 @@ impl VrmComponent for ADC {
     }
 
     fn delete(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> ReservationId {
-        let arrival_time = self.simulator.get_system_time_s();
         log::info!("ADC Delete: Delete on ADC {} the Reservation {:?}", self.id, self.reservation_store.get_name_for_key(reservation_id));
 
+        // Handel the clean up of a Workflow
         if self.reservation_store.is_workflow(reservation_id) {
-            // TODO
-            todo!();
+            let mut is_deleted = true;
+            for workflow_res_id in self.reservation_store.get_workflow_res_ids(reservation_id).unwrap().iter() {
+                if let Some(component_id) = self.manager.get_handler_id(workflow_res_id.clone()) {
+                    self.delete_task_at_component(component_id, *workflow_res_id, shadow_schedule_id.clone());
+                } else {
+                    is_deleted = false;
+                    log::error!("ErrorAdcWorkflowDeletion: No handler found for reservation {:?}", reservation_id);
+                    self.reservation_store.update_state(*workflow_res_id, ReservationState::Rejected);
+                    self.reservation_store.update_state(reservation_id, ReservationState::Rejected);
+                }
+            }
+
+            if is_deleted {
+                self.reservation_store.update_state(reservation_id, ReservationState::Deleted);
+            } else {
+                self.reservation_store.update_state(reservation_id, ReservationState::Rejected);
+                log::error!("ErrorAdcWorkflowDeletion: The process of deleting all related reservations of the Workflow: {:?} was not successful.", reservation_id);
+            }
+
+            return reservation_id;
         }
 
+        // Handle cleanup of atomic Reservation
         if let Some(component_id) = self.manager.get_handler_id(reservation_id) {
             self.delete_task_at_component(component_id, reservation_id, shadow_schedule_id);
             return reservation_id;

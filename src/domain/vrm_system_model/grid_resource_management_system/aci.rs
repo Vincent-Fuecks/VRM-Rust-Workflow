@@ -105,7 +105,6 @@ pub struct AcI {
     commit_timeout: i64,
     rms_system: Box<dyn AdvanceReservationRms + Send>,
     shadow_schedule_reservations: ShadowScheduleReservations,
-    // TODO add event to clean up finished, reject, or deleted tasks
     committed_reservations: HashMap<ReservationId, ReservationContainer>,
     not_committed_reservations: HashMap<ReservationId, ReservationContainer>,
     open_probe_reservations: HashMap<ReservationId, Option<ShadowScheduleId>>,

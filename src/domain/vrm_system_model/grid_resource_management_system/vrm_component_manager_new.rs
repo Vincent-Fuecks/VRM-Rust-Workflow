@@ -185,68 +185,68 @@ impl VrmComponentManager {
     where
         F: Fn(ReservationId, ReservationId) -> Ordering + 'static,
     {
-        let try_n_probe_reservations = 5;
-        let mut probe_reservations = ProbeReservations::new(reservation_id, self.reservation_store.clone());
+        // let try_n_probe_reservations = 5;
+        // let mut probe_reservations = ProbeReservations::new(reservation_id, self.reservation_store.clone());
 
-        for component_id in self.get_random_ordered_vrm_components() {
-            // Get Reservation Clone of the ShadowScheduleId or MasterSchedule
-            let res_snapshot = if let Some(sid) = &shadow_schedule_id {
-                if let Some((_, store)) = self.shadow_schedule_reservations.get(sid) {
-                    store.get_reservation_snapshot(reservation_id)
-                } else {
-                    self.reservation_store.get_reservation_snapshot(reservation_id)
-                }
-            } else {
-                self.reservation_store.get_reservation_snapshot(reservation_id)
-            };
+        // for component_id in self.get_random_ordered_vrm_components() {
+        //     // Get Reservation Clone of the ShadowScheduleId or MasterSchedule
+        //     let res_snapshot = if let Some(sid) = &shadow_schedule_id {
+        //         if let Some((_, store)) = self.shadow_schedule_reservations.get(sid) {
+        //             store.get_reservation_snapshot(reservation_id)
+        //         } else {
+        //             self.reservation_store.get_reservation_snapshot(reservation_id)
+        //         }
+        //     } else {
+        //         self.reservation_store.get_reservation_snapshot(reservation_id)
+        //     };
 
-            if let Some(res) = res_snapshot {
-                if self.can_component_handel(component_id.clone(), res) {
-                    probe_reservations
-                        .add_probe_reservations(self.get_vrm_component_mut(component_id.clone()).probe(reservation_id, shadow_schedule_id.clone()));
-                }
-            }
-        }
+        //     if let Some(res) = res_snapshot {
+        //         if self.can_component_handel(component_id.clone(), res) {
+        //             probe_reservations
+        //                 .add_probe_reservations(self.get_vrm_component_mut(component_id.clone()).probe(reservation_id, shadow_schedule_id.clone()));
+        //         }
+        //     }
+        // }
 
-        for _ in 0..=try_n_probe_reservations {
-            if let Some((component_id, shadow_schedule_id)) = probe_reservations.prompt_best(reservation_id, probe_reservation_comparator.clone()) {
-                self.reserve(component_id, reservation_id, shadow_schedule_id);
+        //     for _ in 0..=try_n_probe_reservations {
+        //         if let Some((component_id, shadow_schedule_id)) = probe_reservations.prompt_best(reservation_id, probe_reservation_comparator.clone()) {
+        //             self.reserve(component_id, reservation_id, shadow_schedule_id);
 
-                // TODO
-                todo!();
-                // TODO
-                // 1. Prepare the gate
-                let gate = self.sync_registry.create_gate(reservation_id);
+        //             // TODO
+        //             todo!();
+        //             // TODO
+        //             // 1. Prepare the gate
+        //             let gate = self.sync_registry.create_gate(reservation_id);
 
-                // 2. Trigger the AcI by updating the store
-                self.reservation_store.update_state(reservation_id, ReservationState::ReserveProbeReservation);
+        //             // 2. Trigger the AcI by updating the store
+        //             self.reservation_store.update_state(reservation_id, ReservationState::ReserveProbeReservation);
 
-                // TODO Add parameter to a config
-                // 3. BLOCK here. This thread sleeps until AcI calls notify().
-                let result = gate.wait_with_timeout(std::time::Duration::from_secs(15));
+        //             // TODO Add parameter to a config
+        //             // 3. BLOCK here. This thread sleeps until AcI calls notify().
+        //             let result = gate.wait_with_timeout(std::time::Duration::from_secs(15));
 
-                // 4. Clean up the registry
-                self.sync_registry.remove_gate(reservation_id);
+        //             // 4. Clean up the registry
+        //             self.sync_registry.remove_gate(reservation_id);
 
-                // Check if update of local schedule was successful
-                if result.state == ReservationState::ReserveAnswer {
-                    log::info!("Reservation {:?} successful!", reservation_id);
+        //             // Check if update of local schedule was successful
+        //             if result.state == ReservationState::ReserveAnswer {
+        //                 log::info!("Reservation {:?} successful!", reservation_id);
 
-                    // Register new schedule Sub-Task
-                    // Update grid_component_res_database for rollback and for ADC to keep track
-                    // Update Transaction Log
-                    if grid_component_res_database.contains_key(&reservation_id) {
-                        log::error!(
-                            "ErrorReservationWasReservedInMultipleGridComponents: The reservation {:?} was multiple times to the GirdComponent {} submitted.",
-                            self.reservation_store.get_name_for_key(reservation_id),
-                            result.aci_id.clone().unwrap(),
-                        );
-                    }
-                    grid_component_res_database.insert(reservation_id, result.aci_id.unwrap());
-                    return Some(reservation_id);
-                }
-            }
-        }
+        //                 // Register new schedule Sub-Task
+        //                 // Update grid_component_res_database for rollback and for ADC to keep track
+        //                 // Update Transaction Log
+        //                 if grid_component_res_database.contains_key(&reservation_id) {
+        //                     log::error!(
+        //                         "ErrorReservationWasReservedInMultipleGridComponents: The reservation {:?} was multiple times to the GirdComponent {} submitted.",
+        //                         self.reservation_store.get_name_for_key(reservation_id),
+        //                         result.aci_id.clone().unwrap(),
+        //                     );
+        //                 }
+        //                 grid_component_res_database.insert(reservation_id, result.aci_id.unwrap());
+        //                 return Some(reservation_id);
+        //             }
+        //         }
+        //     }
         return None;
     }
 
@@ -371,77 +371,5 @@ impl VrmComponentManager {
         }
     }
 
-    pub fn delete_task_at_component(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> bool {
-        let mut target_component = None;
 
-        if let Some(sid) = &shadow_schedule_id {
-            if let Some((shadow_map, _)) = self.shadow_schedule_reservations.get(&sid) {
-                target_component = shadow_map.get(&reservation_id).cloned();
-            }
-        } else {
-            target_component = self.res_to_vrm_component.get(&reservation_id).cloned();
-        }
-
-        match target_component {
-            Some(component_id) => {
-                // No Real Task
-                if component_id == *DUMMY_COMPONENT_ID {
-                    if let Some(sid) = &shadow_schedule_id {
-                        if let Some((_, store)) = self.shadow_schedule_reservations.get(&sid) {
-                            store.update_state(reservation_id, ReservationState::Deleted);
-                        }
-                    } else {
-                        self.reservation_store.update_state(reservation_id, ReservationState::Deleted);
-                    }
-                    return true;
-                }
-
-                let container = self.get_vrm_component_container_mut(component_id.clone());
-
-                container.vrm_component.delete(reservation_id, shadow_schedule_id.clone());
-
-                // Note: We check the store to verify deletion.
-                // If shadow, we check the shadow store
-                let is_deleted = if let Some(sid) = &shadow_schedule_id {
-                    // Check shadow store state
-                    if let Some((_, store)) = self.shadow_schedule_reservations.get(&sid) {
-                        store.get_state(reservation_id) == ReservationState::Deleted
-                    } else {
-                        false
-                    }
-                } else {
-                    self.reservation_store.get_state(reservation_id) == ReservationState::Deleted
-                };
-
-                if is_deleted {
-                    // Update Local view
-                    let container = self.get_vrm_component_container_mut(component_id);
-                    container.schedule.delete_reservation(reservation_id);
-
-                    // Cleanup Mapping
-                    if let Some(sid) = &shadow_schedule_id {
-                        if let Some((shadow_map, _)) = self.shadow_schedule_reservations.get_mut(&sid) {
-                            shadow_map.remove(&reservation_id);
-                        }
-                    } else {
-                        self.res_to_vrm_component.remove(&reservation_id);
-                    }
-
-                    return true;
-                }
-
-                self.reservation_store.update_state(reservation_id, ReservationState::Rejected);
-                return false;
-            }
-            None => {
-                log::error!(
-                    "ReservationForDeletionWasNotFound: In ADC {} ShadowSchedule {:?} was Reservation {:?} not found.",
-                    self.adc_id,
-                    shadow_schedule_id,
-                    self.reservation_store.get_name_for_key(reservation_id)
-                );
-                return false;
-            }
-        }
-    }
 }

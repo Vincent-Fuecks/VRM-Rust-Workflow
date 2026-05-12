@@ -7,11 +7,11 @@ use crate::domain::vrm_system_model::reservation::reservation::Reservation;
 use crate::domain::vrm_system_model::reservation::reservation::ReservationState;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationId;
 use crate::domain::vrm_system_model::reservation::reservation_store::ReservationStore;
-use crate::domain::vrm_system_model::reservation::reservation_sync_gate::SyncRegistry;
 use crate::domain::vrm_system_model::rms::rms::RmsLoadMetric;
 use crate::domain::vrm_system_model::schedule::schedule_trait::Schedule;
 use crate::domain::vrm_system_model::schedule::slotted_schedule::SlottedNodeSchedule;
 use crate::domain::vrm_system_model::schedule::slotted_schedule::strategy::node::node_strategy::NodeStrategy;
+use crate::domain::vrm_system_model::utils::config::DELETE_ALL_VRM_MANAGED_RESERVATIONS_IF_VRM_COMPONENT_IS_DELETED;
 use crate::domain::vrm_system_model::utils::id::RouterId;
 use crate::domain::vrm_system_model::utils::id::{AdcId, ComponentId, ShadowScheduleId, SlottedScheduleId};
 use crate::domain::vrm_system_model::utils::load_buffer::LoadMetric;
@@ -113,6 +113,7 @@ pub struct VrmComponentManager {
     /// Maps a `ReservationId` (Atomic Job or Workflow Subtask) to the `VrmComponentId` that handles it.
     pub res_to_vrm_component: HashMap<ReservationId, ComponentId>,
 
+    /// Contains all commit reservations --> All reservations on the master schedule
     pub committed_reservations: HashMap<ReservationId, ComponentId>,
 
     pub not_committed_reservations: HashMap<ReservationId, ComponentId>,
@@ -138,8 +139,6 @@ pub struct VrmComponentManager {
     pub reservation_store: ReservationStore,
 
     pub simulator: Arc<GlobalClock>,
-
-    pub sync_registry: SyncRegistry,
 }
 
 impl VrmComponentManager {
@@ -193,7 +192,6 @@ impl VrmComponentManager {
             registration_counter,
             reservation_store: reservation_store.clone(),
             simulator: simulator.clone(),
-            sync_registry: SyncRegistry::new(),
         }
     }
 
@@ -332,9 +330,9 @@ impl VrmComponentManager {
         }
     }
 
-    // TODO Rename, if all use this function
     // Queues asks all child systems if they can handel all request.
     // Returns true if one of the child systems can handel requests otherwise this function returns false.
+    /// Note, is only a feasibility request, does not ensure, that these components have still free capacity in the specified time slot etc.
     pub fn can_handel(&self, reservation_id: ReservationId) -> bool {
         let res_ids = if self.reservation_store.is_workflow(reservation_id) {
             self.reservation_store.get_workflow_res_ids(reservation_id).unwrap_or_default()
@@ -495,21 +493,34 @@ impl VrmComponentManager {
     /// # Returns
     /// * `true` - If the VrmComponent was found and removed.
     /// * `false` - If the VrmComponent ID was not found.
-    pub fn delete_vrm_component(&mut self, component_id: ComponentId) -> bool {
-        let container = self.vrm_components.remove(&component_id);
+    pub fn delete_vrm_component(&mut self, del_component_id: ComponentId) -> bool {
+        let container = self.vrm_components.remove(&del_component_id);
+
         match container {
             Some(container) => {
                 self.total_link_capacity -= container.total_link_capacity;
                 self.link_resource_count -= container.link_resource_count;
-                // TODO
-                // Also remove any reservations handled by this VrmComponent?
-                // This would be complex as we'd need to iterate res_to_vrm_component
+
+                // Delete all managed Reservation by VRM form the VrmComponent
+                if DELETE_ALL_VRM_MANAGED_RESERVATIONS_IF_VRM_COMPONENT_IS_DELETED {
+                    for (res_id, component_id) in self.res_to_vrm_component.clone() {
+                        if del_component_id.eq(&component_id) {
+                            if !self.delete_task_at_component(res_id, None) {
+                                log::debug!(
+                                    "In the process of deleting the VrmComponent {:?}, was it not possible to delete the managed reservation: {:?}.",
+                                    del_component_id,
+                                    res_id
+                                );
+                            }
+                        }
+                    }
+                }
                 return true;
             }
             None => {
                 log::error!(
                     "The process of deleting the VrmComponent: {} form VrmComponentManager (Adc: {}). Failed, because the VrmComponentId was not present in the VrmComponentManager.",
-                    component_id,
+                    del_component_id,
                     self.adc_id
                 );
                 return false;
@@ -846,6 +857,80 @@ impl VrmComponentManager {
                     shadow_schedule_id
                 );
                 return *reservation_id;
+            }
+        }
+    }
+
+    pub fn delete_task_at_component(&mut self, reservation_id: ReservationId, shadow_schedule_id: Option<ShadowScheduleId>) -> bool {
+        let mut target_component = None;
+
+        if let Some(sid) = &shadow_schedule_id {
+            if let Some((shadow_map, _)) = self.shadow_schedule_reservations.get(&sid) {
+                target_component = shadow_map.get(&reservation_id).cloned();
+            }
+        } else {
+            target_component = self.res_to_vrm_component.get(&reservation_id).cloned();
+        }
+
+        match target_component {
+            Some(component_id) => {
+                // No Real Task
+                if component_id == *DUMMY_COMPONENT_ID {
+                    if let Some(sid) = &shadow_schedule_id {
+                        if let Some((_, store)) = self.shadow_schedule_reservations.get(&sid) {
+                            store.update_state(reservation_id, ReservationState::Deleted);
+                        }
+                    } else {
+                        self.reservation_store.update_state(reservation_id, ReservationState::Deleted);
+                    }
+                    return true;
+                }
+
+                let container = self.get_vrm_component_container_mut(component_id.clone());
+
+                container.vrm_component.delete(reservation_id, shadow_schedule_id.clone());
+
+                // Note: We check the store to verify deletion.
+                // If shadow, we check the shadow store
+                let is_deleted = if let Some(sid) = &shadow_schedule_id {
+                    // Check shadow store state
+                    if let Some((_, store)) = self.shadow_schedule_reservations.get(&sid) {
+                        store.get_state(reservation_id) == ReservationState::Deleted
+                    } else {
+                        false
+                    }
+                } else {
+                    self.reservation_store.get_state(reservation_id) == ReservationState::Deleted
+                };
+
+                if is_deleted {
+                    // Update Local view
+                    let container = self.get_vrm_component_container_mut(component_id);
+                    container.schedule.delete_reservation(reservation_id);
+
+                    // Cleanup Mapping
+                    if let Some(sid) = &shadow_schedule_id {
+                        if let Some((shadow_map, _)) = self.shadow_schedule_reservations.get_mut(&sid) {
+                            shadow_map.remove(&reservation_id);
+                        }
+                    } else {
+                        self.res_to_vrm_component.remove(&reservation_id);
+                    }
+
+                    return true;
+                }
+
+                self.reservation_store.update_state(reservation_id, ReservationState::Rejected);
+                return false;
+            }
+            None => {
+                log::error!(
+                    "ReservationForDeletionWasNotFound: In ADC {} ShadowSchedule {:?} was Reservation {:?} not found.",
+                    self.adc_id,
+                    shadow_schedule_id,
+                    self.reservation_store.get_name_for_key(reservation_id)
+                );
+                return false;
             }
         }
     }
