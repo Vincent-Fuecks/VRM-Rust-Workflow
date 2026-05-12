@@ -1,4 +1,4 @@
-use crate::domain::vrm_system_model::grid_resource_management_system::vrm_component_manager::VrmComponentContainer;
+use crate::domain::vrm_system_model::grid_resource_management_system::vrm_component_container::VrmComponentContainer;
 
 use std::cmp::Ordering;
 

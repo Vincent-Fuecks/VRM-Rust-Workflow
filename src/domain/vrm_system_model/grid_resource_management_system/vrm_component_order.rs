@@ -3,7 +3,7 @@ use std::cmp::Ordering;
 use crate::domain::vrm_system_model::grid_resource_management_system::comparator::{
     load_compare::LoadCompare, position_compare::PositionCompare, size_compare::SizeCompare,
 };
-use crate::domain::vrm_system_model::grid_resource_management_system::vrm_component_manager::VrmComponentContainer;
+use crate::domain::vrm_system_model::grid_resource_management_system::vrm_component_container::VrmComponentContainer;
 
 /// An enum to describe the available ways to sort the registered VrmComponents.
 ///

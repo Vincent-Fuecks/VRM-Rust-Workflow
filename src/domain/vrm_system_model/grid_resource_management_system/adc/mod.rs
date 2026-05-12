@@ -8,7 +8,6 @@ use crate::domain::{
     vrm_system_model::{
         grid_resource_management_system::{
             scheduler::workflow_scheduler::WorkflowScheduler,
-            vrm_component_manager::VrmComponentManager,
             vrm_component_order::VrmComponentOrder,
             vrm_component_registry::{registry_client::RegistryClient, vrm_component_proxy::VrmComponentProxy},
         },
@@ -16,6 +15,8 @@ use crate::domain::{
         utils::id::AdcId,
     },
 };
+
+use super::vrm_component_manager::VrmComponentManager;
 
 /// The **Administrative Domain Controller (ADC)** acts as the central Grid Broker within the VRM system.
 ///

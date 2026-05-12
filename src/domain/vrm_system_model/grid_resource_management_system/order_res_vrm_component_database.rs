@@ -1,10 +1,11 @@
 use std::{cmp::Ordering, collections::HashMap};
 
 use crate::domain::vrm_system_model::{
-    grid_resource_management_system::vrm_component_manager::{VrmComponentContainer, VrmComponentManager},
-    reservation::reservation_store::ReservationId,
+    grid_resource_management_system::vrm_component_container::VrmComponentContainer, reservation::reservation_store::ReservationId,
     utils::id::ComponentId,
 };
+
+use super::vrm_component_manager::VrmComponentManager;
 
 /**
 * A mapping between reservations and the AIs which handle them. In this

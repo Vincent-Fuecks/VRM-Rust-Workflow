@@ -192,7 +192,10 @@ impl VrmComponent for ADC {
                 self.reservation_store.update_state(reservation_id, ReservationState::Deleted);
             } else {
                 self.reservation_store.update_state(reservation_id, ReservationState::Rejected);
-                log::error!("ErrorAdcWorkflowDeletion: The process of deleting all related reservations of the Workflow: {:?} was not successful.", reservation_id);
+                log::error!(
+                    "ErrorAdcWorkflowDeletion: The process of deleting all related reservations of the Workflow: {:?} was not successful.",
+                    reservation_id
+                );
             }
 
             return reservation_id;
